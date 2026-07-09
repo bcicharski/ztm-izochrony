@@ -23,6 +23,13 @@
     <div class="panel-body" id="panelBody">
       <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
 
+      <div class="search-row">
+        <input id="searchInput" type="search" placeholder="Szukaj adresu (Enter)…"
+               aria-label="Szukaj adresu" autocomplete="off">
+        <button id="locateBtn" title="Użyj mojej lokalizacji" aria-label="Użyj mojej lokalizacji">⌖</button>
+      </div>
+      <ul id="searchResults" hidden></ul>
+
       <fieldset class="control">
         <legend>Kierunek</legend>
         <div class="segmented" role="group">
@@ -76,6 +83,7 @@
       </div>
 
       <p class="status" id="status" role="status"></p>
+      <button class="share-btn" id="shareBtn">Kopiuj link do tego widoku</button>
       <footer class="credits">
         Dane: <a href="https://ckan.multimediagdansk.pl/dataset/tristar" target="_blank" rel="noopener">ZTM Gdańsk</a> (CC BY)
         · rozkład z dnia <span id="feedDate">…</span>
@@ -91,8 +99,11 @@
     <div class="help-body">
       <p>Mapa pokazuje, jak daleko można dotrzeć komunikacją miejską ZTM w Gdańsku
         (tramwaje i autobusy, z przesiadkami) w zadanym czasie.
-        <strong>Kliknij dowolny punkt na mapie</strong> albo przeciągnij znacznik —
-        kolorowe strefy i tabela statystyk przeliczą się od razu.</p>
+        <strong>Kliknij dowolny punkt na mapie</strong>, przeciągnij znacznik,
+        wyszukaj adres albo użyj przycisku ⌖ (Twoja lokalizacja) —
+        kolorowe strefy i tabela statystyk przeliczą się od razu.
+        Przycisk <strong>„Kopiuj link"</strong> zapisuje bieżący widok
+        (punkt i wszystkie opcje) w adresie strony — możesz go wysłać innym.</p>
 
       <h3>Kierunek</h3>
       <p><strong>Z miejsca</strong> — strefy pokazują, dokąd dotrzesz, wyruszając

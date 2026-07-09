@@ -33,6 +33,11 @@ przez przeglądarkę). Strona pokazuje wówczas stosowny komunikat.
   (algorytm RAPTOR, maks. 4 przesiadki) + wybór typu dnia
   (roboczy / sobota / niedziela).
 
+Punkt można też wskazać wyszukiwarką adresów (Nominatim/OSM, wyniki zawężone
+do okolic Trójmiasta) albo przyciskiem geolokalizacji. Bieżący widok (punkt
+i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj link"
+pozwala go udostępnić.
+
 Panel pokazuje też tabelę statystyk dla wybranego punktu: maksymalną
 odległość w linii prostej osiągalną w każdym paśmie czasu oraz — w trybie
 ze spacerem — odsetek powierzchni lądowej Gdańska objętej strefą (liczony

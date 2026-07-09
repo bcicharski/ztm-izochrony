@@ -19,21 +19,53 @@ const state = {
   day: 'workday',
 };
 
+// --- stan z adresu URL (linki do udostępniania) -----------------------------
+
+let pointFromUrl = false;
+{
+  const q = new URLSearchParams(location.search);
+  const p = q.get('p')?.split(',').map(Number);
+  if (p?.length === 2 && p.every(Number.isFinite)) {
+    state.point = L.latLng(p[0], p[1]);
+    pointFromUrl = true;
+  }
+  if (q.get('dir') === 'to') state.direction = 'to';
+  if (q.get('walk') === '0') state.walk = false;
+  if (q.get('mode') === 'time') state.mode = 'time';
+  const t = q.get('t')?.match(/^(\d{1,2}):(\d{2})$/);
+  if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
+  if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) state.day = q.get('day');
+}
+
+function updateUrl() {
+  const q = new URLSearchParams();
+  q.set('p', `${state.point.lat.toFixed(5)},${state.point.lng.toFixed(5)}`);
+  q.set('dir', state.direction);
+  q.set('walk', state.walk ? '1' : '0');
+  q.set('mode', state.mode);
+  if (state.mode === 'time') {
+    const h = Math.floor(state.timeMin / 60), m = state.timeMin % 60;
+    q.set('t', `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    q.set('day', state.day);
+  }
+  history.replaceState(null, '', '?' + q.toString());
+}
+
 // --- mapa ---------------------------------------------------------------
 
 const map = createMap('map');
 const zoneLayer = new ZoneLayer().addTo(map);
 
 const marker = L.marker(state.point, { draggable: true, autoPan: true }).addTo(map);
-marker.on('dragend', () => {
-  state.point = marker.getLatLng();
+marker.on('dragend', () => setPoint(marker.getLatLng()));
+map.on('click', e => setPoint(e.latlng));
+
+function setPoint(latlng, pan = false) {
+  state.point = latlng;
+  marker.setLatLng(latlng);
+  if (pan) map.setView(latlng, Math.max(map.getZoom(), 13));
   recompute();
-});
-map.on('click', e => {
-  state.point = e.latlng;
-  marker.setLatLng(e.latlng);
-  recompute();
-});
+}
 
 // --- kontrolki ------------------------------------------------------------
 
@@ -55,6 +87,80 @@ $('timeInput').addEventListener('change', e => {
   if (!Number.isNaN(h)) { state.timeMin = h * 60 + m; recompute(); }
 });
 $('daySelect').addEventListener('change', e => { state.day = e.target.value; recompute(); });
+
+// --- wyszukiwarka adresów, lokalizacja, udostępnianie ------------------------
+
+async function searchAddress(query) {
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5' +
+    '&accept-language=pl&countrycodes=pl' +
+    '&viewbox=18.30,54.55,19.10,54.20&bounded=1' + // okolice Trójmiasta
+    '&q=' + encodeURIComponent(query);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Nominatim: ${r.status}`);
+  return r.json();
+}
+
+function showSearchResults(items) {
+  const ul = $('searchResults');
+  ul.innerHTML = '';
+  ul.hidden = false;
+  if (!items.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Nie znaleziono — spróbuj doprecyzować.';
+    ul.appendChild(li);
+    return;
+  }
+  for (const item of items) {
+    const li = document.createElement('li');
+    li.textContent = item.display_name.split(', ').slice(0, 4).join(', ');
+    li.addEventListener('click', () => {
+      ul.hidden = true;
+      $('searchInput').value = li.textContent;
+      setPoint(L.latLng(+item.lat, +item.lon), true);
+    });
+    ul.appendChild(li);
+  }
+}
+
+$('searchInput').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const query = e.target.value.trim();
+  if (query.length < 3) return;
+  try {
+    showSearchResults(await searchAddress(query));
+  } catch (err) {
+    console.error(err);
+    $('status').textContent = 'Wyszukiwarka adresów chwilowo niedostępna.';
+  }
+});
+$('searchInput').addEventListener('input', e => {
+  if (!e.target.value) $('searchResults').hidden = true;
+});
+
+$('locateBtn').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    $('status').textContent = 'Przeglądarka nie udostępnia lokalizacji.';
+    return;
+  }
+  $('status').textContent = 'Ustalam lokalizację…';
+  navigator.geolocation.getCurrentPosition(
+    pos => setPoint(L.latLng(pos.coords.latitude, pos.coords.longitude), true),
+    () => { $('status').textContent = 'Nie udało się pobrać lokalizacji (brak zgody?).'; },
+    { enableHighAccuracy: true, timeout: 10000 },
+  );
+});
+
+$('shareBtn').addEventListener('click', async () => {
+  const btn = $('shareBtn');
+  try {
+    await navigator.clipboard.writeText(location.href);
+    btn.textContent = 'Skopiowano ✓';
+  } catch {
+    btn.textContent = location.href; // ostateczność: pokaż link do ręcznego skopiowania
+  }
+  setTimeout(() => { btn.textContent = 'Kopiuj link do tego widoku'; }, 2000);
+});
 
 {
   const dialog = $('helpDialog');
@@ -116,6 +222,7 @@ let computeSeq = 0;
 
 async function recompute() {
   const seq = ++computeSeq;
+  updateUrl();
   const status = $('status');
   status.textContent = 'Obliczam zasięg…';
   try {
@@ -179,6 +286,18 @@ Promise.all([loadWater(), loadCity()])
     }
   })
   .catch(() => { /* brak maski wody/granicy nie blokuje działania */ });
+
+// odtworzenie stanu kontrolek (np. po wejściu z linku)
+$('dirFrom').checked = state.direction === 'from';
+$('dirTo').checked = state.direction === 'to';
+$('walkToggle').checked = state.walk;
+$('modeGeneral').checked = state.mode === 'general';
+$('modeTime').checked = state.mode === 'time';
+$('timeRow').hidden = state.mode !== 'time';
+$('timeInput').value =
+  `${String(Math.floor(state.timeMin / 60)).padStart(2, '0')}:${String(state.timeMin % 60).padStart(2, '0')}`;
+$('daySelect').value = state.day;
+if (pointFromUrl) map.setView(state.point, 13);
 
 loadMeta().then(meta => {
   if (meta?.dates?.workday) {
