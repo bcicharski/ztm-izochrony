@@ -536,6 +536,59 @@ html, body {
 .help-body p { margin: 0 0 8px; }
 .help-body a { color: var(--accent); }
 
+/* ---------- pasek zgody (analityka) ---------- */
+
+.consent {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1100;
+  width: 300px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.consent[hidden] { display: none; }
+
+.consent p { margin: 0 0 10px; }
+
+.consent-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.consent-actions button {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+  cursor: pointer;
+}
+
+.consent-actions button.secondary {
+  background: var(--surface);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.consent-actions button.secondary:hover { color: var(--ink); }
+
+@media (max-width: 560px) {
+  .consent {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+}
+
 /* ---------- mobile ---------- */
 
 @media (max-width: 560px) {
