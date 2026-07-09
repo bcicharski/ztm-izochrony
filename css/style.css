@@ -298,6 +298,62 @@ html, body {
   outline-offset: 1px;
 }
 
+/* ---------- środki transportu ---------- */
+
+.veh-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.veh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.veh input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+/* ---------- dymek trasy ---------- */
+
+.journey {
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.journey h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.journey .person {
+  margin: 8px 0 2px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journey ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journey li {
+  padding: 1.5px 0;
+}
+
+.journey .muted { color: var(--muted); }
+
 /* ---------- legenda ---------- */
 
 .legend { margin: 4px 0 12px; }

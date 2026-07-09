@@ -177,6 +177,7 @@ function reverseNetwork(net) {
   return {
     nStops: net.nStops,
     stopName: net.stopName,
+    routes: net.routes,
     lat: net.lat, lon: net.lon, group: net.group,
     patterns,
     patternsAtStop,

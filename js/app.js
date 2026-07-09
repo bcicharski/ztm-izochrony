@@ -4,7 +4,7 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, DAY_LABELS, distM } from './data.js';
+import { loadDay, loadMeta, loadWater, loadCity, DAY_LABELS, distM, WALK_MPS } from './data.js';
 import { computeReachability } from './router.js';
 import { buildZones, BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
@@ -25,7 +25,17 @@ const state = {
   timeMin: now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5,
   day: todayDay,
   stats: false,
+  veh: { tram: true, bus: true, trol: true, rail: true },
 };
+
+const VEH_TYPES = { tram: 900, bus: 700, trol: 800, rail: 2 };
+
+/** Zbiór dozwolonych route_type albo null, gdy wszystko dozwolone. */
+function allowedTypes() {
+  const keys = Object.keys(VEH_TYPES);
+  if (keys.every(k => state.veh[k])) return null;
+  return new Set(keys.filter(k => state.veh[k]).map(k => VEH_TYPES[k]));
+}
 
 // --- stan z adresu URL (linki do udostępniania) -----------------------------
 
@@ -47,6 +57,11 @@ let pointFromUrl = false;
   if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
   if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) state.day = q.get('day');
   if (q.get('st') === '1') state.stats = true;
+  const veh = q.get('veh');
+  if (veh != null) {
+    const on = new Set(veh.split(','));
+    for (const k of Object.keys(VEH_TYPES)) state.veh[k] = on.has(k);
+  }
 }
 
 function updateUrl() {
@@ -65,6 +80,8 @@ function updateUrl() {
     q.set('day', state.day);
   }
   if (state.stats && !state.compare) q.set('st', '1');
+  const vehOn = Object.keys(VEH_TYPES).filter(k => state.veh[k]);
+  if (vehOn.length < Object.keys(VEH_TYPES).length) q.set('veh', vehOn.join(','));
   history.replaceState(null, '', '?' + q.toString());
 }
 
@@ -137,6 +154,10 @@ for (const el of document.querySelectorAll('input[name="mode"]')) {
   });
 }
 $('walkToggle').addEventListener('change', e => { state.walk = e.target.checked; recompute(); });
+for (const key of Object.keys(VEH_TYPES)) {
+  const id = 'veh' + key[0].toUpperCase() + key.slice(1);
+  $(id).addEventListener('change', e => { state.veh[key] = e.target.checked; recompute(); });
+}
 $('statsToggle').addEventListener('change', e => {
   state.stats = e.target.checked;
   syncModeUi();
@@ -154,9 +175,10 @@ function syncModeUi() {
   if (!state.compare) $('searchResults2').hidden = true;
   $('statsToggleRow').hidden = state.compare;
   $('statsBox').hidden = state.compare || !state.stats;
-  $('hint').innerHTML = state.compare
+  $('hint').innerHTML = (state.compare
     ? 'Strefa pokazuje, dokąd dotrzecie <strong>oboje</strong>. Klik na mapie przesuwa bliższy znacznik.'
-    : 'Kliknij punkt na mapie albo przeciągnij znacznik.';
+    : 'Kliknij punkt na mapie albo przeciągnij znacznik.')
+    + ' Prawy klik / przytrzymanie pokazuje trasę.';
   if (state.compare) marker2.addTo(map);
   else marker2.remove();
 }
@@ -313,6 +335,109 @@ function renderStats(rows) {
   }
 }
 
+// --- dymek z trasą (prawy klik / przytrzymanie) --------------------------------
+
+let lastCompute = null;
+
+map.on('contextmenu', e => {
+  e.originalEvent.preventDefault();
+  showJourneyPopup(e.latlng);
+});
+
+const HHMM = s => `${String(Math.floor(s / 3600) % 24).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}`;
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const VEH_ICON = { 900: '🚊', 700: '🚌', 800: '🚎', 2: '🚆' };
+
+/** Najlepszy przystanek docelowy dla klikniętego miejsca (wg łącznego czasu). */
+function pickTargetStop(latlng) {
+  const { net, minutes, walk } = lastCompute;
+  let best = -1, bestTotal = Infinity, bestWalkMin = 0;
+  for (let i = 0; i < net.nStops; i++) {
+    if (!Number.isFinite(minutes[i])) continue;
+    const d = distM(latlng.lat, latlng.lng, net.lat[i], net.lon[i]);
+    if (!walk && d > 300) continue; // bez spaceru: tylko przystanek tuż obok
+    const wm = walk ? d / WALK_MPS / 60 : 0;
+    const total = minutes[i] + wm;
+    if (total < bestTotal) { bestTotal = total; best = i; bestWalkMin = wm; }
+  }
+  return best < 0 ? null : { stop: best, total: bestTotal, walkMin: bestWalkMin };
+}
+
+/** Lista etapów trasy jako HTML. */
+function legsHtml(legs, target) {
+  const { net, direction } = lastCompute;
+  const items = [];
+  for (const leg of legs) {
+    if (leg.kind === 'access') {
+      const min = Math.round(leg.durSec / 60);
+      if (min >= 1) {
+        items.push(direction === 'from'
+          ? `🚶 ${min} min do przystanku ${esc(net.stopName[leg.stop])}`
+          : `🚶 ${min} min od przystanku ${esc(net.stopName[leg.stop])} do celu`);
+      }
+    } else if (leg.kind === 'walk') {
+      const min = Math.max(1, Math.round(leg.durSec / 60));
+      const same = net.stopName[leg.fromStop] === net.stopName[leg.toStop];
+      items.push(same
+        ? `🚶 przesiadka (${min} min)`
+        : `🚶 ${min} min do: ${esc(net.stopName[leg.toStop])}`);
+    } else {
+      const icon = VEH_ICON[leg.route.t] ?? '🚌';
+      const times = leg.depSec != null
+        ? ` · ${HHMM(leg.depSec)}–${HHMM(leg.arrSec)}`
+        : ` · ${Math.round(leg.durSec / 60)} min`;
+      items.push(`${icon} <strong>${esc(leg.route.n)}</strong>: ${esc(net.stopName[leg.fromStop])} → ${esc(net.stopName[leg.toStop])}${times}`);
+    }
+  }
+  // spacer między klikniętym miejscem a przystankiem docelowym
+  const wm = Math.round(target.walkMin);
+  if (wm >= 1) {
+    const walkItem = direction === 'from'
+      ? `🚶 ${wm} min do celu`
+      : `🚶 ${wm} min do przystanku ${esc(net.stopName[target.stop])}`;
+    if (direction === 'from') items.push(walkItem);
+    else items.unshift(walkItem);
+  }
+  return '<ol>' + items.map(i => `<li>${i}</li>`).join('') + '</ol>';
+}
+
+function journeyHeader(totalMin) {
+  const { mode, direction } = lastCompute;
+  let extra = '';
+  if (mode === 'time') {
+    const clock = direction === 'from'
+      ? `przyjazd ok. ${HHMM(state.timeMin * 60 + totalMin * 60)}`
+      : `wyjście ok. ${HHMM(state.timeMin * 60 - totalMin * 60)}`;
+    extra = ` <span class="muted">(${clock})</span>`;
+  } else {
+    extra = ' <span class="muted">(bez czekania)</span>';
+  }
+  return `<h4>≈ ${Math.round(totalMin)} min${extra}</h4>`;
+}
+
+function showJourneyPopup(latlng) {
+  if (!lastCompute) return;
+  const target = pickTargetStop(latlng);
+  let html;
+  if (!target || target.total > 90) {
+    html = `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${
+      !target ? 'Brak osiągalnego przystanku w pobliżu.' : 'Podróż zajęłaby ponad 90 minut.'}</span></div>`;
+  } else if (!state.compare) {
+    const legs = lastCompute.res.journeyTo(target.stop);
+    html = `<div class="journey">${journeyHeader(target.total)}${legs ? legsHtml(legs, target) : ''}</div>`;
+  } else {
+    const parts = [];
+    for (const [res, cls, name] of [[lastCompute.res, 'dot-a', 'Punkt niebieski'], [lastCompute.res2, 'dot-b', 'Punkt pomarańczowy']]) {
+      const totalMin = res.minutes[target.stop] + target.walkMin;
+      const legs = res.journeyTo(target.stop);
+      parts.push(`<div class="person"><span class="dot ${cls}"></span>${name} · ≈ ${Math.round(totalMin)} min</div>`
+        + (legs ? legsHtml(legs, target) : '<span class="muted">brak trasy</span>'));
+    }
+    html = `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(target.total)} min</h4>${parts.join('')}</div>`;
+  }
+  L.popup({ maxWidth: 300 }).setLatLng(latlng).setContent(html).openOn(map);
+}
+
 // --- przeliczanie -------------------------------------------------------------
 
 let computeSeq = 0;
@@ -344,14 +469,16 @@ async function recompute() {
       walk: state.walk,
       mode: state.mode,
       timeMin: state.timeMin,
+      types: allowedTypes(),
     };
     const res = computeReachability(net, {
       ...optsBase, lat: state.point.lat, lon: state.point.lng,
     });
     let minutes = res.minutes;
+    let res2 = null;
     if (state.compare) {
       // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
-      const res2 = computeReachability(net, {
+      res2 = computeReachability(net, {
         ...optsBase, lat: state.point2.lat, lon: state.point2.lng,
       });
       minutes = new Float64Array(res.minutes.length);
@@ -359,6 +486,8 @@ async function recompute() {
         minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
       }
     }
+    lastCompute = { net, res, res2, minutes, walk: state.walk, mode: state.mode, direction: state.direction };
+    map.closePopup();
     const zones = buildZones(net, minutes, {
       walk: state.walk,
       origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
@@ -416,6 +545,9 @@ $('timeInput').value =
   `${String(Math.floor(state.timeMin / 60)).padStart(2, '0')}:${String(state.timeMin % 60).padStart(2, '0')}`;
 $('daySelect').value = state.day;
 $('statsToggle').checked = state.stats;
+for (const key of Object.keys(VEH_TYPES)) {
+  $('veh' + key[0].toUpperCase() + key.slice(1)).checked = state.veh[key];
+}
 syncModeUi();
 if (pointFromUrl) map.setView(state.point, 13);
 

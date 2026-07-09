@@ -82,6 +82,16 @@
         </label>
       </fieldset>
 
+      <fieldset class="control">
+        <legend>Środki transportu</legend>
+        <div class="veh-grid">
+          <label class="veh"><input type="checkbox" id="vehTram" checked><span>🚊 Tramwaj</span></label>
+          <label class="veh"><input type="checkbox" id="vehBus" checked><span>🚌 Autobus</span></label>
+          <label class="veh"><input type="checkbox" id="vehTrol" checked><span>🚎 Trolejbus</span></label>
+          <label class="veh"><input type="checkbox" id="vehRail" checked><span>🚆 SKM/PKM</span></label>
+        </div>
+      </fieldset>
+
       <div class="legend" aria-label="Legenda stref czasowych">
         <h2>Czas podróży [min]</h2>
         <div class="legend-bar" id="legendBar"></div>
@@ -165,6 +175,17 @@
         <strong>wyłączone</strong>, podróż zaczyna się od najbliższego zespołu
         przystankowego, przesiadki możliwe są tylko w ramach tego samego zespołu,
         a na mapie kolorowane są wyłącznie osiągnięte przystanki.</p>
+
+      <h3>Środki transportu</h3>
+      <p>Można ograniczyć analizę do wybranych pojazdów (tramwaj, autobus,
+        trolejbus, kolej SKM/PKM) — np. odznaczenie kolei pokaże, jak wyglądałby
+        dojazd wyłącznie komunikacją drogową.</p>
+
+      <h3>Trasa do wybranego miejsca</h3>
+      <p><strong>Kliknij prawym przyciskiem</strong> (na telefonie: przytrzymaj
+        palec) dowolne miejsce na mapie, aby zobaczyć proponowaną trasę:
+        odcinki pieszo, linie, przystanki przesiadkowe i godziny (w trybie
+        „O godzinie"). W trybie porównania dymek pokazuje trasy obu osób.</p>
 
       <h3>Strefy na mapie</h3>
       <p>Kolory od ciepłych (blisko) do chłodnych (daleko): do 10, 10–20, 20–30,
