@@ -227,9 +227,10 @@
         w Trójmieście</a> (feed SKM obejmuje też pociągi linii PKM);
         podkład i geometria wody: OpenStreetMap. Wyniki są orientacyjne —
         rzeczywiste czasy zależą m.in. od ruchu ulicznego i opóźnień.
-        Strona korzysta z Google Analytics wyłącznie po wyrażeniu zgody
-        (anonimowe statystyki odwiedzin); zgodę można cofnąć czyszcząc
-        dane strony w przeglądarce.</p>
+        Odwiedziny zlicza anonimowo <a href="https://www.goatcounter.com"
+        target="_blank" rel="noopener">GoatCounter</a> (bez plików cookie
+        i bez profilowania), a Google Analytics działa wyłącznie po wyrażeniu
+        zgody; zgodę można cofnąć czyszcząc dane strony w przeglądarce.</p>
     </div>
   </dialog>
 
@@ -255,6 +256,10 @@
       document.getElementById('consentNo').addEventListener('click', () => choose('denied'));
     })();
   </script>
+
+  <!-- GoatCounter: anonimowy licznik odwiedzin bez cookies — nie wymaga zgody -->
+  <script data-goatcounter="https://ztm-izochrony.goatcounter.com/count"
+          async src="https://gc.zgo.at/count.js"></script>
 
   <script src="vendor/leaflet/leaflet.js"></script>
   <script>
