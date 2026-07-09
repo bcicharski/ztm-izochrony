@@ -21,14 +21,29 @@
     </header>
 
     <div class="panel-body" id="panelBody">
-      <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
+      <div class="segmented app-mode" role="group" aria-label="Tryb analizy">
+        <input type="radio" name="appmode" id="appSingle" value="single" checked>
+        <label for="appSingle">Zasięg transportu</label>
+        <input type="radio" name="appmode" id="appCompare" value="compare">
+        <label for="appCompare">Porównaj dwa punkty</label>
+      </div>
 
       <div class="search-row">
-        <input id="searchInput" type="search" placeholder="Szukaj adresu (Enter)…"
-               aria-label="Szukaj adresu" autocomplete="off">
+        <span class="dot dot-a" aria-hidden="true"></span>
+        <input id="searchInput" type="search" placeholder="Adres punktu (Enter)…"
+               aria-label="Szukaj adresu punktu" autocomplete="off">
         <button id="locateBtn" title="Użyj mojej lokalizacji" aria-label="Użyj mojej lokalizacji">⌖</button>
       </div>
       <ul id="searchResults" hidden></ul>
+
+      <div class="search-row" id="searchRow2" hidden>
+        <span class="dot dot-b" aria-hidden="true"></span>
+        <input id="searchInput2" type="search" placeholder="Adres drugiego punktu (Enter)…"
+               aria-label="Szukaj adresu drugiego punktu" autocomplete="off">
+      </div>
+      <ul id="searchResults2" hidden></ul>
+
+      <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
 
       <fieldset class="control">
         <legend>Kierunek</legend>
@@ -41,16 +56,21 @@
       </fieldset>
 
       <fieldset class="control">
-        <legend>Porównanie</legend>
-        <label class="switch">
-          <input type="checkbox" id="compareToggle">
-          <span class="track" aria-hidden="true"></span>
-          <span>Porównaj dwa punkty</span>
-        </label>
-        <p class="hint compare-hint" id="compareHint" hidden>
-          Strefa pokazuje, dokąd dotrzecie <strong>oboje</strong> w danym czasie.
-          Drugi punkt (pomarańczowy) przesuwaj przeciąganiem.
-        </p>
+        <legend>Czas</legend>
+        <div class="segmented" role="group">
+          <input type="radio" name="mode" id="modeTime" value="time" checked>
+          <label for="modeTime">O godzinie</label>
+          <input type="radio" name="mode" id="modeGeneral" value="general">
+          <label for="modeGeneral">Ogólnie</label>
+        </div>
+        <div class="time-row" id="timeRow">
+          <input type="time" id="timeInput" value="08:00" step="300">
+          <select id="daySelect" aria-label="Typ dnia">
+            <option value="workday" selected>dzień roboczy</option>
+            <option value="saturday">sobota</option>
+            <option value="sunday">niedziela</option>
+          </select>
+        </div>
       </fieldset>
 
       <fieldset class="control">
@@ -62,31 +82,23 @@
         </label>
       </fieldset>
 
-      <fieldset class="control">
-        <legend>Czas</legend>
-        <div class="segmented" role="group">
-          <input type="radio" name="mode" id="modeGeneral" value="general" checked>
-          <label for="modeGeneral">Ogólnie</label>
-          <input type="radio" name="mode" id="modeTime" value="time">
-          <label for="modeTime">O godzinie</label>
-        </div>
-        <div class="time-row" id="timeRow" hidden>
-          <input type="time" id="timeInput" value="08:00" step="300">
-          <select id="daySelect" aria-label="Typ dnia">
-            <option value="workday" selected>dzień roboczy</option>
-            <option value="saturday">sobota</option>
-            <option value="sunday">niedziela</option>
-          </select>
-        </div>
-      </fieldset>
+      <div class="legend" aria-label="Legenda stref czasowych">
+        <h2>Czas podróży [min]</h2>
+        <div class="legend-bar" id="legendBar"></div>
+      </div>
 
-      <div class="legend" aria-label="Legenda i statystyki stref czasowych">
-        <h2>Czas podróży</h2>
+      <label class="switch stats-switch" id="statsToggleRow">
+        <input type="checkbox" id="statsToggle">
+        <span class="track" aria-hidden="true"></span>
+        <span>Pokaż statystyki</span>
+      </label>
+
+      <div id="statsBox" hidden>
         <table class="stats">
           <thead>
             <tr>
               <th scope="col">strefa</th>
-              <th scope="col" class="num" id="distHead">zasięg</th>
+              <th scope="col" class="num">zasięg</th>
               <th scope="col" class="num" id="areaHead">% Trójmiasta</th>
             </tr>
           </thead>
@@ -118,23 +130,33 @@
         oraz koleją SKM/PKM (z przesiadkami) — w zadanym czasie.
         <strong>Kliknij dowolny punkt na mapie</strong>, przeciągnij znacznik,
         wyszukaj adres albo użyj przycisku ⌖ (Twoja lokalizacja) —
-        kolorowe strefy i tabela statystyk przeliczą się od razu.
+        kolorowe strefy przeliczą się od razu.
         Przycisk <strong>„Kopiuj link"</strong> zapisuje bieżący widok
-        (punkt i wszystkie opcje) w adresie strony — możesz go wysłać innym.</p>
+        (punkty i wszystkie opcje) w adresie strony — możesz go wysłać innym.</p>
 
-      <h3>Porównanie dwóch punktów</h3>
-      <p>Po włączeniu na mapie pojawia się drugi, pomarańczowy znacznik
-        (przesuwany przeciąganiem; niebieski ustawiasz klikiem lub wyszukiwarką).
-        Strefa pokazuje wtedy miejsca, do których <strong>obie osoby</strong>
-        dotrą w danym czasie — kolor odpowiada czasowi wolniejszej z nich.
-        Idealne do szukania miejsca spotkania albo mieszkania „pomiędzy".
-        Przy kierunku „do miejsca": obszar, z którego da się dojechać
-        do obu punktów.</p>
+      <h3>Tryby</h3>
+      <p><strong>Zasięg transportu</strong> — analiza jednego punktu.
+        <strong>Porównaj dwa punkty</strong> — na mapie pojawia się drugi,
+        pomarańczowy znacznik (z własną wyszukiwarką adresu), a strefa pokazuje
+        miejsca, do których <strong>obie osoby</strong> dotrą w danym czasie —
+        kolor odpowiada czasowi wolniejszej z nich. Idealne do szukania miejsca
+        spotkania albo mieszkania „pomiędzy". Kliknięcie na mapie przesuwa
+        znacznik bliższy miejscu kliknięcia. Przy kierunku „do miejsca":
+        obszar, z którego da się dojechać do obu punktów.</p>
 
       <h3>Kierunek</h3>
       <p><strong>Z miejsca</strong> — strefy pokazują, dokąd dotrzesz, wyruszając
         z wybranego punktu. <strong>Do miejsca</strong> — pokazują, skąd zdążysz
         dojechać do tego punktu (analiza transportu przyjeżdżającego).</p>
+
+      <h3>Czas</h3>
+      <p><strong>O godzinie</strong> (domyślnie: najbliższe minuty) — liczone
+        według rzeczywistego rozkładu jazdy dla wskazanej godziny i typu dnia,
+        z oczekiwaniem na odjazdy i przesiadki (maks. 4 przesiadki).
+        Przy kierunku „do miejsca" wskazana godzina oznacza czas przyjazdu.
+        <strong>Ogólnie</strong> — suma czasów przejazdu i przejść, bez czekania
+        na pojazdy; obraz „ile się jedzie", niezależny od rozkładu (wynik
+        optymistyczny).</p>
 
       <h3>Dojście piesze</h3>
       <p>Gdy <strong>włączone</strong>, czas obejmuje dojście do przystanku,
@@ -144,27 +166,19 @@
         przystankowego, przesiadki możliwe są tylko w ramach tego samego zespołu,
         a na mapie kolorowane są wyłącznie osiągnięte przystanki.</p>
 
-      <h3>Czas</h3>
-      <p><strong>Ogólnie</strong> — suma czasów przejazdu i przejść, bez czekania
-        na pojazdy; obraz „ile się jedzie", niezależny od rozkładu (wynik
-        optymistyczny). <strong>O godzinie</strong> — liczone według rzeczywistego
-        rozkładu jazdy dla wskazanej godziny i typu dnia, z oczekiwaniem na
-        odjazdy i przesiadki (maks. 4 przesiadki). Przy kierunku „do miejsca"
-        wskazana godzina oznacza czas przyjazdu.</p>
-
       <h3>Strefy na mapie</h3>
       <p>Kolory od ciepłych (blisko) do chłodnych (daleko): do 10, 10–20, 20–30,
         30–45 i 45–60 minut. Pasmo <strong>„ponad 60 min"</strong> jest szare
         i obejmuje miejsca osiągalne w 60–90 minut. Woda (zatoka, port, rzeki)
         jest wycinana ze stref.</p>
 
-      <h3>Tabela statystyk</h3>
-      <p><strong>Zasięg</strong> — największa odległość w linii prostej od
-        wybranego punktu, osiągalna w danym czasie (ukrywana w trybie porównania).
+      <h3>Statystyki</h3>
+      <p>W trybie „Zasięg transportu" przełącznik <strong>„Pokaż statystyki"</strong>
+        otwiera tabelę: <strong>zasięg</strong> — największa odległość w linii
+        prostej od punktu, osiągalna w danym czasie;
         <strong>% Trójmiasta</strong> — odsetek łącznej powierzchni lądowej
-        Gdańska, Sopotu i Gdyni (w granicach administracyjnych) objętej strefą;
-        widoczny tylko przy włączonym spacerze, bo wtedy strefy tworzą ciągły
-        obszar.</p>
+        Gdańska, Sopotu i Gdyni objętej strefą (tylko przy włączonym spacerze,
+        bo wtedy strefy tworzą ciągły obszar).</p>
 
       <h3>Dane</h3>
       <p>Rozkłady: <a href="https://ckan.multimediagdansk.pl/dataset/tristar"

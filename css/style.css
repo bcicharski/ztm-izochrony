@@ -102,13 +102,33 @@ html, body {
   color: var(--muted);
 }
 
+/* ---------- tryb aplikacji ---------- */
+
+.app-mode {
+  margin: 0 0 14px;
+}
+
 /* ---------- wyszukiwarka ---------- */
 
 .search-row {
   display: flex;
+  align-items: center;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
+
+.search-row[hidden] { display: none; }
+
+/* kropki w kolorach pinezek: A niebieska (Leaflet), B pomarańczowa */
+.dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--line);
+}
+.dot-a { background: #2a81cb; }
+.dot-b { background: #e8722d; }
 
 .search-row input {
   flex: 1;
@@ -255,11 +275,6 @@ html, body {
 }
 .time-row[hidden] { display: none; }
 
-.compare-hint {
-  margin: 8px 0 0 !important;
-}
-.compare-hint[hidden] { display: none; }
-
 /* drugi znacznik (tryb porównania) — przebarwiony na pomarańczowo */
 .marker-b {
   filter: hue-rotate(155deg) saturate(1.3) brightness(1.05);
@@ -285,7 +300,35 @@ html, body {
 
 /* ---------- legenda ---------- */
 
-.legend { margin: 4px 0 10px; }
+.legend { margin: 4px 0 12px; }
+
+.legend-bar {
+  display: flex;
+  gap: 2px;
+}
+
+.legend-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend-cell .swatch {
+  width: 100%;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.stats-switch { margin: 0 0 12px; }
+.stats-switch[hidden] { display: none; }
+
+#statsBox { margin: -4px 0 12px; }
+#statsBox[hidden] { display: none; }
 
 .legend h2 {
   margin: 0 0 6px;

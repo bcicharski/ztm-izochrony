@@ -4,21 +4,27 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity } from './data.js';
+import { loadDay, loadMeta, loadWater, loadCity, DAY_LABELS, distM } from './data.js';
 import { computeReachability } from './router.js';
-import { buildZones } from './isochrone.js';
+import { buildZones, BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { initStats, computeStats, computeAreas } from './stats.js';
 
+// --- stan domyślny: „gdybym wyszedł teraz" -----------------------------------
+
+const now = new Date();
+const todayDay = now.getDay() === 0 ? 'sunday' : now.getDay() === 6 ? 'saturday' : 'workday';
+
 const state = {
-  point: L.latLng(54.35540, 18.64450),  // start: Gdańsk Dworzec Główny
-  point2: L.latLng(54.52070, 18.53100), // drugi punkt: Gdynia Dworzec Gł.
+  point: L.latLng(54.35540, 18.64450),  // Gdańsk Dworzec Główny
+  point2: L.latLng(54.38200, 18.60550), // drugi punkt: Wrzeszcz PKP
   compare: false,
   direction: 'from',
   walk: true,
-  mode: 'general',
-  timeMin: 8 * 60,
-  day: 'workday',
+  mode: 'time',
+  timeMin: now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5,
+  day: todayDay,
+  stats: false,
 };
 
 // --- stan z adresu URL (linki do udostępniania) -----------------------------
@@ -36,10 +42,11 @@ let pointFromUrl = false;
   if (q.get('cmp') === '1') state.compare = true;
   if (q.get('dir') === 'to') state.direction = 'to';
   if (q.get('walk') === '0') state.walk = false;
-  if (q.get('mode') === 'time') state.mode = 'time';
+  if (q.get('mode') === 'general') state.mode = 'general';
   const t = q.get('t')?.match(/^(\d{1,2}):(\d{2})$/);
   if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
   if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) state.day = q.get('day');
+  if (q.get('st') === '1') state.stats = true;
 }
 
 function updateUrl() {
@@ -57,6 +64,7 @@ function updateUrl() {
     q.set('t', `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     q.set('day', state.day);
   }
+  if (state.stats && !state.compare) q.set('st', '1');
   history.replaceState(null, '', '?' + q.toString());
 }
 
@@ -67,9 +75,8 @@ const zoneLayer = new ZoneLayer().addTo(map);
 
 const marker = L.marker(state.point, { draggable: true, autoPan: true }).addTo(map);
 marker.on('dragend', () => setPoint(marker.getLatLng()));
-map.on('click', e => setPoint(e.latlng));
 
-// drugi znacznik (tryb porównania) — pomarańczowy, przesuwany tylko przeciąganiem
+// drugi znacznik (tryb porównania) — pomarańczowy
 const marker2 = L.marker(state.point2, {
   draggable: true,
   autoPan: true,
@@ -83,9 +90,15 @@ const marker2 = L.marker(state.point2, {
     className: 'marker-b',
   }),
 });
-marker2.on('dragend', () => {
-  state.point2 = marker2.getLatLng();
-  recompute();
+marker2.on('dragend', () => setPoint2(marker2.getLatLng()));
+
+// w trybie porównania klik przesuwa znacznik bliższy miejscu kliknięcia
+map.on('click', e => {
+  if (!state.compare) { setPoint(e.latlng); return; }
+  const dA = distM(e.latlng.lat, e.latlng.lng, state.point.lat, state.point.lng);
+  const dB = distM(e.latlng.lat, e.latlng.lng, state.point2.lat, state.point2.lng);
+  if (dA <= dB) setPoint(e.latlng);
+  else setPoint2(e.latlng);
 });
 
 function setPoint(latlng, pan = false) {
@@ -95,10 +108,24 @@ function setPoint(latlng, pan = false) {
   recompute();
 }
 
+function setPoint2(latlng, pan = false) {
+  state.point2 = latlng;
+  marker2.setLatLng(latlng);
+  if (pan) map.setView(latlng, Math.max(map.getZoom(), 13));
+  recompute();
+}
+
 // --- kontrolki ------------------------------------------------------------
 
 const $ = id => document.getElementById(id);
 
+for (const el of document.querySelectorAll('input[name="appmode"]')) {
+  el.addEventListener('change', () => {
+    state.compare = el.value === 'compare';
+    syncModeUi();
+    recompute();
+  });
+}
 for (const el of document.querySelectorAll('input[name="direction"]')) {
   el.addEventListener('change', () => { state.direction = el.value; recompute(); });
 }
@@ -110,22 +137,29 @@ for (const el of document.querySelectorAll('input[name="mode"]')) {
   });
 }
 $('walkToggle').addEventListener('change', e => { state.walk = e.target.checked; recompute(); });
-$('compareToggle').addEventListener('change', e => {
-  state.compare = e.target.checked;
-  syncCompareUi();
+$('statsToggle').addEventListener('change', e => {
+  state.stats = e.target.checked;
+  syncModeUi();
   recompute();
 });
-
-function syncCompareUi() {
-  $('compareHint').hidden = !state.compare;
-  if (state.compare) marker2.addTo(map);
-  else marker2.remove();
-}
 $('timeInput').addEventListener('change', e => {
   const [h, m] = e.target.value.split(':').map(Number);
   if (!Number.isNaN(h)) { state.timeMin = h * 60 + m; recompute(); }
 });
 $('daySelect').addEventListener('change', e => { state.day = e.target.value; recompute(); });
+
+/** Dostosowuje panel do trybu: pola punktu B, statystyki, podpowiedź, znacznik. */
+function syncModeUi() {
+  $('searchRow2').hidden = !state.compare;
+  if (!state.compare) $('searchResults2').hidden = true;
+  $('statsToggleRow').hidden = state.compare;
+  $('statsBox').hidden = state.compare || !state.stats;
+  $('hint').innerHTML = state.compare
+    ? 'Strefa pokazuje, dokąd dotrzecie <strong>oboje</strong>. Klik na mapie przesuwa bliższy znacznik.'
+    : 'Kliknij punkt na mapie albo przeciągnij znacznik.';
+  if (state.compare) marker2.addTo(map);
+  else marker2.remove();
+}
 
 // --- wyszukiwarka adresów, lokalizacja, udostępnianie ------------------------
 
@@ -139,43 +173,48 @@ async function searchAddress(query) {
   return r.json();
 }
 
-function showSearchResults(items) {
-  const ul = $('searchResults');
-  ul.innerHTML = '';
-  ul.hidden = false;
-  if (!items.length) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'Nie znaleziono — spróbuj doprecyzować.';
-    ul.appendChild(li);
-    return;
-  }
-  for (const item of items) {
-    const li = document.createElement('li');
-    li.textContent = item.display_name.split(', ').slice(0, 4).join(', ');
-    li.addEventListener('click', () => {
-      ul.hidden = true;
-      $('searchInput').value = li.textContent;
-      setPoint(L.latLng(+item.lat, +item.lon), true);
-    });
-    ul.appendChild(li);
-  }
+/** Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników. */
+function attachSearch(inputId, listId, onPick) {
+  const input = $(inputId), ul = $(listId);
+  const showResults = items => {
+    ul.innerHTML = '';
+    ul.hidden = false;
+    if (!items.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'Nie znaleziono — spróbuj doprecyzować.';
+      ul.appendChild(li);
+      return;
+    }
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.textContent = item.display_name.split(', ').slice(0, 4).join(', ');
+      li.addEventListener('click', () => {
+        ul.hidden = true;
+        input.value = li.textContent;
+        onPick(L.latLng(+item.lat, +item.lon));
+      });
+      ul.appendChild(li);
+    }
+  };
+  input.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter') return;
+    const query = input.value.trim();
+    if (query.length < 3) return;
+    try {
+      showResults(await searchAddress(query));
+    } catch (err) {
+      console.error(err);
+      $('status').textContent = 'Wyszukiwarka adresów chwilowo niedostępna.';
+    }
+  });
+  input.addEventListener('input', () => {
+    if (!input.value) ul.hidden = true;
+  });
 }
 
-$('searchInput').addEventListener('keydown', async e => {
-  if (e.key !== 'Enter') return;
-  const query = e.target.value.trim();
-  if (query.length < 3) return;
-  try {
-    showSearchResults(await searchAddress(query));
-  } catch (err) {
-    console.error(err);
-    $('status').textContent = 'Wyszukiwarka adresów chwilowo niedostępna.';
-  }
-});
-$('searchInput').addEventListener('input', e => {
-  if (!e.target.value) $('searchResults').hidden = true;
-});
+attachSearch('searchInput', 'searchResults', latlng => setPoint(latlng, true));
+attachSearch('searchInput2', 'searchResults2', latlng => setPoint2(latlng, true));
 
 $('locateBtn').addEventListener('click', () => {
   if (!navigator.geolocation) {
@@ -218,11 +257,30 @@ $('collapseBtn').addEventListener('click', () => {
   $('collapseBtn').setAttribute('aria-expanded', String(!collapsed));
 });
 
+// --- legenda (zawsze widoczna, kompaktowa) -----------------------------------
+
+{
+  const bar = $('legendBar');
+  const short = ['≤10', '20', '30', '45', '60', '60+'];
+  BANDS.forEach((band, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'legend-cell';
+    const sw = document.createElement('span');
+    sw.className = 'swatch';
+    // swatch w tej samej przezroczystości, w jakiej strefa leży na mapie
+    sw.style.background = band.color;
+    sw.style.opacity = ZONE_ALPHA;
+    const label = document.createElement('span');
+    label.textContent = short[i];
+    cell.append(sw, label);
+    bar.appendChild(cell);
+  });
+}
+
 // --- tabela statystyk ---------------------------------------------------------
 
-function renderStats(rows, walk, compare) {
-  $('areaHead').hidden = !walk;
-  $('distHead').hidden = compare;
+function renderStats(rows) {
+  $('areaHead').hidden = !state.walk;
   const body = $('statsBody');
   body.innerHTML = '';
   for (const row of rows) {
@@ -233,21 +291,18 @@ function renderStats(rows, walk, compare) {
     cell.className = 'zone-cell';
     const sw = document.createElement('span');
     sw.className = 'swatch';
-    // swatch w tej samej przezroczystości, w jakiej strefa leży na mapie
     sw.style.background = row.color;
     sw.style.opacity = ZONE_ALPHA;
     cell.append(sw, row.label);
     tdZone.appendChild(cell);
     tr.appendChild(tdZone);
 
-    if (!compare) {
-      const tdDist = document.createElement('td');
-      tdDist.className = 'num';
-      tdDist.textContent = row.maxKm > 0 ? `${row.maxKm.toFixed(1)} km` : '—';
-      tr.appendChild(tdDist);
-    }
+    const tdDist = document.createElement('td');
+    tdDist.className = 'num';
+    tdDist.textContent = row.maxKm > 0 ? `${row.maxKm.toFixed(1)} km` : '—';
+    tr.appendChild(tdDist);
 
-    if (walk) {
+    if (state.walk) {
       const tdArea = document.createElement('td');
       tdArea.className = 'num';
       tdArea.textContent = row.areaPct == null ? '—'
@@ -262,6 +317,17 @@ function renderStats(rows, walk, compare) {
 
 let computeSeq = 0;
 
+/** Czytelny opis bieżącego widoku do paska statusu. */
+function statusText() {
+  const what = state.compare
+    ? (state.direction === 'from' ? 'Wspólny zasięg dwóch punktów' : 'Obszar z dojazdem do obu punktów')
+    : (state.direction === 'from' ? 'Zasięg z punktu' : 'Obszar z dojazdem do punktu');
+  const when = state.mode === 'time'
+    ? `${DAY_LABELS[state.day]}, ${$('timeInput').value}`
+    : 'tryb ogólny (bez oczekiwania)';
+  return `${what} · ${when}.`;
+}
+
 async function recompute() {
   const seq = ++computeSeq;
   updateUrl();
@@ -273,7 +339,6 @@ async function recompute() {
     const net = await loadDay(dayKey);
     if (seq !== computeSeq) return; // w międzyczasie przyszło nowsze zapytanie
 
-    const t0 = performance.now();
     const optsBase = {
       direction: state.direction,
       walk: state.walk,
@@ -300,30 +365,26 @@ async function recompute() {
     });
     zoneLayer.setZones(zones);
 
-    const statRows = computeStats(net, minutes, {
-      walk: state.walk,
-      origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
-    });
-    renderStats(statRows, state.walk, state.compare);
-    if (state.walk) {
-      // rasteryzacja powierzchni jest cięższa — poza ścieżką rysowania mapy
-      setTimeout(() => {
-        if (seq !== computeSeq) return;
-        computeAreas(zones, statRows);
-        renderStats(statRows, state.walk, state.compare);
-      }, 0);
+    if (!state.compare && state.stats) {
+      const statRows = computeStats(net, minutes, {
+        walk: state.walk,
+        origin: { lat: state.point.lat, lon: state.point.lng },
+      });
+      renderStats(statRows);
+      if (state.walk) {
+        // rasteryzacja powierzchni jest cięższa — poza ścieżką rysowania mapy
+        setTimeout(() => {
+          if (seq !== computeSeq) return;
+          computeAreas(zones, statRows);
+          renderStats(statRows);
+        }, 0);
+      }
     }
 
     const reachable = minutes.reduce((s, v) => s + (v <= 90 ? 1 : 0), 0);
-    if (reachable === 0) {
-      status.textContent = 'Brak przystanków w zasięgu — wybierz punkt bliżej Trójmiasta.';
-    } else {
-      const dirTxt = state.compare
-        ? (state.direction === 'from' ? 'osiągalnych przez oboje' : 'z dojazdem do obu punktów')
-        : (state.direction === 'from' ? 'w zasięgu z punktu' : 'w zasięgu do punktu');
-      status.textContent =
-        `${reachable} przystanków ${dirTxt} w 90 min (${(performance.now() - t0).toFixed(0)} ms).`;
-    }
+    status.textContent = reachable === 0
+      ? 'Brak przystanków w zasięgu — wybierz punkt bliżej Trójmiasta.'
+      : statusText();
   } catch (err) {
     console.error(err);
     if (seq === computeSeq) status.textContent = 'Błąd wczytywania danych rozkładowych.';
@@ -336,14 +397,15 @@ Promise.all([loadWater(), loadCity()])
   .then(([water, city]) => {
     if (water) zoneLayer.setWater(water);
     if (city) {
-      const landKm2 = initStats(city, water);
-      console.log(`Powierzchnia lądowa Gdańska (raster): ${landKm2.toFixed(1)} km²`);
-      recompute(); // uzupełnij kolumnę "% miasta" po zbudowaniu rastra
+      initStats(city, water);
+      recompute(); // uzupełnij kolumnę "% Trójmiasta" po zbudowaniu rastra
     }
   })
   .catch(() => { /* brak maski wody/granicy nie blokuje działania */ });
 
-// odtworzenie stanu kontrolek (np. po wejściu z linku)
+// odtworzenie stanu kontrolek (domyślne wartości albo stan z linku)
+$('appSingle').checked = !state.compare;
+$('appCompare').checked = state.compare;
 $('dirFrom').checked = state.direction === 'from';
 $('dirTo').checked = state.direction === 'to';
 $('walkToggle').checked = state.walk;
@@ -353,8 +415,8 @@ $('timeRow').hidden = state.mode !== 'time';
 $('timeInput').value =
   `${String(Math.floor(state.timeMin / 60)).padStart(2, '0')}:${String(state.timeMin % 60).padStart(2, '0')}`;
 $('daySelect').value = state.day;
-$('compareToggle').checked = state.compare;
-syncCompareUi();
+$('statsToggle').checked = state.stats;
+syncModeUi();
 if (pointFromUrl) map.setView(state.point, 13);
 
 loadMeta().then(meta => {

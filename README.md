@@ -21,6 +21,13 @@ przez przeglądarkę). Strona pokazuje wówczas stosowny komunikat.
 
 ## Opcje na stronie
 
+Na górze panelu wybiera się tryb: **Zasięg transportu** (jeden punkt) albo
+**Porównaj dwa punkty** (drugi znacznik z własną wyszukiwarką; strefa = czas
+wolniejszej osoby, klik na mapie przesuwa bliższy znacznik). Domyślnie aktywne
+są „O godzinie" (bieżąca godzina i dzisiejszy typ dnia) oraz „Uwzględnij
+spacer". Legenda kolorów jest zawsze widoczna; tabela statystyk (tylko w trybie
+jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
+
 - **Kierunek** — *Z miejsca*: dokąd dotrę z punktu; *Do miejsca*: skąd zdążę
   dotrzeć do punktu.
 - **Dojście piesze** — wliczone dojście do przystanków i od przystanku
