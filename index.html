@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dokąd dojadę? — izochrony ZTM Gdańsk</title>
-  <meta name="description" content="Interaktywna mapa pokazująca, jak daleko można dotrzeć komunikacją miejską ZTM Gdańsk w zadanym czasie.">
+  <title>Dokąd dojadę? — izochrony komunikacji miejskiej Trójmiasta</title>
+  <meta name="description" content="Interaktywna mapa pokazująca, jak daleko można dotrzeć komunikacją miejską w Trójmieście (ZTM Gdańsk, ZKM Gdynia, SKM/PKM) w zadanym czasie.">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230d0887'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23b83289'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23febd2a'/%3E%3C/svg%3E">
@@ -15,7 +15,7 @@
   <main class="panel" id="panel">
     <header class="panel-header">
       <h1>Dokąd dojadę?</h1>
-      <p class="subtitle">Zasięg komunikacji miejskiej ZTM Gdańsk</p>
+      <p class="subtitle">Zasięg komunikacji miejskiej w Trójmieście</p>
       <button class="help-btn" id="helpBtn" aria-label="Pomoc — jak korzystać z mapy">?</button>
       <button class="collapse-btn" id="collapseBtn" aria-label="Zwiń panel" aria-expanded="true">−</button>
     </header>
@@ -38,6 +38,19 @@
           <input type="radio" name="direction" id="dirTo" value="to">
           <label for="dirTo">Do miejsca</label>
         </div>
+      </fieldset>
+
+      <fieldset class="control">
+        <legend>Porównanie</legend>
+        <label class="switch">
+          <input type="checkbox" id="compareToggle">
+          <span class="track" aria-hidden="true"></span>
+          <span>Porównaj dwa punkty</span>
+        </label>
+        <p class="hint compare-hint" id="compareHint" hidden>
+          Strefa pokazuje, dokąd dotrzecie <strong>oboje</strong> w danym czasie.
+          Drugi punkt (pomarańczowy) przesuwaj przeciąganiem.
+        </p>
       </fieldset>
 
       <fieldset class="control">
@@ -73,19 +86,22 @@
           <thead>
             <tr>
               <th scope="col">strefa</th>
-              <th scope="col" class="num">zasięg</th>
-              <th scope="col" class="num" id="areaHead">% miasta</th>
+              <th scope="col" class="num" id="distHead">zasięg</th>
+              <th scope="col" class="num" id="areaHead">% Trójmiasta</th>
             </tr>
           </thead>
           <tbody id="statsBody"></tbody>
         </table>
-        <p class="note">Zasięg = maks. odległość w linii prostej. Pasmo „ponad 60 min" liczone do 90 min.</p>
+        <p class="note">Zasięg = maks. odległość w linii prostej. % = udział powierzchni lądowej
+          Gdańska, Sopotu i Gdyni. Pasmo „ponad 60 min" liczone do 90 min.</p>
       </div>
 
       <p class="status" id="status" role="status"></p>
       <button class="share-btn" id="shareBtn">Kopiuj link do tego widoku</button>
       <footer class="credits">
         Dane: <a href="https://ckan.multimediagdansk.pl/dataset/tristar" target="_blank" rel="noopener">ZTM Gdańsk</a> (CC BY)
+        · <a href="https://otwartedane.gdynia.pl" target="_blank" rel="noopener">ZKM Gdynia</a>
+        · <a href="https://bip.skm.pkp.pl/c97/otwarte-dane" target="_blank" rel="noopener">PKP SKM</a>
         · rozkład z dnia <span id="feedDate">…</span>
       </footer>
     </div>
@@ -97,13 +113,23 @@
       <button class="collapse-btn" id="helpClose" aria-label="Zamknij pomoc">×</button>
     </div>
     <div class="help-body">
-      <p>Mapa pokazuje, jak daleko można dotrzeć komunikacją miejską ZTM w Gdańsku
-        (tramwaje i autobusy, z przesiadkami) w zadanym czasie.
+      <p>Mapa pokazuje, jak daleko można dotrzeć komunikacją miejską w Trójmieście —
+        tramwajami i autobusami ZTM Gdańsk, autobusami i trolejbusami ZKM Gdynia
+        oraz koleją SKM/PKM (z przesiadkami) — w zadanym czasie.
         <strong>Kliknij dowolny punkt na mapie</strong>, przeciągnij znacznik,
         wyszukaj adres albo użyj przycisku ⌖ (Twoja lokalizacja) —
         kolorowe strefy i tabela statystyk przeliczą się od razu.
         Przycisk <strong>„Kopiuj link"</strong> zapisuje bieżący widok
         (punkt i wszystkie opcje) w adresie strony — możesz go wysłać innym.</p>
+
+      <h3>Porównanie dwóch punktów</h3>
+      <p>Po włączeniu na mapie pojawia się drugi, pomarańczowy znacznik
+        (przesuwany przeciąganiem; niebieski ustawiasz klikiem lub wyszukiwarką).
+        Strefa pokazuje wtedy miejsca, do których <strong>obie osoby</strong>
+        dotrą w danym czasie — kolor odpowiada czasowi wolniejszej z nich.
+        Idealne do szukania miejsca spotkania albo mieszkania „pomiędzy".
+        Przy kierunku „do miejsca": obszar, z którego da się dojechać
+        do obu punktów.</p>
 
       <h3>Kierunek</h3>
       <p><strong>Z miejsca</strong> — strefy pokazują, dokąd dotrzesz, wyruszając
@@ -134,14 +160,18 @@
 
       <h3>Tabela statystyk</h3>
       <p><strong>Zasięg</strong> — największa odległość w linii prostej od
-        wybranego punktu, osiągalna w danym czasie.
-        <strong>% miasta</strong> — odsetek powierzchni lądowej Gdańska
-        (w granicach administracyjnych) objętej strefą; widoczny tylko przy
-        włączonym spacerze, bo wtedy strefy tworzą ciągły obszar.</p>
+        wybranego punktu, osiągalna w danym czasie (ukrywana w trybie porównania).
+        <strong>% Trójmiasta</strong> — odsetek łącznej powierzchni lądowej
+        Gdańska, Sopotu i Gdyni (w granicach administracyjnych) objętej strefą;
+        widoczny tylko przy włączonym spacerze, bo wtedy strefy tworzą ciągły
+        obszar.</p>
 
       <h3>Dane</h3>
       <p>Rozkłady: <a href="https://ckan.multimediagdansk.pl/dataset/tristar"
-        target="_blank" rel="noopener">Otwarte dane ZTM w Gdańsku</a> (CC BY);
+        target="_blank" rel="noopener">ZTM Gdańsk</a> (CC BY),
+        <a href="https://otwartedane.gdynia.pl" target="_blank" rel="noopener">ZKM Gdynia</a>,
+        <a href="https://bip.skm.pkp.pl/c97/otwarte-dane" target="_blank" rel="noopener">PKP SKM
+        w Trójmieście</a> (feed SKM obejmuje też pociągi linii PKM);
         podkład i geometria wody: OpenStreetMap. Wyniki są orientacyjne —
         rzeczywiste czasy zależą m.in. od ruchu ulicznego i opóźnień.</p>
     </div>

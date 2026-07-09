@@ -1,5 +1,5 @@
 # pliki robocze przetwarzania GTFS
-gtfs.zip
+*.zip
 gtfs-src/
 
 # system

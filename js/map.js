@@ -13,8 +13,8 @@ const M_PER_DEG_LAT = 111320;
 
 export function createMap(container) {
   const map = L.map(container, {
-    center: [54.372, 18.63],
-    zoom: 12,
+    center: [54.435, 18.57], // całe Trójmiasto
+    zoom: 11,
     zoomControl: false,
   });
   L.control.zoom({ position: 'bottomright' }).addTo(map);

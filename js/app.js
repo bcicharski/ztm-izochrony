@@ -11,7 +11,9 @@ import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { initStats, computeStats, computeAreas } from './stats.js';
 
 const state = {
-  point: L.latLng(54.35540, 18.64450), // start: Dworzec Główny
+  point: L.latLng(54.35540, 18.64450),  // start: Gdańsk Dworzec Główny
+  point2: L.latLng(54.52070, 18.53100), // drugi punkt: Gdynia Dworzec Gł.
+  compare: false,
   direction: 'from',
   walk: true,
   mode: 'general',
@@ -29,6 +31,9 @@ let pointFromUrl = false;
     state.point = L.latLng(p[0], p[1]);
     pointFromUrl = true;
   }
+  const p2 = q.get('p2')?.split(',').map(Number);
+  if (p2?.length === 2 && p2.every(Number.isFinite)) state.point2 = L.latLng(p2[0], p2[1]);
+  if (q.get('cmp') === '1') state.compare = true;
   if (q.get('dir') === 'to') state.direction = 'to';
   if (q.get('walk') === '0') state.walk = false;
   if (q.get('mode') === 'time') state.mode = 'time';
@@ -40,6 +45,10 @@ let pointFromUrl = false;
 function updateUrl() {
   const q = new URLSearchParams();
   q.set('p', `${state.point.lat.toFixed(5)},${state.point.lng.toFixed(5)}`);
+  if (state.compare) {
+    q.set('cmp', '1');
+    q.set('p2', `${state.point2.lat.toFixed(5)},${state.point2.lng.toFixed(5)}`);
+  }
   q.set('dir', state.direction);
   q.set('walk', state.walk ? '1' : '0');
   q.set('mode', state.mode);
@@ -59,6 +68,25 @@ const zoneLayer = new ZoneLayer().addTo(map);
 const marker = L.marker(state.point, { draggable: true, autoPan: true }).addTo(map);
 marker.on('dragend', () => setPoint(marker.getLatLng()));
 map.on('click', e => setPoint(e.latlng));
+
+// drugi znacznik (tryb porównania) — pomarańczowy, przesuwany tylko przeciąganiem
+const marker2 = L.marker(state.point2, {
+  draggable: true,
+  autoPan: true,
+  icon: L.icon({
+    iconUrl: 'vendor/leaflet/images/marker-icon.png',
+    iconRetinaUrl: 'vendor/leaflet/images/marker-icon-2x.png',
+    shadowUrl: 'vendor/leaflet/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    shadowSize: [41, 41],
+    className: 'marker-b',
+  }),
+});
+marker2.on('dragend', () => {
+  state.point2 = marker2.getLatLng();
+  recompute();
+});
 
 function setPoint(latlng, pan = false) {
   state.point = latlng;
@@ -82,6 +110,17 @@ for (const el of document.querySelectorAll('input[name="mode"]')) {
   });
 }
 $('walkToggle').addEventListener('change', e => { state.walk = e.target.checked; recompute(); });
+$('compareToggle').addEventListener('change', e => {
+  state.compare = e.target.checked;
+  syncCompareUi();
+  recompute();
+});
+
+function syncCompareUi() {
+  $('compareHint').hidden = !state.compare;
+  if (state.compare) marker2.addTo(map);
+  else marker2.remove();
+}
 $('timeInput').addEventListener('change', e => {
   const [h, m] = e.target.value.split(':').map(Number);
   if (!Number.isNaN(h)) { state.timeMin = h * 60 + m; recompute(); }
@@ -181,8 +220,9 @@ $('collapseBtn').addEventListener('click', () => {
 
 // --- tabela statystyk ---------------------------------------------------------
 
-function renderStats(rows, walk) {
+function renderStats(rows, walk, compare) {
   $('areaHead').hidden = !walk;
+  $('distHead').hidden = compare;
   const body = $('statsBody');
   body.innerHTML = '';
   for (const row of rows) {
@@ -200,10 +240,12 @@ function renderStats(rows, walk) {
     tdZone.appendChild(cell);
     tr.appendChild(tdZone);
 
-    const tdDist = document.createElement('td');
-    tdDist.className = 'num';
-    tdDist.textContent = row.maxKm > 0 ? `${row.maxKm.toFixed(1)} km` : '—';
-    tr.appendChild(tdDist);
+    if (!compare) {
+      const tdDist = document.createElement('td');
+      tdDist.className = 'num';
+      tdDist.textContent = row.maxKm > 0 ? `${row.maxKm.toFixed(1)} km` : '—';
+      tr.appendChild(tdDist);
+    }
 
     if (walk) {
       const tdArea = document.createElement('td');
@@ -232,41 +274,55 @@ async function recompute() {
     if (seq !== computeSeq) return; // w międzyczasie przyszło nowsze zapytanie
 
     const t0 = performance.now();
-    const res = computeReachability(net, {
-      lat: state.point.lat,
-      lon: state.point.lng,
+    const optsBase = {
       direction: state.direction,
       walk: state.walk,
       mode: state.mode,
       timeMin: state.timeMin,
+    };
+    const res = computeReachability(net, {
+      ...optsBase, lat: state.point.lat, lon: state.point.lng,
     });
-    const zones = buildZones(net, res.minutes, {
+    let minutes = res.minutes;
+    if (state.compare) {
+      // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
+      const res2 = computeReachability(net, {
+        ...optsBase, lat: state.point2.lat, lon: state.point2.lng,
+      });
+      minutes = new Float64Array(res.minutes.length);
+      for (let i = 0; i < minutes.length; i++) {
+        minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
+      }
+    }
+    const zones = buildZones(net, minutes, {
       walk: state.walk,
-      origin: { lat: state.point.lat, lon: state.point.lng },
+      origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
     });
     zoneLayer.setZones(zones);
 
-    const statRows = computeStats(net, res.minutes, {
+    const statRows = computeStats(net, minutes, {
       walk: state.walk,
-      origin: { lat: state.point.lat, lon: state.point.lng },
+      origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
     });
-    renderStats(statRows, state.walk);
+    renderStats(statRows, state.walk, state.compare);
     if (state.walk) {
       // rasteryzacja powierzchni jest cięższa — poza ścieżką rysowania mapy
       setTimeout(() => {
         if (seq !== computeSeq) return;
         computeAreas(zones, statRows);
-        renderStats(statRows, state.walk);
+        renderStats(statRows, state.walk, state.compare);
       }, 0);
     }
 
-    const reachable = res.minutes.reduce((s, v) => s + (v <= 90 ? 1 : 0), 0);
+    const reachable = minutes.reduce((s, v) => s + (v <= 90 ? 1 : 0), 0);
     if (reachable === 0) {
-      status.textContent = 'Brak przystanków w zasięgu — wybierz punkt bliżej Gdańska.';
+      status.textContent = 'Brak przystanków w zasięgu — wybierz punkt bliżej Trójmiasta.';
     } else {
-      const dirTxt = state.direction === 'from' ? 'z punktu' : 'do punktu';
+      const dirTxt = state.compare
+        ? (state.direction === 'from' ? 'osiągalnych przez oboje' : 'z dojazdem do obu punktów')
+        : (state.direction === 'from' ? 'w zasięgu z punktu' : 'w zasięgu do punktu');
       status.textContent =
-        `${reachable} przystanków w zasięgu 90 min ${dirTxt} (${(performance.now() - t0).toFixed(0)} ms).`;
+        `${reachable} przystanków ${dirTxt} w 90 min (${(performance.now() - t0).toFixed(0)} ms).`;
     }
   } catch (err) {
     console.error(err);
@@ -297,6 +353,8 @@ $('timeRow').hidden = state.mode !== 'time';
 $('timeInput').value =
   `${String(Math.floor(state.timeMin / 60)).padStart(2, '0')}:${String(state.timeMin % 60).padStart(2, '0')}`;
 $('daySelect').value = state.day;
+$('compareToggle').checked = state.compare;
+syncCompareUi();
 if (pointFromUrl) map.setView(state.point, 13);
 
 loadMeta().then(meta => {

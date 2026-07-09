@@ -91,17 +91,24 @@ export function orient(ring, filled) {
   return cw === filled ? ring : ring.slice().reverse();
 }
 
-export async function fetchOverpass(query) {
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'ztm-gdansk-isochrones-build/1.0',
-    },
-    body: 'data=' + encodeURIComponent(query),
-  });
-  if (!res.ok) throw new Error(`Overpass: HTTP ${res.status}`);
-  return res.json();
+export async function fetchOverpass(query, tries = 4) {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'ztm-gdansk-isochrones-build/1.0',
+      },
+      body: 'data=' + encodeURIComponent(query),
+    });
+    if (res.ok) return res.json();
+    if (attempt >= tries || ![429, 502, 503, 504].includes(res.status)) {
+      throw new Error(`Overpass: HTTP ${res.status}`);
+    }
+    const waitS = attempt * 20;
+    console.log(`Overpass HTTP ${res.status} — ponawiam za ${waitS} s (próba ${attempt}/${tries})…`);
+    await new Promise(r => setTimeout(r, waitS * 1000));
+  }
 }
 
 /** Kwantyzacja pierścieni do formatu zapisu [[lat*1e5, lon*1e5], ...]. */

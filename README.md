@@ -1,9 +1,9 @@
-# Dokąd dojadę? — izochrony ZTM Gdańsk
+# Dokąd dojadę? — izochrony komunikacji miejskiej Trójmiasta
 
-Statyczna strona pokazująca, jak daleko można dotrzeć komunikacją miejską ZTM
-w Gdańsku (z przesiadkami, opcjonalnie z dojściem pieszym) w ciągu
-10 / 20 / 30 / 45 / 60 / ponad 60 minut. Całość liczy się w przeglądarce —
-bez backendu.
+Statyczna strona pokazująca, jak daleko można dotrzeć komunikacją miejską
+w Trójmieście — ZTM Gdańsk, ZKM Gdynia oraz koleją SKM/PKM (z przesiadkami,
+opcjonalnie z dojściem pieszym) — w ciągu 10 / 20 / 30 / 45 / 60 / ponad 60
+minut. Całość liczy się w przeglądarce — bez backendu.
 
 ## Uruchomienie lokalne
 
@@ -32,6 +32,9 @@ przez przeglądarkę). Strona pokazuje wówczas stosowny komunikat.
 - **O godzinie** — rzeczywisty rozkład z oczekiwaniem na przesiadki
   (algorytm RAPTOR, maks. 4 przesiadki) + wybór typu dnia
   (roboczy / sobota / niedziela).
+- **Porównanie dwóch punktów** — drugi znacznik; strefa pokazuje miejsca
+  osiągalne przez obie osoby (czas = wolniejsza z nich). Przy kierunku
+  „do miejsca": obszar z dojazdem do obu punktów.
 
 Punkt można też wskazać wyszukiwarką adresów (Nominatim/OSM, wyniki zawężone
 do okolic Trójmiasta) albo przyciskiem geolokalizacji. Bieżący widok (punkt
@@ -40,26 +43,36 @@ pozwala go udostępnić.
 
 Panel pokazuje też tabelę statystyk dla wybranego punktu: maksymalną
 odległość w linii prostej osiągalną w każdym paśmie czasu oraz — w trybie
-ze spacerem — odsetek powierzchni lądowej Gdańska objętej strefą (liczony
-rastrowo, 25 m/px, względem granicy administracyjnej z odjęciem wód;
-raster daje ~256 km² lądu przy oficjalnych 262 km² powierzchni miasta).
+ze spacerem — odsetek łącznej powierzchni lądowej Gdańska, Sopotu i Gdyni
+objętej strefą (liczony rastrowo, 25 m/px, względem granic administracyjnych
+z odjęciem wód).
 
 ## Odświeżanie danych rozkładowych
 
-Dane pochodzą z [otwartych danych ZTM Gdańsk](https://ckan.multimediagdansk.pl/dataset/tristar)
-(licencja CC BY). Feed GTFS obejmuje ok. 15 dni, więc dane warto odświeżać
-co tydzień–dwa:
+Źródła (wszystkie otwarte):
+[ZTM Gdańsk](https://ckan.multimediagdansk.pl/dataset/tristar) (CC BY),
+[ZKM Gdynia](https://otwartedane.gdynia.pl) i
+[PKP SKM w Trójmieście](https://bip.skm.pkp.pl/c97/otwarte-dane) — feed SKM
+obejmuje też pociągi linii PKM. Wspólny zakres dat feedów jest ograniczony
+(ZTM publikuje ~15 dni naprzód), więc dane warto odświeżać co tydzień–dwa.
+Robi to automatycznie workflow GitHub Actions (poniedziałki), ręcznie:
 
 ```
-curl -L -o gtfs.zip "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip"
-tar -xf gtfs.zip -C gtfs-src   # (Windows: tar rozpakowuje zip; utwórz wcześniej katalog gtfs-src)
-node tools/build-data.mjs gtfs-src
+mkdir gtfs-src\ztm gtfs-src\zkm gtfs-src\skm
+curl -L -o ztm.zip "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip"
+curl -L -o zkm.zip "http://api.zdiz.gdynia.pl/pt/gtfs.zip"
+curl -L -o skm.zip "https://www.skm.pkp.pl/gtfs-mi-kpd.zip"
+tar -xf ztm.zip -C gtfs-src/ztm & tar -xf zkm.zip -C gtfs-src/zkm & tar -xf skm.zip -C gtfs-src/skm
+node tools/build-data.mjs gtfs-src/ztm gtfs-src/zkm gtfs-src/skm
 ```
 
-Skrypt wybiera z feedu reprezentatywny dzień roboczy (wt–czw), sobotę
-i niedzielę, buduje wzorce tras z deduplikacją profili czasowych i zapisuje
-`data/workday.json`, `data/saturday.json`, `data/sunday.json` (po ~0,3 MB)
-oraz `data/meta.json`.
+Skrypt łączy feedy (prefiksując identyfikatory), wybiera reprezentatywny
+dzień roboczy (wt–czw), sobotę i niedzielę ze wspólnego zakresu dat, buduje
+wzorce tras z deduplikacją profili czasowych i zapisuje `data/workday.json`,
+`data/saturday.json`, `data/sunday.json` (po ~0,6–0,8 MB) oraz `data/meta.json`.
+Zespoły przystankowe wyznacza po nazwie z klastrowaniem odległościowym
+(≤300 m), żeby identyczne nazwy w różnych miastach nie zlewały się w jeden
+węzeł przesiadkowy.
 
 ## Struktura
 
@@ -71,10 +84,10 @@ js/data.js             ładowanie i dekodowanie data/*.json
 js/router.js           RAPTOR (tryb godzinowy) + Dijkstra (tryb ogólny)
 js/isochrone.js        czasy dojazdu -> geometria stref (koła spacerowe)
 js/map.js              Leaflet + warstwa canvas rysująca strefy
-js/stats.js            statystyki: maks. zasięg i % powierzchni miasta
-tools/build-data.mjs   prekompilacja GTFS -> data/*.json
+js/stats.js            statystyki: maks. zasięg i % powierzchni Trójmiasta
+tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/*.json
 tools/build-water.mjs  maska wody z OSM/Overpass -> data/water.json
-tools/build-city.mjs   granica adm. Gdańska z OSM -> data/city.json
+tools/build-city.mjs   granice adm. Gdańska, Sopotu i Gdyni -> data/city.json
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*
 tools/serve.mjs        serwer deweloperski
 vendor/leaflet/        Leaflet 1.9.4 (zvendorowany)
@@ -89,7 +102,8 @@ linia brzegowa, czyli praktycznie nigdy).
 
 ## Ograniczenia
 
-- Tylko linie ZTM Gdańsk (bez SKM/PKM i ZKM Gdynia).
+- Bez połączeń regionalnych spoza sieci miejskiej (Polregio, PKS itd.);
+  feed SKM sięga jednak aż po Wejherowo/Lębork i Tczew.
 - Dojście piesze liczone w linii prostej z korektą na krętość ulic,
   nie po rzeczywistej siatce ulic.
 - Tryb „ogólnie" jest optymistyczny: skleja najszybsze odcinki różnych

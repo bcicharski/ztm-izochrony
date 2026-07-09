@@ -34,8 +34,11 @@ export function buildZones(net, minutes, opts) {
 
   if (opts.walk) {
     // punkt startowy zachowuje się jak przystanek o czasie 0
-    for (let b = 0; b < BANDS.length; b++) {
-      zones[b].circles.push([opts.origin.lat, opts.origin.lon, BANDS[b].limit * 60 * WALK_MPS]);
+    // (w trybie porównania origin jest pomijany — obszar wyznaczają przystanki)
+    if (opts.origin) {
+      for (let b = 0; b < BANDS.length; b++) {
+        zones[b].circles.push([opts.origin.lat, opts.origin.lon, BANDS[b].limit * 60 * WALK_MPS]);
+      }
     }
     for (let i = 0; i < net.nStops; i++) {
       const t = minutes[i];

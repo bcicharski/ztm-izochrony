@@ -16,9 +16,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fetchOverpass } from './geo.mjs';
 
-const BBOX = { s: 54.28, w: 18.45, n: 54.50, e: 19.10 }; // obszar sieci ZTM
-const SEA_N = 54.62, SEA_E = 19.25;                       // domknięcie morza za bboxem
+const BBOX = { s: 54.28, w: 18.30, n: 54.62, e: 19.10 }; // Trójmiasto z okolicą
+const SEA_N = 54.80, SEA_E = 19.25;                       // domknięcie morza za bboxem
 const MIN_AREA_KM2 = 0.02;   // pomijaj oczka mniejsze niż ~2 ha
 const SIMPLIFY_M = 15;       // tolerancja upraszczania Douglas-Peucker
 
@@ -38,12 +39,7 @@ if (process.argv[2]) {
   raw = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 } else {
   console.log('Pobieram geometrię wody z Overpass API…');
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    body: 'data=' + encodeURIComponent(query),
-  });
-  if (!res.ok) throw new Error(`Overpass: HTTP ${res.status}`);
-  raw = await res.json();
+  raw = await fetchOverpass(query);
 }
 
 // --- pomocnicze --------------------------------------------------------------

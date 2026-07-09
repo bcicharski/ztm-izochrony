@@ -1,10 +1,14 @@
 {
-  "generated": "2026-07-08T21:48:18.434Z",
+  "generated": "2026-07-09T10:49:08.438Z",
   "feedEndDate": "20260722",
   "dates": {
-    "workday": "20260708",
+    "workday": "20260709",
     "saturday": "20260711",
     "sunday": "20260712"
   },
-  "source": "ZTM Gdańsk – Otwarte dane (CC BY), https://ckan.multimediagdansk.pl/dataset/tristar"
+  "sources": [
+    "ZTM Gdańsk – Otwarte dane (CC BY), https://ckan.multimediagdansk.pl/dataset/tristar",
+    "ZKM Gdynia – otwartedane.gdynia.pl",
+    "PKP Szybka Kolej Miejska w Trójmieście Sp. z o.o. – bip.skm.pkp.pl/otwarte-dane"
+  ]
 }

@@ -90,6 +90,12 @@ export function computeStats(net, minutes, opts) {
     maxKm: 0, areaPct: null,
   }));
 
+  // bez punktu odniesienia (tryb porównania) odległość nie ma sensu
+  if (!opts.origin) {
+    for (const row of rows) row.maxKm = null;
+    return rows;
+  }
+
   if (opts.walk) {
     for (const row of rows) row.maxKm = row.limit * 60 * WALK_MPS / 1000; // sam spacer
   }
