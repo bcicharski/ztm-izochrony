@@ -1,0 +1,7 @@
+# pliki robocze przetwarzania GTFS
+gtfs.zip
+gtfs-src/
+
+# system
+Thumbs.db
+.DS_Store

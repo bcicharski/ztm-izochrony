@@ -1,0 +1,41 @@
+# Cotygodniowe odświeżenie prekompilowanych danych rozkładowych z GTFS ZTM Gdańsk.
+# Po wypchnięciu zmian GitHub Pages (tryb "deploy from branch") publikuje je automatycznie.
+name: Odśwież dane rozkładowe
+
+on:
+  schedule:
+    - cron: '30 3 * * 1'   # poniedziałki, 3:30 UTC
+  workflow_dispatch:        # możliwość ręcznego uruchomienia z zakładki Actions
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pobierz i rozpakuj GTFS
+        run: |
+          curl -sL -o gtfs.zip "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip"
+          mkdir -p gtfs-src
+          unzip -o gtfs.zip -d gtfs-src
+
+      - name: Zbuduj dane rozkładowe
+        run: node tools/build-data.mjs gtfs-src
+
+      - name: Zapisz zmiany
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.json
+          if git diff --cached --quiet; then
+            echo "Brak zmian w danych."
+          else
+            git commit -m "Automatyczne odświeżenie danych rozkładowych"
+            git push
+          fi
