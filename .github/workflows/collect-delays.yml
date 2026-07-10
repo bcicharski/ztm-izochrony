@@ -5,7 +5,10 @@ name: Zbieraj opóźnienia
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # co 10 min, ale tylko w godzinach dziennych ruchu (03–21 UTC ≈ 4/5–22/23
+    # czasu PL zależnie od pory roku); nocą kursów niewiele, a mniejsza kolejka
+    # zwiększa szansę, że GitHub odpali dzienne przebiegi mimo throttlingu cronów
+    - cron: '*/10 3-21 * * *'
   workflow_dispatch:
 
 concurrency:

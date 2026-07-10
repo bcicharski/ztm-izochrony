@@ -23,6 +23,14 @@ const CAUTIOUS_RIDE_FACTOR = {
 };
 const rideFactor = t => CAUTIOUS_RIDE_FACTOR[t] ?? 1.1;
 
+/** Typowe (percentyl) opóźnienie linii dla danego typu dnia i godziny [s] albo null. */
+function delayLookup(delays, routeName, dayType, boardDepSec) {
+  if (!delays) return null;
+  const hour = Math.floor(boardDepSec / 3600) % 24;
+  const v = delays[`${routeName}|${dayType}|${hour}`];
+  return v == null ? null : v;
+}
+
 // rodzaje rodzica w rekonstrukcji trasy
 const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
 
@@ -31,7 +39,8 @@ const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
  * @param {object} net  sieć z data.js (loadDay)
  * @param {object} opts {lat, lon, direction:'from'|'to', walk:bool, mode:'general'|'time',
  *                       timeMin, types?:Set<number> (dozwolone route_type; brak = wszystkie),
- *                       cautious?:bool (margines na opóźnienia)}
+ *                       cautious?:bool (margines na opóźnienia),
+ *                       delays?:object (profile opóźnień linii), dayType?:0|1|2}
  * @returns {{minutes: Float64Array, journeyTo: (stop:number)=>Array|null}}
  */
 export function computeReachability(net, opts) {
@@ -41,15 +50,19 @@ export function computeReachability(net, opts) {
     return { minutes: new Float64Array(g.nStops).fill(Infinity), journeyTo: () => null };
   }
 
+  // profile opóźnień: tylko tryb godzinowy „z miejsca" (w kierunku „do" oś
+  // czasu jest odwrócona i godzina wsiadania nie odpowiada kluczowi profilu)
+  const delays = (opts.cautious && opts.direction === 'from') ? opts.delays : null;
+
   let run, t0 = 0;
   if (opts.mode === 'time') {
     t0 = opts.timeMin * 60;
     if (opts.direction === 'to') t0 = REV_C - t0;
-    run = raptor(g, sources, t0, opts.walk, opts.types, opts.cautious);
+    run = raptor(g, sources, t0, opts.walk, opts.types, opts.cautious, delays, opts.dayType);
     // pora nocna: kursy "po północy" zapisane są jako 24:00+ dnia poprzedniego
     if (opts.timeMin < 300) {
       const t0b = opts.direction === 'to' ? REV_C - (opts.timeMin + 1440) * 60 : t0 + 86400;
-      const second = raptor(g, sources, t0b, opts.walk, opts.types, opts.cautious);
+      const second = raptor(g, sources, t0b, opts.walk, opts.types, opts.cautious, delays, opts.dayType);
       // scal: dla każdego przystanku wygrywa szybszy przebieg
       for (let i = 0; i < run.seconds.length; i++) {
         if (second.seconds[i] < run.seconds[i]) {
@@ -117,7 +130,7 @@ function newParents(n) {
 
 // --- RAPTOR -----------------------------------------------------------------
 
-function raptor(g, sources, t0, walk, types, cautious) {
+function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
   const n = g.nStops;
   const INF = Infinity;
   const best = new Float64Array(n).fill(INF);      // najlepszy znany czas przyjazdu
@@ -166,7 +179,9 @@ function raptor(g, sources, t0, walk, types, cautious) {
       const startPos = qPattern[pi];
       qPattern[pi] = -1;
       const nStops = p.stops.length;
-      // margines: jazda trwa dłużej niż w rozkładzie (odjazd wg rozkładu)
+      // margines na opóźnienia: realny profil linii (percentyl) tam, gdzie jest
+      // dość danych, inaczej heurystyczny mnożnik czasu jazdy wg typu pojazdu
+      const routeName = g.routes[p.route].n;
       const fac = cautious ? rideFactor(g.routes[p.route].t) : 1;
       let trip = -1, tripCum = null, tripStartT = 0, boardStop = -1, boardDep = 0, boardPos = 0;
       for (let pos = startPos; pos < nStops; pos++) {
@@ -174,8 +189,11 @@ function raptor(g, sources, t0, walk, types, cautious) {
         const fl = p.flags ? p.flags[pos] : 0;
         // wysiądź, jeśli poprawia wynik
         if (trip >= 0 && !(fl & 2)) {
-          const rideBase = tripCum[pos] - tripCum[boardPos];
-          const arrT = tripStartT + tripCum[boardPos] + Math.round(rideBase * fac);
+          let arrT = tripStartT + tripCum[pos];
+          if (cautious) {
+            const d = delayLookup(delays, routeName, dayType, boardDep);
+            arrT += d != null ? d : Math.round((tripCum[pos] - tripCum[boardPos]) * (fac - 1));
+          }
           if (arrT < best[stop] && arrT <= cap) {
             best[stop] = arrT;
             par.kind[stop] = P_RIDE;

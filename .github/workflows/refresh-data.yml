@@ -27,6 +27,14 @@ jobs:
             node --max-old-space-size=6144 tools/build-data.mjs "$city" gtfs-src/$city/*/
           done
 
+      - name: Skompiluj profile opóźnień z gałęzi delays
+        run: |
+          git fetch origin delays --depth 1 || true
+          if git rev-parse --verify origin/delays >/dev/null 2>&1; then
+            git checkout origin/delays -- data/delays || true
+          fi
+          node tools/build-delays.mjs
+
       - name: Zapisz zmiany
         run: |
           git config user.name "github-actions[bot]"

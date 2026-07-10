@@ -4,7 +4,7 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, loadCities, DAY_LABELS, distM, WALK_MPS } from './data.js';
+import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, DAY_LABELS, distM, WALK_MPS } from './data.js';
 import { computeReachability } from './router.js';
 import { buildZones, BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
@@ -499,7 +499,11 @@ async function recompute() {
   try {
     // tryb ogólny zawsze na rozkładzie dnia roboczego
     const dayKey = state.mode === 'time' ? state.day : 'workday';
-    const net = await loadDay(state.city, dayKey);
+    const DAY_TYPE = { workday: 0, saturday: 1, sunday: 2 };
+    const [net, delays] = await Promise.all([
+      loadDay(state.city, dayKey),
+      state.safe ? loadDelays(state.city) : Promise.resolve(null),
+    ]);
     if (seq !== computeSeq) return; // w międzyczasie przyszło nowsze zapytanie
 
     const optsBase = {
@@ -509,6 +513,8 @@ async function recompute() {
       timeMin: state.timeMin,
       types: allowedTypes(),
       cautious: state.safe,
+      delays,
+      dayType: DAY_TYPE[dayKey],
     };
     const res = computeReachability(net, {
       ...optsBase, lat: state.point.lat, lon: state.point.lng,

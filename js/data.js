@@ -224,3 +224,14 @@ export async function loadMeta(cityKey) {
   const r = await fetch(`data/${cityKey}/meta.json`);
   return r.ok ? r.json() : null;
 }
+
+/** Profile opóźnień linii: { "linia|typDnia|godzina": sekundy }. Może być pusty. */
+export async function loadDelays(cityKey) {
+  const key = `delays/${cityKey}`;
+  if (!cache.has(key)) {
+    cache.set(key, fetch(`data/${cityKey}/delays.json`)
+      .then(r => (r.ok ? r.json() : {}))
+      .catch(() => ({})));
+  }
+  return cache.get(key);
+}
