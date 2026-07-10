@@ -1,0 +1,15 @@
+{
+  "city": "trojmiasto",
+  "generated": "2026-07-09T21:42:39.313Z",
+  "feedEndDate": "20260722",
+  "dates": {
+    "workday": "20260709",
+    "saturday": "20260711",
+    "sunday": "20260712"
+  },
+  "sources": [
+    "ZTM Gdańsk — https://ckan.multimediagdansk.pl/dataset/tristar",
+    "ZKM Gdynia — https://otwartedane.gdynia.pl",
+    "PKP SKM — https://bip.skm.pkp.pl/c97/otwarte-dane"
+  ]
+}

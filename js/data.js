@@ -17,15 +17,27 @@ export const M_PER_DEG_LAT = 111320;
 
 const cache = new Map();
 
-export async function loadDay(dayKey) {
-  if (cache.has(dayKey)) return cache.get(dayKey);
-  const promise = fetch(`data/${dayKey}.json`)
+/** Konfiguracja miast (data/cities.json). */
+export async function loadCities() {
+  if (!cache.has('cities')) {
+    cache.set('cities', fetch('data/cities.json').then(r => {
+      if (!r.ok) throw new Error(`Brak konfiguracji miast (${r.status})`);
+      return r.json();
+    }));
+  }
+  return cache.get('cities');
+}
+
+export async function loadDay(cityKey, dayKey) {
+  const key = `${cityKey}/${dayKey}`;
+  if (cache.has(key)) return cache.get(key);
+  const promise = fetch(`data/${cityKey}/${dayKey}.json`)
     .then(r => {
       if (!r.ok) throw new Error(`Nie udało się pobrać danych (${r.status})`);
       return r.json();
     })
     .then(raw => decodeNetwork(raw));
-  cache.set(dayKey, promise);
+  cache.set(key, promise);
   return promise;
 }
 
@@ -188,23 +200,27 @@ function reverseNetwork(net) {
 }
 
 /** Pierścienie wody do maskowania stref: [[ [lat,lon], ... ], ...]. */
-export async function loadWater() {
-  return loadRings('data/water.json');
+export async function loadWater(cityKey) {
+  return loadRings(`data/${cityKey}/water.json`);
 }
 
-/** Granica administracyjna Gdańska (do statystyk powierzchni). */
-export async function loadCity() {
-  return loadRings('data/city.json');
+/** Granice administracyjne miasta (do statystyk powierzchni). */
+export async function loadCity(cityKey) {
+  return loadRings(`data/${cityKey}/city.json`);
 }
 
 async function loadRings(url) {
-  const r = await fetch(url);
-  if (!r.ok) return null;
-  const raw = await r.json();
-  return raw.polys.map(ring => ring.map(([la, lo]) => [la / 1e5, lo / 1e5]));
+  if (!cache.has(url)) {
+    cache.set(url, fetch(url).then(async r => {
+      if (!r.ok) return null;
+      const raw = await r.json();
+      return raw.polys.map(ring => ring.map(([la, lo]) => [la / 1e5, lo / 1e5]));
+    }));
+  }
+  return cache.get(url);
 }
 
-export async function loadMeta() {
-  const r = await fetch('data/meta.json');
+export async function loadMeta(cityKey) {
+  const r = await fetch(`data/${cityKey}/meta.json`);
   return r.ok ? r.json() : null;
 }

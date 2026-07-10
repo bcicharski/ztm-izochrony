@@ -1,24 +1,31 @@
 #!/usr/bin/env node
 /**
  * Prekompilacja danych GTFS (jeden lub więcej feedów) do kompaktowych plików
- * JSON czytanych przez frontend (data/workday.json, saturday.json, sunday.json, meta.json).
+ * JSON czytanych przez frontend (data/<miasto>/{workday,saturday,sunday,meta}.json).
  *
  * Użycie:
- *   node tools/build-data.mjs <katalog-GTFS> [<katalog-GTFS> ...]
+ *   node tools/build-data.mjs <miasto> <katalog-GTFS> [<katalog-GTFS> ...]
+ *   (miasto = klucz z data/cities.json, np. trojmiasto, warszawa, krakow)
  *
- * Obsługiwane feedy (wszystkie definiują kursowanie przez calendar_dates):
- *   ZTM Gdańsk:  https://ckan.multimediagdansk.pl/dataset/tristar (CC BY)
- *   ZKM Gdynia:  http://api.zdiz.gdynia.pl/pt/gtfs.zip (otwartedane.gdynia.pl)
- *   PKP SKM:     https://www.skm.pkp.pl/gtfs-mi-kpd.zip (bip.skm.pkp.pl/otwarte-dane)
- *                — feed SKM zawiera też pociągi linii PKM
+ * Obsługiwane warianty GTFS:
+ *   - kursowanie przez calendar_dates (ZTM Gdańsk, ZKM Gdynia, SKM, Warszawa),
+ *   - pełny calendar.txt z flagami dni tygodnia + wyjątki (Kraków, Wrocław),
+ *   - kursy częstotliwościowe frequencies.txt (metro warszawskie).
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 
-const feedDirs = process.argv.slice(2);
-const outDir = path.join(import.meta.dirname, '..', 'data');
+const cityKey = process.argv[2];
+const feedDirs = process.argv.slice(3);
+const citiesFile = path.join(import.meta.dirname, '..', 'data', 'cities.json');
+const cities = JSON.parse(fs.readFileSync(citiesFile, 'utf8'));
+if (!cities[cityKey]) {
+  console.error(`Nieznane miasto "${cityKey}". Dostępne: ${Object.keys(cities).join(', ')}`);
+  process.exit(1);
+}
+const outDir = path.join(import.meta.dirname, '..', 'data', cityKey);
 if (!feedDirs.length || !feedDirs.every(d => fs.existsSync(path.join(d, 'stop_times.txt')))) {
   console.error('Podaj katalogi z rozpakowanymi GTFS (każdy musi zawierać stop_times.txt).');
   process.exit(1);
@@ -78,17 +85,43 @@ function distMeters(aLat, aLon, bLat, bLon) {
 }
 
 // --- 1. kalendarze: daty wspólne dla wszystkich feedów -------------------
+// Pełna semantyka GTFS: calendar.txt (zakres + flagi dni tygodnia),
+// potem wyjątki z calendar_dates (1 = dodaje, 2 = usuwa).
+
+function* datesBetween(min, max, capDays = 120) {
+  let y = +min.slice(0, 4), m = +min.slice(4, 6) - 1, d = +min.slice(6, 8);
+  const cur = new Date(Date.UTC(y, m, d));
+  for (let i = 0; i < capDays; i++) {
+    const s = cur.toISOString().slice(0, 10).replaceAll('-', '');
+    if (s > max) return;
+    yield s;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+}
+
+const WEEKDAY_COLS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 const servicesByDate = new Map(); // date -> Set("feedIdx:service_id")
 const feedRanges = [];
 feedDirs.forEach((dir, f) => {
   let min = '99999999', max = '00000000';
+  const add = (date, sid) => {
+    if (!servicesByDate.has(date)) servicesByDate.set(date, new Set());
+    servicesByDate.get(date).add(`${f}:${sid}`);
+    if (date < min) min = date;
+    if (date > max) max = date;
+  };
+  const remove = (date, sid) => servicesByDate.get(date)?.delete(`${f}:${sid}`);
+
+  for (const r of readCsvSync(path.join(dir, 'calendar.txt'))) {
+    if (!WEEKDAY_COLS.some(c => r[c] === '1')) continue; // np. SKM: same zera
+    for (const date of datesBetween(r.start_date, r.end_date)) {
+      if (r[WEEKDAY_COLS[dateToWeekday(date)]] === '1') add(date, r.service_id);
+    }
+  }
   for (const r of readCsvSync(path.join(dir, 'calendar_dates.txt'))) {
-    if (r.exception_type !== '1') continue;
-    if (!servicesByDate.has(r.date)) servicesByDate.set(r.date, new Set());
-    servicesByDate.get(r.date).add(`${f}:${r.service_id}`);
-    if (r.date < min) min = r.date;
-    if (r.date > max) max = r.date;
+    if (r.exception_type === '1') add(r.date, r.service_id);
+    else if (r.exception_type === '2') remove(r.date, r.service_id);
   }
   feedRanges.push({ min, max });
   console.log(`Feed ${f} (${path.basename(dir)}): daty ${min}–${max}`);
@@ -133,6 +166,23 @@ const tripMeta = new Map();  // "f:trip_id" -> {routeKey, dayMask}
   });
 }
 console.log(`Kursy w wybranych dniach: ${tripMeta.size}`);
+
+// kursy częstotliwościowe (frequencies.txt, np. metro warszawskie):
+// tripKey -> [[startSec, endSec, headwaySec], ...]
+const frequencies = new Map();
+feedDirs.forEach((dir, f) => {
+  for (const r of readCsvSync(path.join(dir, 'frequencies.txt'))) {
+    const key = `${f}:${r.trip_id}`;
+    if (!tripMeta.has(key)) continue;
+    if (!frequencies.has(key)) frequencies.set(key, []);
+    frequencies.get(key).push([
+      timeToMin(r.start_time) * 60 + (+r.start_time.split(':')[2] || 0),
+      timeToMin(r.end_time) * 60 + (+r.end_time.split(':')[2] || 0),
+      +r.headway_secs,
+    ]);
+  }
+});
+if (frequencies.size) console.log(`Kursy częstotliwościowe: ${frequencies.size}`);
 
 // --- 3. przystanki -------------------------------------------------------
 
@@ -266,7 +316,17 @@ function buildDay(dayIdx) {
       p.profiles.set(dKey, profIdx);
       p.profileList.push(deltas);
     }
-    p.trips.push([times[0], profIdx]);
+    const freq = frequencies.get(tripKey);
+    if (freq) {
+      // kurs częstotliwościowy: starty co headway w każdym oknie
+      for (const [startSec, endSec, headway] of freq) {
+        for (let s = startSec; s < endSec; s += headway) {
+          p.trips.push([Math.round(s / 60), profIdx]);
+        }
+      }
+    } else {
+      p.trips.push([times[0], profIdx]);
+    }
   }
   const out = [];
   for (const p of patterns.values()) {
@@ -339,13 +399,10 @@ for (let d = 0; d < dayTypes.length; d++) {
 }
 
 fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({
+  city: cityKey,
   generated: new Date().toISOString(),
   feedEndDate: commonMax,
   dates: Object.fromEntries(dayTypes.map(d => [d.key, d.date])),
-  sources: [
-    'ZTM Gdańsk – Otwarte dane (CC BY), https://ckan.multimediagdansk.pl/dataset/tristar',
-    'ZKM Gdynia – otwartedane.gdynia.pl',
-    'PKP Szybka Kolej Miejska w Trójmieście Sp. z o.o. – bip.skm.pkp.pl/otwarte-dane',
-  ],
+  sources: cities[cityKey].credits.map(c => `${c.label} — ${c.url}`),
 }, null, 2));
 console.log('Gotowe.');

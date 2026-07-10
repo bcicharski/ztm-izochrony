@@ -4,11 +4,14 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, DAY_LABELS, distM, WALK_MPS } from './data.js';
+import { loadDay, loadMeta, loadWater, loadCity, loadCities, DAY_LABELS, distM, WALK_MPS } from './data.js';
 import { computeReachability } from './router.js';
 import { buildZones, BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
-import { initStats, computeStats, computeAreas } from './stats.js';
+import { initStats, resetStats, computeStats, computeAreas } from './stats.js';
+
+const CITIES = await loadCities();
+const DEFAULT_CITY = 'trojmiasto';
 
 // --- stan domyślny: „gdybym wyszedł teraz" -----------------------------------
 
@@ -16,8 +19,9 @@ const now = new Date();
 const todayDay = now.getDay() === 0 ? 'sunday' : now.getDay() === 6 ? 'saturday' : 'workday';
 
 const state = {
-  point: L.latLng(54.35540, 18.64450),  // Gdańsk Dworzec Główny
-  point2: L.latLng(54.38200, 18.60550), // drugi punkt: Wrzeszcz PKP
+  city: DEFAULT_CITY,
+  point: null,   // ustawiane z konfiguracji miasta poniżej
+  point2: null,
   compare: false,
   direction: 'from',
   walk: true,
@@ -25,16 +29,20 @@ const state = {
   timeMin: now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5,
   day: todayDay,
   stats: false,
-  veh: { tram: true, bus: true, trol: true, rail: true },
+  veh: {},       // klucze zależne od miasta
 };
 
-const VEH_TYPES = { tram: 900, bus: 700, trol: 800, rail: 2 };
+const cityCfg = () => CITIES[state.city];
+
+function defaultVeh() {
+  return Object.fromEntries(cityCfg().veh.map(v => [v.key, true]));
+}
 
 /** Zbiór dozwolonych route_type albo null, gdy wszystko dozwolone. */
 function allowedTypes() {
-  const keys = Object.keys(VEH_TYPES);
-  if (keys.every(k => state.veh[k])) return null;
-  return new Set(keys.filter(k => state.veh[k]).map(k => VEH_TYPES[k]));
+  const groups = cityCfg().veh;
+  if (groups.every(g => state.veh[g.key])) return null;
+  return new Set(groups.filter(g => state.veh[g.key]).flatMap(g => g.types));
 }
 
 // --- stan z adresu URL (linki do udostępniania) -----------------------------
@@ -42,6 +50,11 @@ function allowedTypes() {
 let pointFromUrl = false;
 {
   const q = new URLSearchParams(location.search);
+  if (CITIES[q.get('city')]) state.city = q.get('city');
+  state.point = L.latLng(...cityCfg().pointA);
+  state.point2 = L.latLng(...cityCfg().pointB);
+  state.veh = defaultVeh();
+
   const p = q.get('p')?.split(',').map(Number);
   if (p?.length === 2 && p.every(Number.isFinite)) {
     state.point = L.latLng(p[0], p[1]);
@@ -60,12 +73,13 @@ let pointFromUrl = false;
   const veh = q.get('veh');
   if (veh != null) {
     const on = new Set(veh.split(','));
-    for (const k of Object.keys(VEH_TYPES)) state.veh[k] = on.has(k);
+    for (const k of Object.keys(state.veh)) state.veh[k] = on.has(k);
   }
 }
 
 function updateUrl() {
   const q = new URLSearchParams();
+  q.set('city', state.city);
   q.set('p', `${state.point.lat.toFixed(5)},${state.point.lng.toFixed(5)}`);
   if (state.compare) {
     q.set('cmp', '1');
@@ -80,14 +94,15 @@ function updateUrl() {
     q.set('day', state.day);
   }
   if (state.stats && !state.compare) q.set('st', '1');
-  const vehOn = Object.keys(VEH_TYPES).filter(k => state.veh[k]);
-  if (vehOn.length < Object.keys(VEH_TYPES).length) q.set('veh', vehOn.join(','));
+  const vehKeys = Object.keys(state.veh);
+  const vehOn = vehKeys.filter(k => state.veh[k]);
+  if (vehOn.length < vehKeys.length) q.set('veh', vehOn.join(','));
   history.replaceState(null, '', '?' + q.toString());
 }
 
 // --- mapa ---------------------------------------------------------------
 
-const map = createMap('map');
+const map = createMap('map', cityCfg().center, cityCfg().zoom);
 const zoneLayer = new ZoneLayer().addTo(map);
 
 const marker = L.marker(state.point, { draggable: true, autoPan: true }).addTo(map);
@@ -154,10 +169,28 @@ for (const el of document.querySelectorAll('input[name="mode"]')) {
   });
 }
 $('walkToggle').addEventListener('change', e => { state.walk = e.target.checked; recompute(); });
-for (const key of Object.keys(VEH_TYPES)) {
-  const id = 'veh' + key[0].toUpperCase() + key.slice(1);
-  $(id).addEventListener('change', e => { state.veh[key] = e.target.checked; recompute(); });
+
+/** Buduje checkboxy środków transportu dla bieżącego miasta. */
+function renderVehControls() {
+  const grid = $('vehGrid');
+  grid.innerHTML = '';
+  for (const group of cityCfg().veh) {
+    const label = document.createElement('label');
+    label.className = 'veh';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = state.veh[group.key] !== false;
+    input.addEventListener('change', () => {
+      state.veh[group.key] = input.checked;
+      recompute();
+    });
+    const span = document.createElement('span');
+    span.textContent = group.label;
+    label.append(input, span);
+    grid.appendChild(label);
+  }
 }
+
 $('statsToggle').addEventListener('change', e => {
   state.stats = e.target.checked;
   syncModeUi();
@@ -188,7 +221,7 @@ function syncModeUi() {
 async function searchAddress(query) {
   const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5' +
     '&accept-language=pl&countrycodes=pl' +
-    '&viewbox=18.30,54.55,19.10,54.20&bounded=1' + // okolice Trójmiasta
+    `&viewbox=${cityCfg().viewbox}&bounded=1` + // okolice wybranego miasta
     '&q=' + encodeURIComponent(query);
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Nominatim: ${r.status}`);
@@ -346,7 +379,7 @@ map.on('contextmenu', e => {
 
 const HHMM = s => `${String(Math.floor(s / 3600) % 24).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}`;
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const VEH_ICON = { 900: '🚊', 700: '🚌', 800: '🚎', 2: '🚆' };
+const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
 /** Najlepszy przystanek docelowy dla klikniętego miejsca (wg łącznego czasu). */
 function pickTargetStop(latlng) {
@@ -461,7 +494,7 @@ async function recompute() {
   try {
     // tryb ogólny zawsze na rozkładzie dnia roboczego
     const dayKey = state.mode === 'time' ? state.day : 'workday';
-    const net = await loadDay(dayKey);
+    const net = await loadDay(state.city, dayKey);
     if (seq !== computeSeq) return; // w międzyczasie przyszło nowsze zapytanie
 
     const optsBase = {
@@ -520,17 +553,66 @@ async function recompute() {
   }
 }
 
-// --- start ---------------------------------------------------------------------
+// --- miasto: zasoby (geometria, statystyki, stopka) i przełączanie -------------
 
-Promise.all([loadWater(), loadCity()])
-  .then(([water, city]) => {
-    if (water) zoneLayer.setWater(water);
+function renderCredits() {
+  $('creditsLinks').innerHTML = cityCfg().credits
+    .map(c => `<a href="${c.url}" target="_blank" rel="noopener">${c.label}</a>`)
+    .join(' · ');
+}
+
+async function loadCityAssets() {
+  const key = state.city;
+  $('areaHead').textContent = cityCfg().areaLabel;
+  renderCredits();
+  renderVehControls();
+  $('feedDate').textContent = '…';
+  loadMeta(key).then(meta => {
+    if (state.city !== key) return;
+    const d = meta?.dates?.workday;
+    $('feedDate').textContent = d ? `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}` : '—';
+  }).catch(() => { if (state.city === key) $('feedDate').textContent = '—'; });
+  try {
+    const [water, city] = await Promise.all([loadWater(key), loadCity(key)]);
+    if (state.city !== key) return; // w międzyczasie zmieniono miasto
+    zoneLayer.setWater(water ?? []);
     if (city) {
       initStats(city, water);
-      recompute(); // uzupełnij kolumnę "% Trójmiasta" po zbudowaniu rastra
+      recompute(); // uzupełnij kolumnę "%" po zbudowaniu rastra
     }
-  })
-  .catch(() => { /* brak maski wody/granicy nie blokuje działania */ });
+  } catch { /* brak maski wody/granicy nie blokuje działania */ }
+}
+
+function switchCity(key) {
+  if (!CITIES[key] || key === state.city) return;
+  state.city = key;
+  state.veh = defaultVeh();
+  state.point = L.latLng(...cityCfg().pointA);
+  state.point2 = L.latLng(...cityCfg().pointB);
+  marker.setLatLng(state.point);
+  marker2.setLatLng(state.point2);
+  for (const id of ['searchInput', 'searchInput2']) $(id).value = '';
+  for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
+  map.closePopup();
+  map.setView(cityCfg().center, cityCfg().zoom);
+  resetStats(); // raster poprzedniego miasta nie może liczyć nowych stref
+  loadCityAssets();
+  recompute();
+}
+
+{
+  const sel = $('citySelect');
+  for (const [key, cfg] of Object.entries(CITIES)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = cfg.name;
+    sel.appendChild(opt);
+  }
+  sel.value = state.city;
+  sel.addEventListener('change', () => switchCity(sel.value));
+}
+
+// --- start ---------------------------------------------------------------------
 
 // odtworzenie stanu kontrolek (domyślne wartości albo stan z linku)
 $('appSingle').checked = !state.compare;
@@ -545,19 +627,8 @@ $('timeInput').value =
   `${String(Math.floor(state.timeMin / 60)).padStart(2, '0')}:${String(state.timeMin % 60).padStart(2, '0')}`;
 $('daySelect').value = state.day;
 $('statsToggle').checked = state.stats;
-for (const key of Object.keys(VEH_TYPES)) {
-  $('veh' + key[0].toUpperCase() + key.slice(1)).checked = state.veh[key];
-}
 syncModeUi();
 if (pointFromUrl) map.setView(state.point, 13);
 
-loadMeta().then(meta => {
-  if (meta?.dates?.workday) {
-    const d = meta.dates.workday;
-    $('feedDate').textContent = `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}`;
-  } else {
-    $('feedDate').textContent = '—';
-  }
-}).catch(() => { $('feedDate').textContent = '—'; });
-
+loadCityAssets();
 recompute();

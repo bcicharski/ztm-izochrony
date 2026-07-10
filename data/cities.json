@@ -1,0 +1,97 @@
+{
+  "trojmiasto": {
+    "name": "Trójmiasto",
+    "feeds": [
+      { "name": "ztm-gdansk", "url": "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip" },
+      { "name": "zkm-gdynia", "url": "http://api.zdiz.gdynia.pl/pt/gtfs.zip" },
+      { "name": "skm", "url": "https://www.skm.pkp.pl/gtfs-mi-kpd.zip" }
+    ],
+    "bbox": [54.28, 18.30, 54.62, 19.10],
+    "seaClose": { "n": 54.80, "e": 19.25 },
+    "boundaries": ["Gdańsk", "Sopot", "Gdynia"],
+    "areaLabel": "% Trójmiasta",
+    "center": [54.435, 18.57],
+    "zoom": 11,
+    "pointA": [54.3554, 18.6445],
+    "pointB": [54.382, 18.6055],
+    "viewbox": "18.30,54.55,19.10,54.20",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [900, 0] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [700, 3] },
+      { "key": "trol", "label": "🚎 Trolejbus", "types": [800, 11] },
+      { "key": "rail", "label": "🚆 SKM/PKM", "types": [2] }
+    ],
+    "credits": [
+      { "label": "ZTM Gdańsk", "url": "https://ckan.multimediagdansk.pl/dataset/tristar" },
+      { "label": "ZKM Gdynia", "url": "https://otwartedane.gdynia.pl" },
+      { "label": "PKP SKM", "url": "https://bip.skm.pkp.pl/c97/otwarte-dane" }
+    ]
+  },
+  "warszawa": {
+    "name": "Warszawa",
+    "feeds": [
+      { "name": "wtp", "url": "https://mkuran.pl/gtfs/warsaw.zip" }
+    ],
+    "bbox": [52.05, 20.75, 52.40, 21.30],
+    "boundaries": ["Warszawa"],
+    "areaLabel": "% Warszawy",
+    "center": [52.23, 21.01],
+    "zoom": 11,
+    "pointA": [52.2286, 21.0031],
+    "pointB": [52.2445, 21.0889],
+    "viewbox": "20.75,52.40,21.30,52.05",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
+      { "key": "metro", "label": "🚇 Metro", "types": [1] },
+      { "key": "rail", "label": "🚆 Kolej", "types": [2] }
+    ],
+    "credits": [
+      { "label": "Warszawski Transport Publiczny (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+    ]
+  },
+  "wroclaw": {
+    "name": "Wrocław",
+    "feeds": [
+      { "name": "mpk", "url": "https://api.open-data.cui.wroclaw.pl/od2/6/", "resolve": "wroclaw-od2" }
+    ],
+    "bbox": [50.95, 16.8, 51.22, 17.2],
+    "boundaries": ["Wrocław"],
+    "areaLabel": "% Wrocławia",
+    "center": [51.11, 17.03],
+    "zoom": 12,
+    "pointA": [51.0989, 17.0366],
+    "pointB": [51.1122, 17.0596],
+    "viewbox": "16.80,51.22,17.20,50.95",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "Wrocław Otwarte Dane (MPK)", "url": "https://open-data.cui.wroclaw.pl" }
+    ]
+  },
+  "krakow": {
+    "name": "Kraków",
+    "feeds": [
+      { "name": "ztp-bus", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_A.zip" },
+      { "name": "ztp-tram", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_T.zip" },
+      { "name": "ztp-mobilis", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_M.zip" }
+    ],
+    "bbox": [49.95, 19.75, 50.15, 20.25],
+    "boundaries": ["Kraków"],
+    "areaLabel": "% Krakowa",
+    "center": [50.06, 19.95],
+    "zoom": 12,
+    "pointA": [50.0682, 19.9475],
+    "pointB": [50.0719, 20.0375],
+    "viewbox": "19.75,50.15,20.25,49.95",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [900, 0] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZTP Kraków", "url": "https://gtfs.ztp.krakow.pl/" }
+    ]
+  }
+}

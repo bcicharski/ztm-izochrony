@@ -16,6 +16,11 @@ const PAD_M = 500;  // margines wokół granicy miasta
 
 let raster = null;  // { W, H, toX, toY, landCanvas, landPx, landKm2, scratch }
 
+/** Unieważnia raster (np. przy zmianie miasta) — do czasu initStats % pokazuje „—". */
+export function resetStats() {
+  raster = null;
+}
+
 /** Jednorazowa inicjalizacja rastra lądu. cityRings/waterRings: [[[lat,lon],...],...] */
 export function initStats(cityRings, waterRings) {
   let latN = -Infinity, latS = Infinity, lonW = Infinity, lonE = -Infinity;

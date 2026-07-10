@@ -102,6 +102,26 @@ html, body {
   color: var(--muted);
 }
 
+/* ---------- wybór miasta ---------- */
+
+.city-select {
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.city-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* ---------- tryb aplikacji ---------- */
 
 .app-mode {

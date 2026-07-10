@@ -11,17 +11,17 @@ export const ZONE_ALPHA = 0.55;
 
 const M_PER_DEG_LAT = 111320;
 
-export function createMap(container) {
+export function createMap(container, center, zoom) {
   const map = L.map(container, {
-    center: [54.435, 18.57], // całe Trójmiasto
-    zoom: 11,
+    center,
+    zoom,
     zoomControl: false,
   });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' +
-      ' | Dane rozkładowe: <a href="https://ckan.multimediagdansk.pl/dataset/tristar">ZTM Gdańsk</a> (CC BY)',
+      ' | Rozkłady: otwarte dane przewoźników (szczegóły w panelu)',
     subdomains: 'abcd',
     maxZoom: 19,
   }).addTo(map);

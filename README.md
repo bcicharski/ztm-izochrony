@@ -1,9 +1,13 @@
-# Dokąd dojadę? — izochrony komunikacji miejskiej Trójmiasta
+# Dokąd dojadę? — izochrony komunikacji miejskiej
 
 Statyczna strona pokazująca, jak daleko można dotrzeć komunikacją miejską
-w Trójmieście — ZTM Gdańsk, ZKM Gdynia oraz koleją SKM/PKM (z przesiadkami,
-opcjonalnie z dojściem pieszym) — w ciągu 10 / 20 / 30 / 45 / 60 / ponad 60
-minut. Całość liczy się w przeglądarce — bez backendu.
+(z przesiadkami, opcjonalnie z dojściem pieszym) w ciągu
+10 / 20 / 30 / 45 / 60 / ponad 60 minut. Obsługiwane miasta: **Trójmiasto**
+(ZTM Gdańsk + ZKM Gdynia + SKM/PKM), **Warszawa** (tramwaje, autobusy, metro,
+kolej miejska), **Wrocław** i **Kraków** (z autobusami aglomeracyjnymi).
+Całość liczy się w przeglądarce — bez backendu; wszystko, co miejskie
+(feedy GTFS, granice, maski wody, punkty domyślne, grupy pojazdów, atrybucje),
+definiuje `data/cities.json`, a dane leżą w `data/<miasto>/`.
 
 ## Uruchomienie lokalne
 
@@ -55,36 +59,32 @@ pozwala go udostępnić.
 
 Panel pokazuje też tabelę statystyk dla wybranego punktu: maksymalną
 odległość w linii prostej osiągalną w każdym paśmie czasu oraz — w trybie
-ze spacerem — odsetek łącznej powierzchni lądowej Gdańska, Sopotu i Gdyni
-objętej strefą (liczony rastrowo, 25 m/px, względem granic administracyjnych
-z odjęciem wód).
+ze spacerem — odsetek powierzchni lądowej miasta objętej strefą (liczony
+rastrowo, 25 m/px, względem granic administracyjnych z odjęciem wód;
+dla Trójmiasta: Gdańsk+Sopot+Gdynia łącznie).
 
 ## Odświeżanie danych rozkładowych
 
-Źródła (wszystkie otwarte):
-[ZTM Gdańsk](https://ckan.multimediagdansk.pl/dataset/tristar) (CC BY),
-[ZKM Gdynia](https://otwartedane.gdynia.pl) i
-[PKP SKM w Trójmieście](https://bip.skm.pkp.pl/c97/otwarte-dane) — feed SKM
-obejmuje też pociągi linii PKM. Wspólny zakres dat feedów jest ograniczony
-(ZTM publikuje ~15 dni naprzód), więc dane warto odświeżać co tydzień–dwa.
-Robi to automatycznie workflow GitHub Actions (poniedziałki), ręcznie:
+Wszystkie źródła to otwarte dane (adresy w `data/cities.json`, widoczne też
+w stopce panelu). Zakresy publikowanych rozkładów są ograniczone (np. ZTM
+Gdańsk ~15 dni naprzód), więc dane odświeża co poniedziałek workflow GitHub
+Actions. Ręcznie, dla jednego miasta:
 
 ```
-mkdir gtfs-src\ztm gtfs-src\zkm gtfs-src\skm
-curl -L -o ztm.zip "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip"
-curl -L -o zkm.zip "http://api.zdiz.gdynia.pl/pt/gtfs.zip"
-curl -L -o skm.zip "https://www.skm.pkp.pl/gtfs-mi-kpd.zip"
-tar -xf ztm.zip -C gtfs-src/ztm & tar -xf zkm.zip -C gtfs-src/zkm & tar -xf skm.zip -C gtfs-src/skm
-node tools/build-data.mjs gtfs-src/ztm gtfs-src/zkm gtfs-src/skm
+node tools/fetch-feeds.mjs warszawa gtfs-src/warszawa
+node tools/build-data.mjs warszawa gtfs-src/warszawa/*/
 ```
 
-Skrypt łączy feedy (prefiksując identyfikatory), wybiera reprezentatywny
-dzień roboczy (wt–czw), sobotę i niedzielę ze wspólnego zakresu dat, buduje
-wzorce tras z deduplikacją profili czasowych i zapisuje `data/workday.json`,
-`data/saturday.json`, `data/sunday.json` (po ~0,6–0,8 MB) oraz `data/meta.json`.
-Zespoły przystankowe wyznacza po nazwie z klastrowaniem odległościowym
-(≤300 m), żeby identyczne nazwy w różnych miastach nie zlewały się w jeden
-węzeł przesiadkowy.
+`fetch-feeds.mjs` pobiera i rozpakowuje wszystkie feedy miasta (w tym
+dwustopniowe API Wrocławia). `build-data.mjs` łączy feedy (prefiksując
+identyfikatory), obsługuje kursowanie przez `calendar_dates`, pełny
+`calendar.txt` z flagami dni oraz kursy częstotliwościowe `frequencies.txt`
+(metro warszawskie), wybiera reprezentatywny dzień roboczy (wt–czw), sobotę
+i niedzielę ze wspólnego zakresu dat, buduje wzorce tras z deduplikacją
+profili czasowych i zapisuje `data/<miasto>/{workday,saturday,sunday,meta}.json`
+(0,6–1,9 MB na dzień). Zespoły przystankowe wyznacza po nazwie z klastrowaniem
+odległościowym (≤300 m), żeby identyczne nazwy w różnych miejscach nie zlewały
+się w jeden węzeł przesiadkowy.
 
 ## Struktura
 
@@ -96,14 +96,19 @@ js/data.js             ładowanie i dekodowanie data/*.json
 js/router.js           RAPTOR (tryb godzinowy) + Dijkstra (tryb ogólny)
 js/isochrone.js        czasy dojazdu -> geometria stref (koła spacerowe)
 js/map.js              Leaflet + warstwa canvas rysująca strefy
-js/stats.js            statystyki: maks. zasięg i % powierzchni Trójmiasta
-tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/*.json
-tools/build-water.mjs  maska wody z OSM/Overpass -> data/water.json
-tools/build-city.mjs   granice adm. Gdańska, Sopotu i Gdyni -> data/city.json
+js/stats.js            statystyki: maks. zasięg i % powierzchni miasta
+data/cities.json       konfiguracja miast (feedy, granice, pojazdy, punkty)
+tools/fetch-feeds.mjs  pobieranie i rozpakowanie feedów miasta
+tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/<miasto>/*.json
+tools/build-water.mjs  maska wody z OSM/Overpass -> data/<miasto>/water.json
+tools/build-city.mjs   granice administracyjne -> data/<miasto>/city.json
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*
 tools/serve.mjs        serwer deweloperski
 vendor/leaflet/        Leaflet 1.9.4 (zvendorowany)
 ```
+
+Nowe miasto = wpis w `data/cities.json` + `fetch-feeds`/`build-data`/
+`build-water`/`build-city` — bez zmian w kodzie aplikacji.
 
 Kolory stref biegną od ciepłych (blisko) do chłodnych (daleko) z monotoniczną
 jasnością — porządek stref pozostaje czytelny przy zaburzeniach widzenia barw.
