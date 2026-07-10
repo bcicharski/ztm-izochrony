@@ -1,0 +1,49 @@
+# Zbiera obserwacje opóźnień (GTFS-RT / estymacje) co ~15 minut i utrzymuje
+# zagregowane profile na gałęzi "delays" (jeden commit, nadpisywany amend+push -f,
+# żeby nie zaśmiecać historii ani nie wyzwalać deployów Pages z gałęzi main).
+name: Zbieraj opóźnienia
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: collect-delays
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Przywróć dotychczasowe agregaty z gałęzi delays
+        run: |
+          git fetch origin delays --depth 1 || true
+          if git rev-parse --verify origin/delays >/dev/null 2>&1; then
+            git checkout origin/delays -- data/delays || true
+          fi
+
+      - name: Zainstaluj dekoder GTFS-RT
+        run: npm install --no-save gtfs-realtime-bindings
+
+      - name: Zbierz obserwacje
+        run: node tools/collect-delays.mjs
+
+      - name: Zapisz agregaty na gałęzi delays
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B delays
+          git add -f data/delays
+          git commit -m "Agregaty opóźnień ($(date -u +%Y-%m-%dT%H:%MZ))" || { echo "Brak zmian."; exit 0; }
+          git push -f origin delays

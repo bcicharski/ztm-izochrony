@@ -25,7 +25,8 @@
       { "label": "ZTM Gdańsk", "url": "https://ckan.multimediagdansk.pl/dataset/tristar" },
       { "label": "ZKM Gdynia", "url": "https://otwartedane.gdynia.pl" },
       { "label": "PKP SKM", "url": "https://bip.skm.pkp.pl/c97/otwarte-dane" }
-    ]
+    ],
+    "rt": { "type": "gdansk-departures", "url": "https://ckan2.multimediagdansk.pl/departures" }
   },
   "warszawa": {
     "name": "Warszawa",
@@ -92,6 +93,14 @@
     ],
     "credits": [
       { "label": "ZTP Kraków", "url": "https://gtfs.ztp.krakow.pl/" }
-    ]
+    ],
+    "rt": {
+      "type": "gtfsrt",
+      "urls": [
+        "https://gtfs.ztp.krakow.pl/TripUpdates_A.pb",
+        "https://gtfs.ztp.krakow.pl/TripUpdates_T.pb",
+        "https://gtfs.ztp.krakow.pl/TripUpdates_M.pb"
+      ]
+    }
   }
 }

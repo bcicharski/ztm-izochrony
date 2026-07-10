@@ -29,6 +29,7 @@ const state = {
   timeMin: now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5,
   day: todayDay,
   stats: false,
+  safe: false,   // tryb ostrożny: margines na opóźnienia
   veh: {},       // klucze zależne od miasta
 };
 
@@ -70,6 +71,7 @@ let pointFromUrl = false;
   if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
   if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) state.day = q.get('day');
   if (q.get('st') === '1') state.stats = true;
+  if (q.get('safe') === '1') state.safe = true;
   const veh = q.get('veh');
   if (veh != null) {
     const on = new Set(veh.split(','));
@@ -94,6 +96,7 @@ function updateUrl() {
     q.set('day', state.day);
   }
   if (state.stats && !state.compare) q.set('st', '1');
+  if (state.safe) q.set('safe', '1');
   const vehKeys = Object.keys(state.veh);
   const vehOn = vehKeys.filter(k => state.veh[k]);
   if (vehOn.length < vehKeys.length) q.set('veh', vehOn.join(','));
@@ -191,6 +194,7 @@ function renderVehControls() {
   }
 }
 
+$('safeToggle').addEventListener('change', e => { state.safe = e.target.checked; recompute(); });
 $('statsToggle').addEventListener('change', e => {
   state.stats = e.target.checked;
   syncModeUi();
@@ -483,7 +487,8 @@ function statusText() {
   const when = state.mode === 'time'
     ? `${DAY_LABELS[state.day]}, ${$('timeInput').value}`
     : 'tryb ogólny (bez oczekiwania)';
-  return `${what} · ${when}.`;
+  const safe = state.safe ? ' · z marginesem na opóźnienia' : '';
+  return `${what} · ${when}${safe}.`;
 }
 
 async function recompute() {
@@ -503,6 +508,7 @@ async function recompute() {
       mode: state.mode,
       timeMin: state.timeMin,
       types: allowedTypes(),
+      cautious: state.safe,
     };
     const res = computeReachability(net, {
       ...optsBase, lat: state.point.lat, lon: state.point.lng,
@@ -627,6 +633,7 @@ $('timeInput').value =
   `${String(Math.floor(state.timeMin / 60)).padStart(2, '0')}:${String(state.timeMin % 60).padStart(2, '0')}`;
 $('daySelect').value = state.day;
 $('statsToggle').checked = state.stats;
+$('safeToggle').checked = state.safe;
 syncModeUi();
 if (pointFromUrl) map.setView(state.point, 13);
 

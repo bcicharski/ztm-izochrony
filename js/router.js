@@ -12,6 +12,17 @@ const MAX_ROUNDS = 5;          // maks. 4 przesiadki
 const HORIZON_S = 180 * 60;    // ogranicznik wyszukiwania (3 h)
 const NEAREST_EXTRA_M = 150;   // tryb bez spaceru: przystanki tuż obok najbliższego zespołu
 
+// Tryb ostrożny: heurystyczny margines na opóźnienia (do czasu zebrania
+// rzeczywistych profili opóźnień). Bufor przesiadkowy rośnie z 1 do 4 minut,
+// a czasy jazdy są wydłużane zależnie od podatności środka transportu na korki.
+const CAUTIOUS_TRANSFER_S = 240;
+const CAUTIOUS_RIDE_FACTOR = {
+  3: 1.15, 700: 1.15, 800: 1.15, 11: 1.15, // autobusy i trolejbusy
+  0: 1.05, 900: 1.05,                       // tramwaje
+  1: 1.02, 2: 1.02,                         // metro i kolej
+};
+const rideFactor = t => CAUTIOUS_RIDE_FACTOR[t] ?? 1.1;
+
 // rodzaje rodzica w rekonstrukcji trasy
 const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
 
@@ -19,7 +30,8 @@ const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
  * Główne wejście.
  * @param {object} net  sieć z data.js (loadDay)
  * @param {object} opts {lat, lon, direction:'from'|'to', walk:bool, mode:'general'|'time',
- *                       timeMin, types?:Set<number> (dozwolone route_type; brak = wszystkie)}
+ *                       timeMin, types?:Set<number> (dozwolone route_type; brak = wszystkie),
+ *                       cautious?:bool (margines na opóźnienia)}
  * @returns {{minutes: Float64Array, journeyTo: (stop:number)=>Array|null}}
  */
 export function computeReachability(net, opts) {
@@ -33,11 +45,11 @@ export function computeReachability(net, opts) {
   if (opts.mode === 'time') {
     t0 = opts.timeMin * 60;
     if (opts.direction === 'to') t0 = REV_C - t0;
-    run = raptor(g, sources, t0, opts.walk, opts.types);
+    run = raptor(g, sources, t0, opts.walk, opts.types, opts.cautious);
     // pora nocna: kursy "po północy" zapisane są jako 24:00+ dnia poprzedniego
     if (opts.timeMin < 300) {
       const t0b = opts.direction === 'to' ? REV_C - (opts.timeMin + 1440) * 60 : t0 + 86400;
-      const second = raptor(g, sources, t0b, opts.walk, opts.types);
+      const second = raptor(g, sources, t0b, opts.walk, opts.types, opts.cautious);
       // scal: dla każdego przystanku wygrywa szybszy przebieg
       for (let i = 0; i < run.seconds.length; i++) {
         if (second.seconds[i] < run.seconds[i]) {
@@ -49,7 +61,7 @@ export function computeReachability(net, opts) {
       run.second = second;
     }
   } else {
-    run = dijkstra(g, sources, opts.walk, opts.types);
+    run = dijkstra(g, sources, opts.walk, opts.types, opts.cautious);
   }
 
   const minutes = new Float64Array(g.nStops);
@@ -105,7 +117,7 @@ function newParents(n) {
 
 // --- RAPTOR -----------------------------------------------------------------
 
-function raptor(g, sources, t0, walk, types) {
+function raptor(g, sources, t0, walk, types, cautious) {
   const n = g.nStops;
   const INF = Infinity;
   const best = new Float64Array(n).fill(INF);      // najlepszy znany czas przyjazdu
@@ -148,19 +160,22 @@ function raptor(g, sources, t0, walk, types) {
     marked = [];
 
     // 2. skan wzorców
-    const buffer = round > 1 ? MIN_TRANSFER_S : 0;
+    const buffer = round > 1 ? (cautious ? CAUTIOUS_TRANSFER_S : MIN_TRANSFER_S) : 0;
     for (const pi of qList) {
       const p = g.patterns[pi];
       const startPos = qPattern[pi];
       qPattern[pi] = -1;
       const nStops = p.stops.length;
-      let trip = -1, tripCum = null, tripStartT = 0, boardStop = -1, boardDep = 0;
+      // margines: jazda trwa dłużej niż w rozkładzie (odjazd wg rozkładu)
+      const fac = cautious ? rideFactor(g.routes[p.route].t) : 1;
+      let trip = -1, tripCum = null, tripStartT = 0, boardStop = -1, boardDep = 0, boardPos = 0;
       for (let pos = startPos; pos < nStops; pos++) {
         const stop = p.stops[pos];
         const fl = p.flags ? p.flags[pos] : 0;
         // wysiądź, jeśli poprawia wynik
         if (trip >= 0 && !(fl & 2)) {
-          const arrT = tripStartT + tripCum[pos];
+          const rideBase = tripCum[pos] - tripCum[boardPos];
+          const arrT = tripStartT + tripCum[boardPos] + Math.round(rideBase * fac);
           if (arrT < best[stop] && arrT <= cap) {
             best[stop] = arrT;
             par.kind[stop] = P_RIDE;
@@ -185,6 +200,7 @@ function raptor(g, sources, t0, walk, types) {
                 tripStartT = p.tripStart[t];
                 boardStop = stop;
                 boardDep = dep;
+                boardPos = pos;
               }
             }
           }
@@ -199,12 +215,13 @@ function raptor(g, sources, t0, walk, types) {
     for (const s of newlyByRide) {
       const adj = footAdj[s];
       for (let k = 0; k < adj.length; k += 2) {
-        const to = adj[k], t = best[s] + adj[k + 1];
+        const sec = cautious ? Math.max(adj[k + 1], CAUTIOUS_TRANSFER_S) : adj[k + 1];
+        const to = adj[k], t = best[s] + sec;
         if (t < best[to] && t <= cap) {
           best[to] = t;
           par.kind[to] = P_FOOT;
           par.stop[to] = s;
-          par.dep[to] = adj[k + 1];
+          par.dep[to] = sec;
           par.arr[to] = t;
           mark(to);
         }
@@ -239,19 +256,21 @@ function earliestTrip(p, pos, ready) {
  * Krawędzie przejazdowe: minimalny czas między kolejnymi przystankami wzorca,
  * z zachowaniem linii, która ten czas osiąga. Cache per zestaw dozwolonych typów.
  */
-function rideAdjacency(g, types) {
-  const key = types ? [...types].sort().join(',') : 'all';
+function rideAdjacency(g, types, cautious) {
+  const key = (cautious ? 'c|' : 'n|') + (types ? [...types].sort().join(',') : 'all');
   g.rideAdjCache ??= new Map();
   if (g.rideAdjCache.has(key)) return g.rideAdjCache.get(key);
 
   const minEdge = new Map(); // klucz u*100000+v -> [w, routeIdx]
   for (const p of g.patterns) {
     if (types && !types.has(g.routes[p.route].t)) continue;
+    const fac = cautious ? rideFactor(g.routes[p.route].t) : 1;
     for (let pos = 0; pos + 1 < p.stops.length; pos++) {
       const u = p.stops[pos], v = p.stops[pos + 1];
       if (u === v) continue;
       let w = Infinity;
       for (const cum of p.profCum) w = Math.min(w, cum[pos + 1] - cum[pos]);
+      w = Math.round(w * fac);
       const k = u * 100000 + v;
       const cur = minEdge.get(k);
       if (cur === undefined || w < cur[0]) minEdge.set(k, [w, p.route]);
@@ -266,9 +285,9 @@ function rideAdjacency(g, types) {
   return adj;
 }
 
-function dijkstra(g, sources, walk, types) {
+function dijkstra(g, sources, walk, types, cautious) {
   const n = g.nStops;
-  const rideAdj = rideAdjacency(g, types);
+  const rideAdj = rideAdjacency(g, types, cautious);
   const footAdj = walk ? g.transferAdj : g.sameGroupAdj;
   const dist = new Float64Array(n).fill(Infinity);
   const par = newParents(n);
@@ -332,12 +351,13 @@ function dijkstra(g, sources, walk, types) {
     }
     const fa = footAdj[u];
     for (let k = 0; k < fa.length; k += 2) {
-      const v = fa[k], nt = t + fa[k + 1];
+      const sec = cautious ? Math.max(fa[k + 1], CAUTIOUS_TRANSFER_S) : fa[k + 1];
+      const v = fa[k], nt = t + sec;
       if (nt < dist[v]) {
         dist[v] = nt;
         par.kind[v] = P_FOOT;
         par.stop[v] = u;
-        par.dep[v] = fa[k + 1];
+        par.dep[v] = sec;
         par.arr[v] = nt;
         push(nt, v);
       }

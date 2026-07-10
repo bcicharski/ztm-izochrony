@@ -2,6 +2,14 @@
 *.zip
 gtfs-src/
 
+# agregaty opóźnień żyją na gałęzi "delays" (workflow collect-delays)
+data/delays/
+
+# zależności lokalnych testów kolektora
+node_modules/
+package.json
+package-lock.json
+
 # system
 Thumbs.db
 .DS_Store

@@ -107,6 +107,15 @@
         <div class="veh-grid" id="vehGrid"></div>
       </fieldset>
 
+      <fieldset class="control">
+        <legend>Opóźnienia</legend>
+        <label class="switch">
+          <input type="checkbox" id="safeToggle">
+          <span class="track" aria-hidden="true"></span>
+          <span>Tryb ostrożny (margines)</span>
+        </label>
+      </fieldset>
+
       <div class="legend" aria-label="Legenda stref czasowych">
         <h2>Czas podróży [min]</h2>
         <div class="legend-bar" id="legendBar"></div>
@@ -201,6 +210,15 @@
         palec) dowolne miejsce na mapie, aby zobaczyć proponowaną trasę:
         odcinki pieszo, linie, przystanki przesiadkowe i godziny (w trybie
         „O godzinie"). W trybie porównania dymek pokazuje trasy obu osób.</p>
+
+      <h3>Opóźnienia (tryb ostrożny)</h3>
+      <p>Rozkłady zakładają idealną punktualność, a autobusy bywają opóźnione.
+        <strong>Tryb ostrożny</strong> dodaje margines bezpieczeństwa:
+        na każdą przesiadkę rezerwuje co najmniej 4 minuty (zamiast 1),
+        a czasy jazdy wydłuża o ok. 15% dla autobusów i trolejbusów,
+        5% dla tramwajów i 2% dla kolei/metra. To świadome przybliżenie —
+        pracujemy nad rzeczywistymi profilami opóźnień z danych na żywo,
+        które w przyszłości je zastąpią.</p>
 
       <h3>Strefy na mapie</h3>
       <p>Kolory od ciepłych (blisko) do chłodnych (daleko): do 10, 10–20, 20–30,
