@@ -508,6 +508,21 @@ html, body {
   border-color: var(--accent);
 }
 
+.ad-box {
+  margin: 0 0 10px;
+}
+.ad-box[hidden] { display: none; }
+
+.ad-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-align: center;
+}
+
 .credits {
   padding-top: 10px;
   border-top: 1px solid var(--line);

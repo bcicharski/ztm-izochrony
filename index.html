@@ -152,6 +152,17 @@
       <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
         ☕ Podoba się? Postaw kawę
       </a>
+
+      <div class="ad-box" id="adBox" hidden>
+        <span class="ad-label">Reklama</span>
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-7876278687977632"
+             data-ad-slot="6970050259"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+      </div>
+
       <footer class="credits">
         Dane: <span id="creditsLinks">…</span>
         · rozkład z dnia <span id="feedDate">…</span>
@@ -251,27 +262,38 @@
         rzeczywiste czasy zależą m.in. od ruchu ulicznego i opóźnień.
         Odwiedziny zlicza anonimowo <a href="https://www.goatcounter.com"
         target="_blank" rel="noopener">GoatCounter</a> (bez plików cookie
-        i bez profilowania), a Google Analytics działa wyłącznie po wyrażeniu
-        zgody; zgodę można cofnąć czyszcząc dane strony w przeglądarce.</p>
+        i bez profilowania), a Google Analytics oraz reklamy Google działają
+        wyłącznie po wyrażeniu zgody; zgodę można cofnąć czyszcząc dane strony
+        w przeglądarce.</p>
     </div>
   </dialog>
 
   <div class="consent" id="consentBar" hidden>
-    <p>Strona korzysta z Google Analytics do anonimowych statystyk odwiedzin
-      (pliki cookie zapisywane tylko po zgodzie).</p>
+    <p>Strona korzysta z Google Analytics (anonimowe statystyki) oraz reklam
+      Google — pliki cookie zapisywane tylko po zgodzie.</p>
     <div class="consent-actions">
       <button id="consentYes">Zgoda</button>
       <button id="consentNo" class="secondary">Nie, dziękuję</button>
     </div>
   </div>
   <script>
+    // ładuje reklamę AdSense — dopiero po zgodzie (skrypt adsbygoogle.js w <head>
+    // służy do weryfikacji, ale reklamy inicjujemy push() dopiero tutaj)
+    window.loadAds = () => {
+      const box = document.getElementById('adBox');
+      if (!box || box.dataset.loaded) return;
+      box.hidden = false;
+      box.dataset.loaded = '1';
+      try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* niezatwierdzone */ }
+    };
     (() => {
+      if (localStorage.getItem('ga-consent') === 'granted') loadAds();
       if (localStorage.getItem('ga-consent')) return; // decyzja już zapadła
       const bar = document.getElementById('consentBar');
       bar.hidden = false;
       const choose = value => {
         localStorage.setItem('ga-consent', value);
-        if (value === 'granted') loadGA();
+        if (value === 'granted') { loadGA(); loadAds(); }
         bar.hidden = true;
       };
       document.getElementById('consentYes').addEventListener('click', () => choose('granted'));
