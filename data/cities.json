@@ -1,4 +1,65 @@
 {
+  "bialystok": {
+    "name": "Białystok",
+    "feeds": [
+      { "name": "bkm", "url": "https://komunikacja.bialystok.pl/cms/File/download/gtfs/google_transit.zip" }
+    ],
+    "bbox": [52.95, 22.9, 53.28, 23.35],
+    "boundaries": ["Białystok"],
+    "areaLabel": "% Białegostoku",
+    "center": [53.132, 23.159],
+    "zoom": 12,
+    "pointA": [53.1324, 23.1639],
+    "pointB": [53.1176, 23.1436],
+    "viewbox": "22.90,53.28,23.35,52.95",
+    "veh": [
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "BKM Białystok", "url": "https://www.komunikacja.bialystok.pl/pl/rozklad-jazdy/dane_otwarte" }
+    ]
+  },
+  "rzeszow": {
+    "name": "Rzeszów",
+    "feeds": [
+      { "name": "ztm-rzeszow", "url": "https://mkuran.pl/gtfs/rzeszow.zip" }
+    ],
+    "bbox": [49.9, 21.75, 50.15, 22.25],
+    "boundaries": ["Rzeszów"],
+    "areaLabel": "% Rzeszowa",
+    "center": [50.041, 22.0],
+    "zoom": 12,
+    "pointA": [50.0419, 22.0033],
+    "pointB": [50.03, 21.999],
+    "viewbox": "21.75,50.15,22.25,49.90",
+    "veh": [
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZTM Rzeszów (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+    ]
+  },
+  "olsztyn": {
+    "name": "Olsztyn",
+    "feeds": [
+      { "name": "zdzit-olsztyn", "url": "https://cdn.zbiorkom.live/gtfs/olsztyn.zip" }
+    ],
+    "bbox": [53.68, 20.3, 53.86, 20.6],
+    "boundaries": ["Olsztyn"],
+    "areaLabel": "% Olsztyna",
+    "center": [53.778, 20.48],
+    "zoom": 12,
+    "pointA": [53.7776, 20.4899],
+    "pointB": [53.7784, 20.4801],
+    "viewbox": "20.30,53.86,20.60,53.68",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZDZiT Olsztyn (via zbiorkom.live)", "url": "https://otwartedane.olsztyn.eu/index.php/gtfs-zdzit" }
+    ]
+  },
   "trojmiasto": {
     "name": "Trójmiasto i okolice",
     "feeds": [

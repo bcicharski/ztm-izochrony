@@ -177,6 +177,8 @@ $('walkToggle').addEventListener('change', e => { state.walk = e.target.checked;
 function renderVehControls() {
   const grid = $('vehGrid');
   grid.innerHTML = '';
+  // przy jednym środku transportu filtr nie ma sensu — ukryj całą sekcję
+  grid.closest('fieldset').hidden = cityCfg().veh.length < 2;
   for (const group of cityCfg().veh) {
     const label = document.createElement('label');
     label.className = 'veh';
