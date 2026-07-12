@@ -102,5 +102,48 @@
         "https://gtfs.ztp.krakow.pl/TripUpdates_M.pb"
       ]
     }
+  },
+  "poznan": {
+    "name": "Poznań",
+    "feeds": [
+      { "name": "ztm-poznan", "url": "https://www.ztm.poznan.pl/pl/dla-deweloperow/getGTFSFile", "accept": "application/octet-stream" }
+    ],
+    "bbox": [52.25, 16.70, 52.55, 17.15],
+    "boundaries": ["Poznań"],
+    "areaLabel": "% Poznania",
+    "center": [52.408, 16.925],
+    "zoom": 12,
+    "pointA": [52.4013, 16.9126],
+    "pointB": [52.3936, 16.949],
+    "viewbox": "16.70,52.55,17.15,52.25",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZTM Poznań", "url": "https://www.ztm.poznan.pl/otwarte-dane/" }
+    ],
+    "rt": { "type": "gtfsrt", "urls": ["https://www.ztm.poznan.pl/pl/dla-deweloperow/getGtfsRtFile?file=trip_updates.pb"] }
+  },
+  "lodz": {
+    "name": "Łódź",
+    "feeds": [
+      { "name": "zdit-lodz", "url": "https://cdn.zbiorkom.live/gtfs/lodz.zip" }
+    ],
+    "bbox": [51.68, 19.28, 51.87, 19.68],
+    "boundaries": ["Łódź"],
+    "areaLabel": "% Łodzi",
+    "center": [51.759, 19.457],
+    "zoom": 12,
+    "pointA": [51.7677, 19.4686],
+    "pointB": [51.7789, 19.457],
+    "viewbox": "19.28,51.87,19.68,51.68",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZDiT Łódź (via zbiorkom.live)", "url": "https://otwarte.miasto.lodz.pl/transport_komunikacja/" }
+    ]
   }
 }

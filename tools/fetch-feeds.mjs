@@ -38,7 +38,8 @@ for (const feed of cities[cityKey].feeds) {
   fs.mkdirSync(dir, { recursive: true });
   const url = await resolveUrl(feed);
   console.log(`Pobieram ${feed.name}: ${url}`);
-  const res = await fetch(url, { headers: UA, redirect: 'follow' });
+  const headers = feed.accept ? { ...UA, Accept: feed.accept } : UA;
+  const res = await fetch(url, { headers, redirect: 'follow' });
   if (!res.ok) throw new Error(`${feed.name}: HTTP ${res.status}`);
   const zipPath = path.join(workDir, `${feed.name}.zip`);
   fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
