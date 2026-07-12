@@ -1,20 +1,21 @@
 {
   "trojmiasto": {
-    "name": "Trójmiasto",
+    "name": "Trójmiasto i okolice",
     "feeds": [
       { "name": "ztm-gdansk", "url": "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip" },
       { "name": "zkm-gdynia", "url": "http://api.zdiz.gdynia.pl/pt/gtfs.zip" },
-      { "name": "skm", "url": "https://www.skm.pkp.pl/gtfs-mi-kpd.zip" }
+      { "name": "skm", "url": "https://www.skm.pkp.pl/gtfs-mi-kpd.zip" },
+      { "name": "mzk-wejherowo", "url": "https://mkuran.pl/gtfs/wejherowo.zip" }
     ],
-    "bbox": [54.28, 18.30, 54.62, 19.10],
-    "seaClose": { "n": 54.80, "e": 19.25 },
-    "boundaries": ["Gdańsk", "Sopot", "Gdynia"],
-    "areaLabel": "% Trójmiasta",
-    "center": [54.435, 18.57],
+    "bbox": [54.28, 18.05, 54.68, 19.10],
+    "seaClose": { "n": 54.85, "e": 19.25 },
+    "boundaries": ["Gdańsk", "Sopot", "Gdynia", "Reda", "Rumia", "Wejherowo"],
+    "areaLabel": "% obszaru",
+    "center": [54.47, 18.50],
     "zoom": 11,
     "pointA": [54.3554, 18.6445],
     "pointB": [54.382, 18.6055],
-    "viewbox": "18.30,54.55,19.10,54.20",
+    "viewbox": "18.05,54.68,19.10,54.20",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [900, 0] },
       { "key": "bus", "label": "🚌 Autobus", "types": [700, 3] },
@@ -24,7 +25,8 @@
     "credits": [
       { "label": "ZTM Gdańsk", "url": "https://ckan.multimediagdansk.pl/dataset/tristar" },
       { "label": "ZKM Gdynia", "url": "https://otwartedane.gdynia.pl" },
-      { "label": "PKP SKM", "url": "https://bip.skm.pkp.pl/c97/otwarte-dane" }
+      { "label": "PKP SKM", "url": "https://bip.skm.pkp.pl/c97/otwarte-dane" },
+      { "label": "MZK Wejherowo", "url": "https://mkuran.pl/gtfs/" }
     ],
     "rt": { "type": "gdansk-departures", "url": "https://ckan2.multimediagdansk.pl/departures" }
   },
