@@ -105,6 +105,30 @@
       ]
     }
   },
+  "gzm": {
+    "name": "Aglomeracja śląska (GZM)",
+    "feeds": [
+      { "name": "ztm-gzm", "url": "https://otwartedane.metropoliagzm.pl/api/3/action/package_show?id=rozklady-jazdy-gtfs-wersja-tymczasowa", "resolve": "ckan-latest" }
+    ],
+    "bbox": [50.05, 18.35, 50.65, 19.55],
+    "boundaries": ["Górnośląsko-Zagłębiowska Metropolia"],
+    "adminLevel": 5,
+    "areaLabel": "% metropolii",
+    "center": [50.29, 19.02],
+    "zoom": 10,
+    "pointA": [50.2585, 19.018],
+    "pointB": [50.2965, 18.954],
+    "viewbox": "18.35,50.65,19.55,50.05",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
+      { "key": "trol", "label": "🚎 Trolejbus", "types": [800, 11] }
+    ],
+    "credits": [
+      { "label": "ZTM (Metropolia GZM)", "url": "https://otwartedane.metropoliagzm.pl" }
+    ],
+    "rt": { "type": "gtfsrt", "urls": ["https://gtfsrt.transportgzm.pl:5443/gtfsrt/gzm/tripUpdates"] }
+  },
   "poznan": {
     "name": "Poznań",
     "feeds": [

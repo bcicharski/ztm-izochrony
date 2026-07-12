@@ -157,7 +157,9 @@ const tripMeta = new Map();  // "f:trip_id" -> {routeKey, dayMask}
   });
   feedDirs.forEach((dir, f) => {
     for (const r of readCsvSync(path.join(dir, 'routes.txt'))) {
-      routeInfo.set(`${f}:${r.route_id}`, { name: r.route_short_name, type: +r.route_type });
+      // GZM zostawia route_short_name puste, a numer linii trzyma w long_name
+      const name = r.route_short_name || r.route_long_name || r.route_id;
+      routeInfo.set(`${f}:${r.route_id}`, { name, type: +r.route_type });
     }
     for (const t of readCsvSync(path.join(dir, 'trips.txt'))) {
       const mask = serviceDayMask.get(`${f}:${t.service_id}`);

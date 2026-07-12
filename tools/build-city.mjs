@@ -29,8 +29,9 @@ const bbox = `${cfg.bbox[0] - PAD},${cfg.bbox[1] - PAD},${cfg.bbox[2] + PAD},${c
 const SIMPLIFY_M = 40; // granice mogą być zgrubne — służą tylko statystyce
 const outFile = path.join(import.meta.dirname, '..', 'data', cityKey, 'city.json');
 
+const adminLevel = cfg.adminLevel ?? 8; // gminy; np. GZM to jedna relacja poziomu 5
 const query = `[out:json][timeout:120];(
-${cfg.boundaries.map(n => `relation["boundary"="administrative"]["admin_level"="8"]["name"="${n}"](${bbox});`).join('\n')}
+${cfg.boundaries.map(n => `relation["boundary"="administrative"]["admin_level"="${adminLevel}"]["name"="${n}"](${bbox});`).join('\n')}
 );out geom;`;
 
 let raw;

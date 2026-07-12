@@ -22,6 +22,15 @@ if (!cities[cityKey] || !workDir) {
 const UA = { 'User-Agent': 'ztm-izochrony-build/1.0' };
 
 async function resolveUrl(feed) {
+  if (feed.resolve === 'ckan-latest') {
+    // feed.url = endpoint package_show CKAN; bierzemy najnowszy zasób ZIP
+    const pkg = await (await fetch(feed.url, { headers: UA })).json();
+    const zips = (pkg.result.resources ?? []).filter(r => (r.format ?? '').toUpperCase() === 'ZIP');
+    zips.sort((a, b) => (b.last_modified ?? b.created ?? '').localeCompare(a.last_modified ?? a.created ?? ''));
+    if (!zips.length) throw new Error(`${feed.name}: brak zasobów ZIP w zbiorze CKAN`);
+    console.log(`  CKAN: najnowszy zasób ${zips[0].name ?? zips[0].url.split('/').pop()}`);
+    return zips[0].url;
+  }
   if (feed.resolve === 'wroclaw-od2') {
     // dataset -> lista id plików -> metadane najnowszego pliku -> download_url
     const ds = await (await fetch(feed.url, { headers: UA })).json();
