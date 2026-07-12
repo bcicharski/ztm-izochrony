@@ -151,6 +151,70 @@
     ],
     "rt": { "type": "gtfsrt", "urls": ["https://www.ztm.poznan.pl/pl/dla-deweloperow/getGtfsRtFile?file=trip_updates.pb"] }
   },
+  "szczecin": {
+    "name": "Szczecin",
+    "feeds": [
+      { "name": "zditm", "url": "https://www.zditm.szczecin.pl/storage/gtfs/gtfs.zip" }
+    ],
+    "bbox": [53.3, 14.4, 53.6, 14.9],
+    "boundaries": ["Szczecin"],
+    "areaLabel": "% Szczecina",
+    "center": [53.43, 14.56],
+    "zoom": 12,
+    "pointA": [53.4185, 14.55],
+    "pointB": [53.4326, 14.5507],
+    "viewbox": "14.40,53.60,14.90,53.30",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZDiTM Szczecin", "url": "https://www.zditm.szczecin.pl/pl/zditm/dla-deweloperow/gtfs" }
+    ],
+    "rt": { "type": "gtfsrt", "urls": ["https://www.zditm.szczecin.pl/storage/gtfs/gtfs-rt-trips.pb"] }
+  },
+  "lublin": {
+    "name": "Lublin",
+    "feeds": [
+      { "name": "ztm-lublin", "url": "https://mkuran.pl/gtfs/lublin.zip" }
+    ],
+    "bbox": [51.14, 22.45, 51.32, 22.7],
+    "boundaries": ["Lublin"],
+    "areaLabel": "% Lublina",
+    "center": [51.245, 22.565],
+    "zoom": 12,
+    "pointA": [51.232, 22.5695],
+    "pointB": [51.2497, 22.558],
+    "viewbox": "22.45,51.32,22.70,51.14",
+    "veh": [
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
+      { "key": "trol", "label": "🚎 Trolejbus", "types": [11, 800] }
+    ],
+    "credits": [
+      { "label": "ZTM Lublin (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+    ]
+  },
+  "bydgoszcz": {
+    "name": "Bydgoszcz",
+    "feeds": [
+      { "name": "zdmikp", "url": "https://mkuran.pl/gtfs/bydgoszcz.zip" }
+    ],
+    "bbox": [53.05, 17.85, 53.2, 18.2],
+    "boundaries": ["Bydgoszcz"],
+    "areaLabel": "% Bydgoszczy",
+    "center": [53.125, 18.01],
+    "zoom": 12,
+    "pointA": [53.1352, 17.9884],
+    "pointB": [53.1228, 18.0083],
+    "viewbox": "17.85,53.20,18.20,53.05",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZDMiKP Bydgoszcz (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+    ]
+  },
   "lodz": {
     "name": "Łódź",
     "feeds": [

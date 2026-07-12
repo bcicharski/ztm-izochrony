@@ -133,9 +133,16 @@ if (commonMin > commonMax) {
   console.error(`Feedy nie mają wspólnego zakresu dat (${commonMin} > ${commonMax}).`);
   process.exit(1);
 }
-const allDates = [...servicesByDate.keys()]
-  .filter(d => d >= commonMin && d <= commonMax)
+// tylko daty od dziś — feedy z historią nie mogą podsuwać starych rozkładów
+const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' })
+  .format(new Date()).replaceAll('-', '');
+let allDates = [...servicesByDate.keys()]
+  .filter(d => d >= commonMin && d <= commonMax && d >= today)
   .sort();
+if (!allDates.length) {
+  console.warn('Uwaga: brak dat od dziś we wspólnym zakresie — używam pełnego zakresu.');
+  allDates = [...servicesByDate.keys()].filter(d => d >= commonMin && d <= commonMax).sort();
+}
 const pickDate = pred => allDates.find(d => pred(dateToWeekday(d)));
 const dayTypes = [
   { key: 'workday', date: pickDate(w => w >= 2 && w <= 4) ?? pickDate(w => w >= 1 && w <= 5) },
