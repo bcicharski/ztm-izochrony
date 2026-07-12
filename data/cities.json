@@ -60,6 +60,108 @@
       { "label": "ZDZiT Olsztyn (via zbiorkom.live)", "url": "https://otwartedane.olsztyn.eu/index.php/gtfs-zdzit" }
     ]
   },
+  "torun": {
+    "name": "Toruń",
+    "feeds": [
+      { "name": "mzk-torun", "url": "https://mkuran.pl/gtfs/torun.zip" }
+    ],
+    "bbox": [52.9, 18.45, 53.09, 18.75],
+    "boundaries": ["Toruń"],
+    "areaLabel": "% Torunia",
+    "center": [53.012, 18.605],
+    "zoom": 12,
+    "pointA": [53.0106, 18.6033],
+    "pointB": [53.0138, 18.5984],
+    "viewbox": "18.45,53.09,18.75,52.90",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "MZK Toruń (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+    ]
+  },
+  "kielce": {
+    "name": "Kielce",
+    "feeds": [
+      { "name": "ztm-kielce", "url": "https://mkuran.pl/gtfs/kielce.zip" }
+    ],
+    "bbox": [50.78, 20.5, 50.94, 20.78],
+    "boundaries": ["Kielce"],
+    "areaLabel": "% Kielc",
+    "center": [50.87, 20.63],
+    "zoom": 12,
+    "pointA": [50.8735, 20.6285],
+    "pointB": [50.8661, 20.6286],
+    "viewbox": "20.50,50.94,20.78,50.78",
+    "veh": [
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "ZTM Kielce (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+    ]
+  },
+  "opole": {
+    "name": "Opole",
+    "feeds": [
+      { "name": "mzk-opole", "url": "https://cdn.zbiorkom.live/gtfs/opole.zip" }
+    ],
+    "bbox": [50.6, 17.85, 50.74, 18.02],
+    "boundaries": ["Opole"],
+    "areaLabel": "% Opola",
+    "center": [50.667, 17.925],
+    "zoom": 12,
+    "pointA": [50.6675, 17.9213],
+    "pointB": [50.6606, 17.9269],
+    "viewbox": "17.85,50.74,18.02,50.60",
+    "veh": [
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "MZK Opole (via zbiorkom.live)", "url": "https://zbiorkom.live" }
+    ]
+  },
+  "zielonagora": {
+    "name": "Zielona Góra",
+    "feeds": [
+      { "name": "mzk-zg", "url": "https://www.mzk.zgora.pl/storage/website/dla_deweloperow_74ib2.zip" }
+    ],
+    "bbox": [51.83, 15.42, 52.0, 15.68],
+    "boundaries": ["Zielona Góra"],
+    "areaLabel": "% Zielonej Góry",
+    "center": [51.938, 15.505],
+    "zoom": 12,
+    "pointA": [51.9356, 15.5064],
+    "pointB": [51.9412, 15.4966],
+    "viewbox": "15.42,52.00,15.68,51.83",
+    "veh": [
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "MZK Zielona Góra", "url": "https://www.mzk.zgora.pl/dla-deweloperow" }
+    ]
+  },
+  "gorzow": {
+    "name": "Gorzów Wielkopolski",
+    "feeds": [
+      { "name": "mzk-gorzow", "url": "https://cdn.zbiorkom.live/gtfs/gorzow.zip" }
+    ],
+    "bbox": [52.68, 15.05, 52.81, 15.38],
+    "boundaries": ["Gorzów Wielkopolski"],
+    "areaLabel": "% Gorzowa",
+    "center": [52.735, 15.235],
+    "zoom": 12,
+    "pointA": [52.7368, 15.2288],
+    "pointB": [52.7305, 15.2408],
+    "viewbox": "15.05,52.81,15.38,52.68",
+    "veh": [
+      { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+    ],
+    "credits": [
+      { "label": "MZK Gorzów (via zbiorkom.live)", "url": "https://zbiorkom.live" }
+    ]
+  },
   "trojmiasto": {
     "name": "Trójmiasto i okolice",
     "feeds": [

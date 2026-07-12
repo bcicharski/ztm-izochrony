@@ -51,6 +51,7 @@ html, body {
 
 .panel-header {
   position: relative;
+  flex: none; /* nagłówek zawsze widoczny — nie kurczy się przy długiej treści */
   padding: 16px 18px 12px;
   border-bottom: 1px solid var(--line);
 }
@@ -91,6 +92,8 @@ html, body {
 .collapse-btn:hover, .help-btn:hover { color: var(--ink); }
 
 .panel-body {
+  flex: 1 1 auto;
+  min-height: 0; /* pozwala treści przewijać się wewnątrz panelu zamiast rozpychać go */
   padding: 14px 18px 16px;
   overflow-y: auto;
 }
@@ -126,6 +129,11 @@ html, body {
 
 .app-mode {
   margin: 0 0 14px;
+}
+/* krótsze etykiety trybu — niższe przyciski */
+.app-mode label {
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 /* ---------- wyszukiwarka ---------- */
@@ -514,7 +522,8 @@ html, body {
 .ad-box[hidden] { display: none; }
 
 .ad-label {
-  display: block;
+  /* ukryte do czasu zatwierdzenia witryny przez AdSense (Faza 2) */
+  display: none;
   margin-bottom: 2px;
   font-size: 9px;
   text-transform: uppercase;

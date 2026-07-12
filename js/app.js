@@ -616,7 +616,9 @@ function switchCity(key) {
 
 {
   const sel = $('citySelect');
-  for (const [key, cfg] of Object.entries(CITIES)) {
+  const sorted = Object.entries(CITIES)
+    .sort((a, b) => a[1].name.localeCompare(b[1].name, 'pl'));
+  for (const [key, cfg] of sorted) {
     const opt = document.createElement('option');
     opt.value = key;
     opt.textContent = cfg.name;
