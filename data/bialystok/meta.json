@@ -1,11 +1,11 @@
 {
   "city": "bialystok",
-  "generated": "2026-07-12T18:52:58.067Z",
+  "generated": "2026-07-13T11:52:17.361Z",
   "feedEndDate": "20261006",
   "dates": {
     "workday": "20260714",
     "saturday": "20260718",
-    "sunday": "20260712"
+    "sunday": "20260719"
   },
   "sources": [
     "BKM Białystok — https://www.komunikacja.bialystok.pl/pl/rozklad-jazdy/dane_otwarte"

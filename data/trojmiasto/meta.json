@@ -1,11 +1,11 @@
 {
   "city": "trojmiasto",
-  "generated": "2026-07-12T07:07:45.982Z",
-  "feedEndDate": "20260726",
+  "generated": "2026-07-13T11:52:52.103Z",
+  "feedEndDate": "20260727",
   "dates": {
     "workday": "20260714",
     "saturday": "20260718",
-    "sunday": "20260712"
+    "sunday": "20260719"
   },
   "sources": [
     "ZTM Gdańsk — https://ckan.multimediagdansk.pl/dataset/tristar",
