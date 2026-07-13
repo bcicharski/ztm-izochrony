@@ -21,11 +21,21 @@ jobs:
 
       - name: Pobierz feedy i zbuduj dane wszystkich miast
         run: |
+          ok=0; fail=0; failed=""
           for city in $(node -e "console.log(Object.keys(require('./data/cities.json')).join(' '))"); do
             echo "===== $city ====="
-            node tools/fetch-feeds.mjs "$city" "gtfs-src/$city"
-            node --max-old-space-size=6144 tools/build-data.mjs "$city" gtfs-src/$city/*/
+            # pojedyncze niedziałające źródło nie może przerwać całego odświeżania —
+            # takie miasto pomijamy i zostają jego dotychczasowe dane
+            if node tools/fetch-feeds.mjs "$city" "gtfs-src/$city" \
+               && node --max-old-space-size=6144 tools/build-data.mjs "$city" gtfs-src/$city/*/; then
+              ok=$((ok+1))
+            else
+              fail=$((fail+1)); failed="$failed $city"; echo "::warning::pominięto $city (błąd feedu/budowy)"
+            fi
           done
+          echo "Zbudowano: $ok, pominięto: $fail ($failed)"
+          # awaria zbiorcza (nic się nie zbudowało) = realny problem, oflaguj
+          if [ "$ok" -eq 0 ]; then echo "::error::żadne miasto nie zbudowane"; exit 1; fi
 
       - name: Skompiluj profile opóźnień z gałęzi delays
         run: |

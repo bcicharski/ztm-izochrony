@@ -42,16 +42,36 @@ async function resolveUrl(feed) {
   return feed.url;
 }
 
+/** Pobiera plik z timeoutem, ponawia i sprawdza, że to faktycznie ZIP. */
+async function downloadZip(url, headers, tries = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(90000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      // serwery miejskie potrafią oddać stronę błędu z kodem 200 — waliduj nagłówek ZIP (PK\x03\x04)
+      if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+        throw new Error(`odpowiedź nie jest plikiem ZIP (${buf.length} B)`);
+      }
+      return buf;
+    } catch (err) {
+      if (attempt >= tries) throw err;
+      const waitS = attempt * 15;
+      console.log(`  pobieranie nieudane (${err.message}) — ponawiam za ${waitS} s (${attempt}/${tries})…`);
+      await new Promise(r => setTimeout(r, waitS * 1000));
+    }
+  }
+}
+
 for (const feed of cities[cityKey].feeds) {
   const dir = path.join(workDir, feed.name);
   fs.mkdirSync(dir, { recursive: true });
   const url = await resolveUrl(feed);
   console.log(`Pobieram ${feed.name}: ${url}`);
   const headers = feed.accept ? { ...UA, Accept: feed.accept } : UA;
-  const res = await fetch(url, { headers, redirect: 'follow' });
-  if (!res.ok) throw new Error(`${feed.name}: HTTP ${res.status}`);
+  const buf = await downloadZip(url, headers);
   const zipPath = path.join(workDir, `${feed.name}.zip`);
-  fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
+  fs.writeFileSync(zipPath, buf);
   // Windows: systemowy bsdtar rozpakowuje zip (GNU tar z Git Basha
   // potraktowałby "C:\..." jako host zdalny); Linux/Actions: unzip
   if (process.platform === 'win32') {
