@@ -209,6 +209,19 @@ export async function loadCity(cityKey) {
   return loadRings(`data/${cityKey}/city.json`);
 }
 
+/** Mosty/kładki/mola (przejezdne korytarze przez wodę w siatce pieszej). */
+export async function loadBridges(cityKey) {
+  const url = `data/${cityKey}/bridges.json`;
+  if (!cache.has(url)) {
+    cache.set(url, fetch(url).then(async r => {
+      if (!r.ok) return null;
+      const raw = await r.json();
+      return raw.lines.map(line => line.map(([la, lo]) => [la / 1e5, lo / 1e5]));
+    }).catch(() => null));
+  }
+  return cache.get(url);
+}
+
 async function loadRings(url) {
   if (!cache.has(url)) {
     cache.set(url, fetch(url).then(async r => {

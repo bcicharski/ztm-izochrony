@@ -91,22 +91,29 @@ export function orient(ring, filled) {
   return cw === filled ? ring : ring.slice().reverse();
 }
 
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
 export async function fetchOverpass(query, tries = 4) {
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
+    // przy kolejnych próbach przełączaj się między mirrorami
+    const url = OVERPASS_MIRRORS[(attempt - 1) % OVERPASS_MIRRORS.length];
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'ztm-gdansk-isochrones-build/1.0',
       },
       body: 'data=' + encodeURIComponent(query),
-    });
+    }).catch(err => ({ ok: false, status: err.message }));
     if (res.ok) return res.json();
-    if (attempt >= tries || ![429, 502, 503, 504].includes(res.status)) {
+    if (attempt >= tries || (typeof res.status === 'number' && ![429, 502, 503, 504].includes(res.status))) {
       throw new Error(`Overpass: HTTP ${res.status}`);
     }
     const waitS = attempt * 20;
-    console.log(`Overpass HTTP ${res.status} — ponawiam za ${waitS} s (próba ${attempt}/${tries})…`);
+    console.log(`Overpass ${res.status} (${url.split('/')[2]}) — ponawiam za ${waitS} s (próba ${attempt}/${tries})…`);
     await new Promise(r => setTimeout(r, waitS * 1000));
   }
 }

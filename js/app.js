@@ -4,11 +4,12 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, DAY_LABELS, distM, WALK_MPS } from './data.js';
+import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, DAY_LABELS, distM, WALK_MPS } from './data.js';
 import { computeReachability } from './router.js';
 import { buildZones, BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
-import { initStats, resetStats, computeStats, computeAreas } from './stats.js';
+import { computeStats } from './stats.js';
+import { buildWalkGrid, computeTimeGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents } from './walkgrid.js';
 
 const CITIES = await loadCities();
 const DEFAULT_CITY = 'trojmiasto';
@@ -535,26 +536,64 @@ async function recompute() {
     }
     lastCompute = { net, res, res2, minutes, walk: state.walk, mode: state.mode, direction: state.direction };
     map.closePopup();
-    const zones = buildZones(net, minutes, {
-      walk: state.walk,
-      origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
-    });
-    zoneLayer.setZones(zones);
+
+    let gridTime = null, grid = null;
+    if (state.walk && cityAssets) {
+      // zasięg pieszy po lądzie: woda blokuje, mosty przepuszczają
+      grid = buildWalkGrid(state.city, cityCfg(), cityAssets.water, cityAssets.bridges, cityAssets.city);
+      const seedsFor = (mins, origin) => {
+        const seeds = [];
+        for (let i = 0; i < net.nStops; i++) {
+          const t = mins[i];
+          if (!(t <= 90)) continue;
+          const idx = pixelIndex(grid, net.lat[i], net.lon[i]);
+          if (idx >= 0) seeds.push([idx, Math.round(t * 60)]);
+        }
+        if (origin) {
+          const oIdx = pixelIndex(grid, origin.lat, origin.lng);
+          if (oIdx >= 0) seeds.push([oIdx, 0]);
+        }
+        return seeds;
+      };
+      if (state.compare) {
+        const t1 = computeTimeGrid(grid, seedsFor(res.minutes, state.point)).slice();
+        const t2 = computeTimeGrid(grid, seedsFor(res2.minutes, state.point2));
+        gridTime = maxTimeGrid(grid, t1, t2);
+      } else {
+        gridTime = computeTimeGrid(grid, seedsFor(minutes, state.point));
+      }
+      zoneLayer.setGrid({
+        canvas: renderTimeGrid(grid, gridTime),
+        latN: grid.latN, lonW: grid.lonW, latS: grid.latS, lonE: grid.lonE,
+      });
+      // koła tylko dla przystanków poza bboxem siatki (np. dalekie stacje SKM)
+      const outside = new Float64Array(minutes.length).fill(Infinity);
+      let anyOutside = false;
+      for (let i = 0; i < net.nStops; i++) {
+        if (minutes[i] <= 90 && pixelIndex(grid, net.lat[i], net.lon[i]) < 0) {
+          outside[i] = minutes[i];
+          anyOutside = true;
+        }
+      }
+      zoneLayer.setZones(anyOutside ? buildZones(net, outside, { walk: true, origin: null }) : null);
+    } else {
+      zoneLayer.setGrid(null);
+      zoneLayer.setZones(buildZones(net, minutes, {
+        walk: state.walk,
+        origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
+      }));
+    }
 
     if (!state.compare && state.stats) {
       const statRows = computeStats(net, minutes, {
         walk: state.walk,
         origin: { lat: state.point.lat, lon: state.point.lng },
       });
-      renderStats(statRows);
-      if (state.walk) {
-        // rasteryzacja powierzchni jest cięższa — poza ścieżką rysowania mapy
-        setTimeout(() => {
-          if (seq !== computeSeq) return;
-          computeAreas(zones, statRows);
-          renderStats(statRows);
-        }, 0);
+      if (gridTime && grid) {
+        const pct = areaPercents(grid, gridTime);
+        if (pct) statRows.forEach((row, i) => { row.areaPct = pct[i]; });
       }
+      renderStats(statRows);
     }
 
     const reachable = minutes.reduce((s, v) => s + (v <= 90 ? 1 : 0), 0);
@@ -575,6 +614,8 @@ function renderCredits() {
     .join(' · ');
 }
 
+let cityAssets = null; // {water, city, bridges} bieżącego miasta (do siatki pieszej)
+
 async function loadCityAssets() {
   const key = state.city;
   $('areaHead').textContent = cityCfg().areaLabel;
@@ -587,13 +628,11 @@ async function loadCityAssets() {
     $('feedDate').textContent = d ? `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}` : '—';
   }).catch(() => { if (state.city === key) $('feedDate').textContent = '—'; });
   try {
-    const [water, city] = await Promise.all([loadWater(key), loadCity(key)]);
+    const [water, city, bridges] = await Promise.all([loadWater(key), loadCity(key), loadBridges(key)]);
     if (state.city !== key) return; // w międzyczasie zmieniono miasto
     zoneLayer.setWater(water ?? []);
-    if (city) {
-      initStats(city, water);
-      recompute(); // uzupełnij kolumnę "%" po zbudowaniu rastra
-    }
+    cityAssets = { water, city, bridges };
+    recompute(); // przelicz strefy na siatce pieszej po załadowaniu geometrii
   } catch { /* brak maski wody/granicy nie blokuje działania */ }
 }
 
@@ -609,7 +648,8 @@ function switchCity(key) {
   for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
   map.closePopup();
   map.setView(cityCfg().center, cityCfg().zoom);
-  resetStats(); // raster poprzedniego miasta nie może liczyć nowych stref
+  cityAssets = null; // geometria poprzedniego miasta nie pasuje do nowego
+  zoneLayer.setGrid(null);
   loadCityAssets();
   recompute();
 }
@@ -645,7 +685,9 @@ $('daySelect').value = state.day;
 $('statsToggle').checked = state.stats;
 $('safeToggle').checked = state.safe;
 syncModeUi();
-if (pointFromUrl) map.setView(state.point, 13);
+// animate:false — animowany zoom bywa przerywany przez invalidateSize
+// z ResizeObservera przy starcie i widok zostawał na zoomie domyślnym
+if (pointFromUrl) map.setView(state.point, 13, { animate: false });
 
 loadCityAssets();
 recompute();

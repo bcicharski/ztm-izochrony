@@ -61,6 +61,15 @@ export const ZoneLayer = L.Layer.extend({
     this._redraw();
   },
 
+  /**
+   * Raster stref (siatka piesza): {canvas, latN, lonW, latS, lonE} albo null.
+   * Rysowany pod ewentualnymi kołami (fallback dla przystanków poza siatką).
+   */
+  setGrid(gridImage) {
+    this._grid = gridImage;
+    this._redraw();
+  },
+
   /** Pierścienie wody [[ [lat,lon], ... ], ...] — wycinane ze stref. */
   setWater(rings) {
     this._water = rings;
@@ -85,7 +94,7 @@ export const ZoneLayer = L.Layer.extend({
 
     const ctx = this._canvas.getContext('2d');
     ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-    if (!this._zones) return;
+    if (!this._zones && !this._grid) return;
 
     const bctx = this._buffer.getContext('2d');
     bctx.clearRect(0, 0, this._buffer.width, this._buffer.height);
@@ -99,7 +108,16 @@ export const ZoneLayer = L.Layer.extend({
 
     const bounds = map.getBounds().pad(0.3);
 
-    for (const zone of this._zones) {
+    // raster siatki pieszej — rozciągnięty między narożnikami bboxa
+    if (this._grid) {
+      const g = this._grid;
+      const tl = map.latLngToContainerPoint([g.latN, g.lonW]);
+      const br = map.latLngToContainerPoint([g.latS, g.lonE]);
+      bctx.imageSmoothingEnabled = true;
+      bctx.drawImage(g.canvas, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+    }
+
+    for (const zone of this._zones ?? []) {
       bctx.fillStyle = zone.color;
       bctx.beginPath();
       for (const [lat, lon, rM] of zone.circles) {

@@ -129,7 +129,9 @@ linia brzegowa, czyli praktycznie nigdy).
 
 - Bez połączeń regionalnych spoza sieci miejskiej (Polregio, PKS itd.);
   feed SKM sięga jednak aż po Wejherowo/Lębork i Tczew.
-- Dojście piesze liczone w linii prostej z korektą na krętość ulic,
-  nie po rzeczywistej siatce ulic.
+- Dojście piesze liczone falowo po siatce lądu (~25–40 m; woda blokuje,
+  mosty/kładki/mola z OSM przepuszczają — `tools/build-bridges.mjs` →
+  `data/<miasto>/bridges.json`), bez rzeczywistej siatki ulic; przystanki
+  poza bboxem miasta (dalekie stacje kolejowe) mają uproszczony zasięg kołowy.
 - Tryb „ogólnie" jest optymistyczny: skleja najszybsze odcinki różnych
   kursów i nie wlicza oczekiwania.
