@@ -9,7 +9,7 @@ import { computeReachability } from './router.js';
 import { buildZones, BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { computeStats } from './stats.js';
-import { buildWalkGrid, computeTimeGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents } from './walkgrid.js';
+import { buildWalkGrid, computeTimeGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, UNREACH } from './walkgrid.js';
 
 const CITIES = await loadCities();
 const DEFAULT_CITY = 'trojmiasto';
@@ -388,9 +388,41 @@ const HHMM = s => `${String(Math.floor(s / 3600) % 24).padStart(2, '0')}:${Strin
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
-/** Najlepszy przystanek docelowy dla klikniętego miejsca (wg łącznego czasu). */
+/**
+ * Najlepszy przystanek docelowy dla klikniętego miejsca (wg łącznego czasu).
+ *
+ * W trybie pieszym, dla punktu wewnątrz siatki (`js/walkgrid.js`), łączny czas
+ * bierze z fali po lądzie (`gridTime[idx]`) — spójnie ze strefami i bez
+ * przechodzenia przez wodę. Przystanek do rekonstrukcji trasy wybiera spośród
+ * tych, które mogły być źródłem fali (`minutes[i]*60 ≤ gridTime[idx]`),
+ * biorąc najbliższy w linii prostej. Gdy żaden przystanek nie mógł być źródłem
+ * fali (punkt osiągalny pieszo wprost od origin), a także poza siatką (dalekie
+ * stacje) i w trybie bez spaceru — zostaje dobór crow-fly.
+ * @param {{lat:number, lng:number}} latlng
+ * @returns {{stop:number, total:number, walkMin:number}|null}
+ */
 function pickTargetStop(latlng) {
-  const { net, minutes, walk } = lastCompute;
+  const { net, minutes, walk, grid, gridTime } = lastCompute;
+  if (walk && grid && gridTime) {
+    const idx = pixelIndex(grid, latlng.lat, latlng.lng);
+    if (idx >= 0) {
+      // wewnątrz siatki ufamy wyłącznie fali po lądzie (bez crow-fly przez wodę)
+      const totalSec = gridTime[idx];
+      if (totalSec >= UNREACH) return null;
+      let best = -1, bestD = Infinity;
+      for (let i = 0; i < net.nStops; i++) {
+        if (!Number.isFinite(minutes[i]) || minutes[i] * 60 > totalSec + 1) continue;
+        const d = distM(latlng.lat, latlng.lng, net.lat[i], net.lon[i]);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      if (best >= 0) {
+        const total = totalSec / 60;
+        return { stop: best, total, walkMin: Math.max(0, total - minutes[best]) };
+      }
+      // brak przystanku-źródła: punkt osiągalny pieszo wprost od origin → crow-fly niżej
+    }
+    // idx < 0: punkt poza bboxem siatki — spada do crow-fly poniżej
+  }
   let best = -1, bestTotal = Infinity, bestWalkMin = 0;
   for (let i = 0; i < net.nStops; i++) {
     if (!Number.isFinite(minutes[i])) continue;
@@ -534,7 +566,7 @@ async function recompute() {
         minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
       }
     }
-    lastCompute = { net, res, res2, minutes, walk: state.walk, mode: state.mode, direction: state.direction };
+    lastCompute = { net, res, res2, minutes, walk: state.walk, mode: state.mode, direction: state.direction, grid: null, gridTime: null };
     map.closePopup();
 
     let gridTime = null, grid = null;
@@ -583,6 +615,9 @@ async function recompute() {
         origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
       }));
     }
+    // dymek trasy korzysta z tej samej siatki co strefy (spójny dobór przystanku)
+    lastCompute.grid = grid;
+    lastCompute.gridTime = gridTime;
 
     if (!state.compare && state.stats) {
       const statRows = computeStats(net, minutes, {

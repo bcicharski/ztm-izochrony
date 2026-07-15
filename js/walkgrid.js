@@ -104,7 +104,7 @@ export function buildWalkGrid(cityKey, cfg, water, bridges, city) {
   return grid;
 }
 
-const UNREACH = 65535;
+export const UNREACH = 65535;
 
 /**
  * Propagacja czasu po lądzie od źródeł [pxIndex, sekundy].
