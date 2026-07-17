@@ -11,6 +11,15 @@
  *   - kursowanie przez calendar_dates (ZTM Gdańsk, ZKM Gdynia, SKM, Warszawa),
  *   - pełny calendar.txt z flagami dni tygodnia + wyjątki (Kraków, Wrocław),
  *   - kursy częstotliwościowe frequencies.txt (metro warszawskie).
+ *
+ * Opcjonalne per-feed filtry (pola w danym feedzie w data/cities.json, dopasowane
+ * po nazwie katalogu = feed.name); używane do wyłuskania jednego przewoźnika/
+ * regionu z feedu zbiorczego (np. PolRegio-Pomorze z ogólnopolskiego
+ * polish_trains.zip):
+ *   - keepAgency: ["PR", ...] — zostaw tylko trasy o tym agency_id (routes.txt),
+ *   - keepBbox: [minLat, minLon, maxLat, maxLon] — zostaw tylko kursy z ≥1
+ *     przystankiem w tym prostokącie (pełny przebieg kursu zachowany, także
+ *     przystanki poza bboxem — dojazd dalekobieżny liczy się jak zwykle).
  */
 
 import fs from 'node:fs';
@@ -30,6 +39,10 @@ if (!feedDirs.length || !feedDirs.every(d => fs.existsSync(path.join(d, 'stop_ti
   console.error('Podaj katalogi z rozpakowanymi GTFS (każdy musi zawierać stop_times.txt).');
   process.exit(1);
 }
+// konfiguracja per-feed z cities.json (dopasowanie po nazwie katalogu = feed.name):
+// keepAgency / keepBbox — filtry wyłuskujące przewoźnika/region z feedu zbiorczego
+const feedCfgByName = new Map((cities[cityKey].feeds ?? []).map(fe => [fe.name, fe]));
+const feedCfg = feedDirs.map(d => feedCfgByName.get(path.basename(d)) ?? {});
 
 // --- pomocnicze ---------------------------------------------------------
 
@@ -153,7 +166,7 @@ console.log('Wybrane daty:', dayTypes.map(d => `${d.key}=${d.date}`).join(', '))
 
 // --- 2. linie i kursy (usługa może kursować w kilku wybranych dniach) -----
 
-const routeInfo = new Map(); // "f:route_id" -> {name, type}
+const routeInfo = new Map(); // "f:route_id" -> {name, type, agency}
 const tripMeta = new Map();  // "f:trip_id" -> {routeKey, dayMask}
 {
   const serviceDayMask = new Map(); // "f:service_id" -> bitmask dni
@@ -166,11 +179,14 @@ const tripMeta = new Map();  // "f:trip_id" -> {routeKey, dayMask}
     for (const r of readCsvSync(path.join(dir, 'routes.txt'))) {
       // GZM zostawia route_short_name puste, a numer linii trzyma w long_name
       const name = r.route_short_name || r.route_long_name || r.route_id;
-      routeInfo.set(`${f}:${r.route_id}`, { name, type: +r.route_type });
+      routeInfo.set(`${f}:${r.route_id}`, { name, type: +r.route_type, agency: r.agency_id ?? '' });
     }
+    const keepAgency = feedCfg[f].keepAgency; // filtr przewoźnika (feed zbiorczy)
     for (const t of readCsvSync(path.join(dir, 'trips.txt'))) {
       const mask = serviceDayMask.get(`${f}:${t.service_id}`);
-      if (mask) tripMeta.set(`${f}:${t.trip_id}`, { routeKey: `${f}:${t.route_id}`, dayMask: mask });
+      if (!mask) continue;
+      if (keepAgency && !keepAgency.includes(routeInfo.get(`${f}:${t.route_id}`)?.agency)) continue;
+      tripMeta.set(`${f}:${t.trip_id}`, { routeKey: `${f}:${t.route_id}`, dayMask: mask });
     }
   });
 }
@@ -275,6 +291,28 @@ for (let f = 0; f < feedDirs.length; f++) {
     if (++n % 500000 === 0) console.log(`  stop_times feed ${f}: ${n}…`);
   }
   console.log(`Feed ${f}: wierszy stop_times w wybranych dniach: ${n}`);
+}
+
+// --- 4b. filtr geograficzny per-feed (keepBbox) --------------------------
+// Feed zbiorczy (np. polish_trains.zip): zostaw tylko kursy dotykające regionu.
+// Warunek liczony po zbudowaniu tripStops, bo potrzebne są współrzędne
+// przystanków; cały przebieg kursu zostaje (dalekie przystanki jak zwykle).
+for (let f = 0; f < feedDirs.length; f++) {
+  const bb = feedCfg[f].keepBbox;
+  if (!bb) continue;
+  const [minLat, minLon, maxLat, maxLon] = bb;
+  const prefix = `${f}:`;
+  let dropped = 0, kept = 0;
+  for (const [tripKey, arr] of tripStops) {
+    if (!tripKey.startsWith(prefix)) continue;
+    const inBox = arr.some(([, sIdx]) => {
+      const s = stops[sIdx];
+      return s.lat >= minLat && s.lat <= maxLat && s.lon >= minLon && s.lon <= maxLon;
+    });
+    if (inBox) kept++;
+    else { tripStops.delete(tripKey); tripMeta.delete(tripKey); dropped++; }
+  }
+  console.log(`Feed ${f} (${path.basename(feedDirs[f])}): filtr bbox — zostawiono ${kept}, usunięto ${dropped} kursów`);
 }
 
 // --- 5. wzorce tras per dzień --------------------------------------------

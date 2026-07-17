@@ -1,9 +1,9 @@
 {
   "city": "trojmiasto",
-  "generated": "2026-07-13T11:52:52.103Z",
-  "feedEndDate": "20260727",
+  "generated": "2026-07-17T06:31:13.590Z",
+  "feedEndDate": "20260731",
   "dates": {
-    "workday": "20260714",
+    "workday": "20260721",
     "saturday": "20260718",
     "sunday": "20260719"
   },
@@ -11,6 +11,7 @@
     "ZTM Gdańsk — https://ckan.multimediagdansk.pl/dataset/tristar",
     "ZKM Gdynia — https://otwartedane.gdynia.pl",
     "PKP SKM — https://bip.skm.pkp.pl/c97/otwarte-dane",
-    "MZK Wejherowo — https://mkuran.pl/gtfs/"
+    "MZK Wejherowo — https://mkuran.pl/gtfs/",
+    "PolRegio / PKM (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
   ]
 }

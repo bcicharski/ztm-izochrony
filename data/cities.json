@@ -168,7 +168,8 @@
       { "name": "ztm-gdansk", "url": "https://ckan.multimediagdansk.pl/dataset/c24aa637-3619-4dc2-a171-a23eec8f2172/resource/30e783e4-2bec-4a7d-bb22-ee3e3b26ca96/download/gtfsgoogle.zip" },
       { "name": "zkm-gdynia", "url": "http://api.zdiz.gdynia.pl/pt/gtfs.zip" },
       { "name": "skm", "url": "https://www.skm.pkp.pl/gtfs-mi-kpd.zip" },
-      { "name": "mzk-wejherowo", "url": "https://mkuran.pl/gtfs/wejherowo.zip" }
+      { "name": "mzk-wejherowo", "url": "https://mkuran.pl/gtfs/wejherowo.zip" },
+      { "name": "polregio", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["PR"], "keepBbox": [54.25, 18.0, 54.72, 19.15] }
     ],
     "bbox": [54.28, 18.05, 54.68, 19.10],
     "seaClose": { "n": 54.85, "e": 19.25 },
@@ -189,7 +190,8 @@
       { "label": "ZTM Gdańsk", "url": "https://ckan.multimediagdansk.pl/dataset/tristar" },
       { "label": "ZKM Gdynia", "url": "https://otwartedane.gdynia.pl" },
       { "label": "PKP SKM", "url": "https://bip.skm.pkp.pl/c97/otwarte-dane" },
-      { "label": "MZK Wejherowo", "url": "https://mkuran.pl/gtfs/" }
+      { "label": "MZK Wejherowo", "url": "https://mkuran.pl/gtfs/" },
+      { "label": "PolRegio / PKM (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
     ],
     "rt": { "type": "gdansk-departures", "url": "https://ckan2.multimediagdansk.pl/departures" }
   },

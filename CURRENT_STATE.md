@@ -17,11 +17,23 @@ Pozostałe znane luki mechanizmu (kandydaci na dalszą pracę):
 
 ## 2. Ostatnie modyfikacje
 
-### Sesja 2026-07-17 (niezacommitowane) — WKD dla Warszawy (poza tematem wody)
+### Sesja 2026-07-17 (cd., niezacommitowane) — PKM/PolRegio dla Trójmiasta (poza tematem wody)
+
+Problem: linia PKM (Pomorska Kolej Metropolitalna) miała w apce **stacje, ale zero kursów** — feed SKM Trójmiasta wypisuje przystanki PKM (Brętowo, Rębiechowo, Port Lotniczy…), lecz nie ma tam żadnych kursów. PKM obsługuje PolRegio. Brak dedykowanego feedu PKM/Pomorze (pkm-sa.pl = tylko PDF; PolRegio publikuje wyłącznie GTFS ogólnopolski z nietrwałym URL). Jedyne trwałe źródło: `mkuran.pl/gtfs/polish_trains.zip` (agencja `PR` = PolRegio, cała Polska).
+
+- **`tools/build-data.mjs` (NOWA ZDOLNOŚĆ)**: opcjonalne per-feed filtry z `cities.json` (dopasowane po nazwie katalogu = `feed.name`, przez `feedCfg`):
+  - `keepAgency: ["PR"]` — przy budowie `tripMeta` zostają tylko trasy o danym `agency_id` (dodano czytanie `agency_id` do `routeInfo`).
+  - `keepBbox: [minLat, minLon, maxLat, maxLon]` — sekcja **4b** (po zbudowaniu `tripStops`, bo potrzebne współrzędne): zostają tylko kursy z ≥1 przystankiem w prostokącie; **cały przebieg kursu zachowany** (dalekie przystanki jak zwykle, fallback `outside`). Log: „filtr bbox — zostawiono N, usunięto M".
+  - JSDoc w nagłówku pliku opisuje oba filtry.
+- **`data/cities.json`**: do `trojmiasto.feeds` dodany `{ "name": "polregio", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["PR"], "keepBbox": [54.25, 18.0, 54.72, 19.15] }` + credit „PolRegio / PKM". `veh` bez zmian — PolRegio `route_type 2` wpada w istniejący `rail` (🚆 SKM/PKM). Bbox = rdzeń metropolitalny (≈ bbox apki, poszerzony o Kartuzy): kurs kwalifikuje się, gdy realnie obsługuje aglomerację; kursy przybrzeżne/PKM (Gdynia–Hel/Słupsk/Elbląg, Gdańsk–Kartuzy–Somonino→Kościerzyna) wchodzą przez Gdańsk/Gdynię i zostają w całości, a trans-Polska kończące tylko w Słupsku (Zielona Góra→Słupsk) — odrzucone.
+- **`data/trojmiasto/{workday,saturday,sunday,meta}.json`**: przebudowane (5 feedów). Filtr PolRegio: zostawiono **607**, usunięto **2778** kursów. Weryfikacja: trasa `REG` (PolRegio, type 2), 84 wzorce/dzień roboczy; PKM obsłużone (Brętowo 7, Kartuzy 5, Port Lotniczy 2, →Kościerzyna via Somonino); brak przecieków Szczecin/Zielona Góra/Koszalin (zostają tylko ogony Bydgoszcz/Piła kursów z Gdyni). Z Kartuz strefa sięga 21 km w głąb Gdańska w 30 min (dawniej tylko autobus ZTM), 84% obszaru w paśmie „ponad 60". Zero błędów konsoli.
+- **Uwaga o klastrowaniu**: nazwy stacji różnią się wielkością liter między feedami (SKM „KARTUZY" vs PolRegio „Kartuzy") — klastrowanie zespołów jest po dokładnej nazwie, więc część stacji PKM nie scala się z istniejącymi (duplikat węzła, brak przesiadki między nimi). Do ewentualnego sprzątnięcia (normalizacja wielkości liter w `build-data.mjs` sekcja 3) — dotyczy wszystkich miast, więc świadomie pominięte tu.
+
+### Sesja 2026-07-17 — WKD dla Warszawy (zacommitowane, `33b2097`)
 
 - **`data/cities.json`**: do `warszawa.feeds` dodany feed `{ "name": "wkd", "url": "https://mkuran.pl/gtfs/wkd.zip" }`; drugi wpis w `credits` (WKD). `veh` bez zmian — WKD to `route_type 2`, wpada w istniejący klucz `rail` (🚆 Kolej). Trasa ZKA WKD (`route_type 3`) wpadłaby pod 🚌, ale nie kursuje w wybranych dniach.
 - **`data/warszawa/{workday,saturday,sunday,meta}.json`**: przebudowane (`node tools/fetch-feeds.mjs warszawa gtfs-src/warszawa` + `node tools/build-data.mjs warszawa gtfs-src/warszawa/wtp gtfs-src/warszawa/wkd`). Wspólny zakres dat WTP∩WKD = 20260717–20260816. Weryfikacja: trasa `WKD`, 144 kursy/dzień roboczy, stacje Podkowa Leśna…Śródmieście WKD; z Podkowej strefa sięga w głąb Warszawy (70% powierzchni w paśmie „ponad 60"), zero błędów konsoli.
-- **Koleje Mazowieckie: ODŁOŻONE.** Brak osiągalnego feedu tylko-KM (mkuran usunął `kolejemazowieckie.zip` 2026-03-31, przyjazdy.pl padł). Jedyne źródło z KM to ogólnopolski `mkuran.pl/gtfs/polish_trains.zip` (28 MB; też PKP IC/PolRegio/KD/…). `agency_id=KM` jest tam czyste (41 linii, prefiks `KM_`), ale build-data nie filtruje po agencji — wpięcie KM wymaga filtra (opcjonalne pole w feedzie cities.json + lookup po `path.basename(dir)` w build-data). Decyzja użytkownika: dodać dopiero po ustaleniu źródła/filtra.
+- **Koleje Mazowieckie: ODŁOŻONE.** Brak osiągalnego feedu tylko-KM (mkuran usunął `kolejemazowieckie.zip` 2026-03-31, przyjazdy.pl padł). Jedyne źródło z KM to ogólnopolski `mkuran.pl/gtfs/polish_trains.zip` (28 MB; też PKP IC/PolRegio/KD/…). `agency_id=KM` jest tam czyste (41 linii, prefiks `KM_`). **Filtr `keepAgency` już istnieje** (dodany przy PKM, patrz wyżej) — KM można teraz wpiąć wpisem `{ "name": "km", "url": ".../polish_trains.zip", "keepAgency": ["KM"] }` w `warszawa.feeds` (bez `keepBbox` — KM jest regionalne), gdy użytkownik zdecyduje. Decyzja z sesji: cała agencja KM (z ZKA).
 
 ### Sesja 2026-07-15 (niezacommitowane) — spójny dobór przystanku w dymku trasy
 
