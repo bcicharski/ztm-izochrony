@@ -20,7 +20,7 @@ const gridCache = new Map(); // cityKey -> grid
  * Buduje statyczną siatkę lądu dla miasta (raz, cache).
  * @param {string} cityKey
  * @param {object} cfg          wpis z cities.json (bbox)
- * @param {Array|null} water    pierścienie wody [[ [lat,lon], ...], ...]
+ * @param {{polys:Array,lines:Array}|null} water  poligony akwenów + linie rzek/kanałów
  * @param {Array|null} bridges  linie mostów [[ [lat,lon], ...], ...]
  * @param {Array|null} city     granice miasta (do statystyk % powierzchni)
  */
@@ -53,10 +53,26 @@ export function buildWalkGrid(cityKey, cfg, water, bridges, city) {
       ctx.closePath();
     }
   };
-  if (water) {
+  if (water?.polys?.length) {
     ctx.fillStyle = '#000';
-    trace(water);
+    trace(water.polys);
     ctx.fill('nonzero');
+  }
+  if (water?.lines?.length) {
+    // linie rzek/kanałów uzupełniają dziury poligonów; ~100 m szerokości,
+    // większe niż korytarz mostu (50 m), by most-cut nie zniwelował rzeki
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = Math.max(3, 100 / res);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (const line of water.lines) {
+      for (let i = 0; i < line.length; i++) {
+        const x = toX(line[i][1]), y = toY(line[i][0]);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
   }
   if (bridges) {
     ctx.globalCompositeOperation = 'destination-out';

@@ -665,7 +665,7 @@ async function loadCityAssets() {
   try {
     const [water, city, bridges] = await Promise.all([loadWater(key), loadCity(key), loadBridges(key)]);
     if (state.city !== key) return; // w międzyczasie zmieniono miasto
-    zoneLayer.setWater(water ?? []);
+    zoneLayer.setWater(water ?? { polys: [], lines: [] });
     cityAssets = { water, city, bridges };
     recompute(); // przelicz strefy na siatce pieszej po załadowaniu geometrii
   } catch { /* brak maski wody/granicy nie blokuje działania */ }

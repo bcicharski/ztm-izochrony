@@ -70,9 +70,9 @@ export const ZoneLayer = L.Layer.extend({
     this._redraw();
   },
 
-  /** Pierścienie wody [[ [lat,lon], ... ], ...] — wycinane ze stref. */
-  setWater(rings) {
-    this._water = rings;
+  /** Geometria wody {polys, lines} — wycinana ze stref (linie rzek stroke ~100 m). */
+  setWater(water) {
+    this._water = water;
     this._redraw();
   },
 
@@ -131,18 +131,34 @@ export const ZoneLayer = L.Layer.extend({
     }
 
     // wytnij wodę (reguła nonzero: wyspy w pierścieniach wody zostają)
-    if (this._water) {
+    if (this._water?.polys?.length || this._water?.lines?.length) {
       bctx.globalCompositeOperation = 'destination-out';
-      bctx.beginPath();
-      for (const ring of this._water) {
-        for (let i = 0; i < ring.length; i++) {
-          const p = map.latLngToContainerPoint(ring[i]);
-          if (i === 0) bctx.moveTo(p.x, p.y);
-          else bctx.lineTo(p.x, p.y);
+      if (this._water.polys?.length) {
+        bctx.beginPath();
+        for (const ring of this._water.polys) {
+          for (let i = 0; i < ring.length; i++) {
+            const p = map.latLngToContainerPoint(ring[i]);
+            if (i === 0) bctx.moveTo(p.x, p.y);
+            else bctx.lineTo(p.x, p.y);
+          }
+          bctx.closePath();
         }
-        bctx.closePath();
+        bctx.fill('nonzero');
       }
-      bctx.fill('nonzero');
+      if (this._water.lines?.length) {
+        bctx.lineWidth = Math.max(3, 100 * pxPerM);
+        bctx.lineCap = 'round';
+        bctx.lineJoin = 'round';
+        bctx.beginPath();
+        for (const line of this._water.lines) {
+          for (let i = 0; i < line.length; i++) {
+            const p = map.latLngToContainerPoint(line[i]);
+            if (i === 0) bctx.moveTo(p.x, p.y);
+            else bctx.lineTo(p.x, p.y);
+          }
+        }
+        bctx.stroke();
+      }
       bctx.globalCompositeOperation = 'source-over';
     }
 

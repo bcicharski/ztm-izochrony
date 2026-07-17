@@ -199,9 +199,25 @@ function reverseNetwork(net) {
   };
 }
 
-/** Pierścienie wody do maskowania stref: [[ [lat,lon], ... ], ...]. */
+/**
+ * Geometria wody: {polys, lines}, gdzie polys to zamknięte pierścienie akwenów,
+ * a lines to linie rzek/kanałów (waterway=river/canal) uzupełniające dziury
+ * w poligonach. Linie rysowane jako stroke ~100 m; poligony fill nonzero.
+ */
 export async function loadWater(cityKey) {
-  return loadRings(`data/${cityKey}/water.json`);
+  const url = `data/${cityKey}/water.json`;
+  if (!cache.has(url)) {
+    cache.set(url, fetch(url).then(async r => {
+      if (!r.ok) return null;
+      const raw = await r.json();
+      const dec = pts => pts.map(([la, lo]) => [la / 1e5, lo / 1e5]);
+      return {
+        polys: (raw.polys ?? []).map(dec),
+        lines: (raw.lines ?? []).map(dec),
+      };
+    }));
+  }
+  return cache.get(url);
 }
 
 /** Granice administracyjne miasta (do statystyk powierzchni). */

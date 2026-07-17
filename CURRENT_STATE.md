@@ -1,6 +1,6 @@
 # CURRENT_STATE — mechanizm przekraczania wody (zasięg pieszy)
 
-Stan na 2026-07-15, na bazie commitu `994f52e` (wdrożony na https://transport.excelninja.pro). Niezacommitowane: naprawa `pickTargetStop` (dymek trasy po siatce) — patrz §2.
+Stan na 2026-07-18, na bazie commitu `994f52e` (wdrożony na https://transport.excelninja.pro). Niezacommitowane: naprawa `pickTargetStop` (dymek trasy po siatce) — patrz §2 (sesja 2026-07-15) — oraz uszczelnienie maski wody o linie waterway=river/canal — patrz §2 (sesja 2026-07-18).
 
 ## 1. Cel bieżący
 
@@ -12,10 +12,32 @@ Pozostałe znane luki mechanizmu (kandydaci na dalszą pracę):
 - **Tryb bez spaceru** (`walk=false`): przystanki rysowane stałymi kołami 200 m (`js/isochrone.js`, `NO_WALK_RADIUS_M`) — koło może przeciąć wąski kanał; siatka tam nie działa.
 - **Przystanki poza bboxem miasta** (np. Lębork, Tczew w feedzie SKM; bbox z `data/cities.json`): fallback = stare koła crow-fly bez bariery wody (app.js, zmienna `outside`).
 - ~~**Popup trasy** (`pickTargetStop` w app.js): dobór przystanku docelowego liczył dojście crow-fly przez wodę.~~ **NAPRAWIONE** (ta sesja, §2): wewnątrz siatki łączny czas z `gridTime[idx]`, crow-fly tylko poza bboxem / bez spaceru.
-- **Szerokość korytarza mostu**: `ctx.lineWidth = max(1.5, 50/res)` px (~50 m) — przy równoległych bliskich brzegach (wąskie kanały portowe) korytarz może fałszywie połączyć oba brzegi wzdłuż mostu biegnącego równolegle do kanału.
+- **Szerokość korytarza mostu**: `ctx.lineWidth = max(1.5, 50/res)` px (~50 m) — przy równoległych bliskich brzegach (wąskie kanały portowe) korytarz może fałszywie połączyć oba brzegi wzdłuż mostu biegnącego równolegle do kanału. Sprawdzone dla Nowego Portu / Trójmiasto (2026-07-18): fala z origin nie przecieka kanału portowego (wszystkie punkty za kanałem = UNREACH); dedykowany case nie potwierdzony, ale ryzyko teoretyczne pozostaje.
+- ~~Dziury w masce wody na dużych rzekach (Wisła w Warszawie poniżej Śródmieścia, Motława/Kanał Portowy w Trójmieście itp.): raster obejmował tylko poligony `natural=water`, brakowało `waterway=river/canal`.~~ **NAPRAWIONE** (sesja 2026-07-18, §2): dodane linie waterway do `water.json` + stroke 100 m w rasterze.
 - Brak siatki ulic: płoty, tory, tereny zamknięte (stocznia!) nieuwzględnione — pełny routing pieszy OSM to osobny, duży temat.
 
 ## 2. Ostatnie modyfikacje
+
+### Sesja 2026-07-18 (niezacommitowane) — uszczelnienie maski wody o linie waterway=river/canal
+
+Problem: raster wody (`data/<miasto>/water.json`) miał DZIURY na dużych rzekach. Overpass query pobierało tylko `natural=water` (poligony) i `natural=coastline` — a Wisła w Warszawie (poniżej Śródmieścia, lat < 52.249: Praga Południe, Siekierki, Wilanów), Motława/Kanał Portowy w Trójmieście i wiele fragmentów rzek w innych miastach ma w OSM głównie tag `waterway=river`/`waterway=canal` (linia, nie poligon). Skutek: fala pieszo w `js/walkgrid.js` przechodziła bezpośrednio przez rzekę, dając koncentryczne strefy zamiast obejść mostem (przykład: Warszawa Saska Kępa 52.242,21.055 → Bartycka Siekierki 52.204,21.055 (4225 m linia prosta) pieszo = **81 min** w apce, realny objazd mostem Łazienkowskim/Siekierkowskim ~5.5 km = >90 min pieszo).
+
+Diagnoza: raster warszawa pokrywał Wisłę tylko lat 52.249–52.433 (trzy duże pierścienie `natural=water`), poza tym paskiem land=1 wszędzie. Trójmiasto podobnie — Motława, Kanał Portowy, dolna Wisła: linie w OSM, brak poligonów.
+
+- **`tools/build-water.mjs`**:
+  - Rozszerzone zapytanie Overpass o `way["waterway"~"^(river|canal)$"]`.
+  - Nowa sekcja 3 (pod istniejące poligony): zbieranie linii waterway, `stitch()` (skleja segmenty relacji), `simplify(15m)`, `quantize`.
+  - Format wyjścia zmieniony z `{polys}` na `{polys, lines}` (linie renderowane jako stroke ~100 m — patrz walkgrid.js).
+  - JSDoc w nagłówku pliku opisuje nową sekcję.
+- **`js/data.js` `loadWater`**: przepisane z `loadRings` na własną implementację. Zwraca `{polys, lines}` (obie tablice pierścieni `[lat,lon]`, każdy z osobna dekwantyzowany). Kompatybilność wsteczna: jeśli plik ma tylko `polys` bez `lines`, `lines=[]`.
+- **`js/walkgrid.js` `buildWalkGrid`**: sygnatura `water` teraz `{polys, lines}`. Po `fill('nonzero')` poligonów — `stroke` linii z `lineWidth = max(3, 100/res)` (~100 m), `lineCap/lineJoin = 'round'`. Wybór 100 m: **2x korytarz mostu** (bridge cut = 50 m) — most-cut wycina rzekę wąskim korytarzem (fala przechodzi), ale poza mostem rzeka pozostaje ciągłą barierą.
+- **`js/map.js` `_water`**: obsługa `{polys, lines}`; w `destination-out` bufora stref: fill poligonów + stroke linii z `lineWidth = max(3, 100 * pxPerM)` (~100 m w bieżącym zoomie).
+- **`js/app.js`**: `zoneLayer.setWater(water ?? { polys: [], lines: [] })` zamiast `?? []`.
+- **`data/*/water.json`**: rebuild wszystkich 18 miast (`node tools/build-water.mjs <miasto>`).
+  Największe (linii): GZM 182, Trójmiasto 91, Warszawa 75, Szczecin 166, Wrocław 57, Białystok 50, Kraków 39.
+- **Weryfikacja Warszawa** (preview, origin Saska Kępa 52.242,21.055, siatka piesza z samym origin bez pojazdów): Bartycka Siekierki (4225 m linia prosta) z **81 min → UNREACH** (fala nie przechodzi przez Wisłę w linii prostej; realna droga mostem >90 min = powyżej CAP_SEC).
+- **Weryfikacja Trójmiasto**: Nowy Port (54.403,18.658) → Westerplatte pomnik / Twierdza Wisłoujście / Terminal promowy pieszo z samego origin = UNREACH (jak dotąd — fala nie przecieka kanału portowego; dodatkowe linie waterway wzmacniają barierę Motławy).
+- **Nierozstrzygnięte** (do dalszej pracy): pomiar pokrycia rzek metodą sample co 200m wzdłuż osi lon wciąż niski (~9% Warszawa lon=21.045) — linia rzeki 100 m nie zawsze trafia w oś pomiarową, ale fala rzeczywiście nie przechodzi (dowód pierwszorzędny). Ewentualne szersze rzeki (Wisła 500 m) — linia 100 m to LATA DZIUR w istniejących poligonach, nie zastąpienie ich. Jeżeli pojawi się przeciek, zwiększyć `lineWidth` w `walkgrid.js` i `map.js` (np. 150-200 m); pamiętać o synchronizacji z bridge-cut (obecnie 50 m).
 
 ### Sesja 2026-07-17 (cd., niezacommitowane) — PKM/PolRegio dla Trójmiasta (poza tematem wody)
 
@@ -67,7 +89,7 @@ Problem: linia PKM (Pomorska Kolej Metropolitalna) miała w apce **stacje, ale z
 
 ## 3. Struktury danych
 
-- **`data/<miasto>/water.json`**: `{polys: [[[lat*1e5, lon*1e5], ...], ...]}`. Pierścienie wody obieg CW (matematycznie, x=lon y=lat), wyspy CCW → wypełnianie canvas regułą **nonzero** daje dziury na wyspach i odporność na nakładanie. Generowane przez `tools/build-water.mjs` (Overpass: coastline + natural=water; miasta nadmorskie mają `seaClose` w cities.json).
+- **`data/<miasto>/water.json`**: `{polys: [[[lat*1e5, lon*1e5], ...], ...], lines: [[[lat*1e5, lon*1e5], ...], ...]}`. Pierścienie wody (`polys`) obieg CW (matematycznie, x=lon y=lat), wyspy CCW → wypełnianie canvas regułą **nonzero** daje dziury na wyspach i odporność na nakładanie. Linie rzek/kanałów (`lines`) uzupełniają dziury w poligonach — rysowane w `walkgrid.js` i `map.js` jako `stroke` szerokości ~100 m. Generowane przez `tools/build-water.mjs` (Overpass: coastline + natural=water + waterway=river/canal; miasta nadmorskie mają `seaClose` w cities.json).
 - **`data/<miasto>/bridges.json`**: `{lines: [[[lat*1e5, lon*1e5], ...], ...]}` — polilinie (NIE poligony) mostów/kładek/mol.
 - **Siatka (`buildWalkGrid` wynik)**: `{W, H, res(m), latS, lonW, latN, lonE, mPerDegLon, land: Uint8Array(W*H) 1=ląd 0=woda, cityMask: Uint8Array|null, cityLandPx, toX(lon), toY(lat), time: Uint16Array, imageData, canvas}`. Indeks piksela = `y*W + x`; `toX/toY` rzut równokątny od narożnika NW.
 - **Seeds Dijkstry**: `[[pixelIndex, sekundyStartu], ...]` — sekundy = czas dojazdu do przystanku (z `computeReachability(...).minutes[i]*60`) albo 0 dla punktu użytkownika.
@@ -102,7 +124,9 @@ Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach.
 ### Priorytet ŚREDNI
 
 3. **Przesiadki autobus/tramwaj → metro w Warszawie — weryfikacja.** Sprawdzić, czy przesiadki na metro działają poprawnie (zespoły przystankowe: nazwy stacji metra vs przystanków naziemnych mogą się nie sklejać; metro jest częstotliwościowe — `frequencies.txt`).
-4. **Przekraczanie wody — czasy fali nierealnie krótkie.** Nowy Port → Westerplatte „24 min pieszo" to ZA KRÓTKO (naokoło kanału portowego realnie dużo dalej). Podejrzenie: przeciek przez korytarz mostu (§1: `lineWidth` ~50 m może fałszywie łączyć brzegi wąskiego kanału wzdłuż mostu równoległego do brzegu) albo za optymistyczna metryka fali (8 sąsiadów, brak krętości realnych ulic). Zdiagnozować, którędy fala „przechodzi" (zwizualizować gridTime).
+4. ~~**Przekraczanie wody — czasy fali nierealnie krótkie.**~~ **NAPRAWIONE** (sesja 2026-07-18, §2). Diagnoza (2026-07-18): dwa różne przypadki użytkownika:
+   (a) Trójmiasto Nowy Port → Muzeum Westerplatte „21 min" = autobus (Terminal Promowy, 20.58 min, objazd mostem Sucharskiego) + 1 min spacer. Fala pieszo z origin do Westerplatte / Twierdza Wisłoujście / Terminal Promowy = UNREACH — nie przecieka. Wynik autobusowy poprawny (dlaczego autobus w apce 20 min a Google „1h 30 min" transportem publicznym — do sprawdzenia osobno, prawdopodobnie chodzi o różnicę SKM vs autobus miejski w widoku Google).
+   (b) Warszawa Saska Kępa → Bartycka Siekierki, bez autobusów: apka „48 min" pieszo, Google „1h 12 min". FAKTYCZNY PRZECIEK — raster wody miał dziury na Wiśle poniżej Śródmieścia. Fix: dodane linie `waterway=river/canal` do maski wody. Po fixie: Bartycka = UNREACH (realny objazd mostem >90 min). Kod: `tools/build-water.mjs`, `js/data.js`, `js/walkgrid.js`, `js/map.js`, `js/app.js`; rebuild wszystkich 18 miast.
 5. **Tryb „tylko pieszo".** Nowy środek transportu w panelu: izochrona samego spaceru (bez pojazdów). Siatka piesza już istnieje (`walkgrid.js`) — seed = tylko origin, cap 90 min.
 6. **Rower jako dojście (rower + komunikacja).** Rower zamiast spaceru w dojściu do/od przystanków (wyższa prędkość na tej samej siatce z barierą wody; do rozstrzygnięcia: przewóz roweru w pojeździe czy rower zostaje na przystanku).
 7. **Kolej podmiejska w Krakowie (dojazd z Wieliczki).** SKA/Koleje Małopolskie — w `polish_trains.zip` agencja `KML` (13 linii). Mechanizm: wpis w `krakow.feeds` z `keepAgency: ["KML"]` (ew. + `keepBbox` na Małopolskę, bo KML jeździ też np. do Tarnowa). Uwaga: pociągi wymagają klucza `rail` w `veh` Krakowa (dziś tylko tram/bus).
