@@ -87,3 +87,27 @@ Problem: linia PKM (Pomorska Kolej Metropolitalna) miała w apce **stacje, ale z
 ## 5. Kolejny krok
 
 Dymek trasy (`pickTargetStop`) załatwiony (§2). Następny kandydat z §1 — **tryb bez spaceru** (`walk=false`): przystanki rysowane stałymi kołami `NO_WALK_RADIUS_M`=200 m w `js/isochrone.js`, bez bariery wody — koło może przeciąć wąski kanał (regresja tego samego typu co pierwotny problem, tylko dla `walk=false`). Do rozważenia: przyciąć koła geometrią `water.json` przy rysowaniu (warstwa i tak eraseuje wodę w `map.js`, więc wizualnie znika, ale statystyki/„osiągalność" liczą się z pełnego koła), albo — spójniej — zbudować siatkę pieszą też dla `walk=false` z zerowym promieniem dojścia (tylko piksel przystanku jako seed), co wymaga oddzielenia „progu dojścia" od budowy siatki. Alternatywnie: przystanki poza bboxem siatki (`outside` w `recompute()`) wciąż crow-fly — mniejszy priorytet (dalekie stacje SKM, rzadkie kliknięcia).
+
+Priorytety zadań na kolejne sesje: patrz §6 (backlog od użytkownika, 2026-07-17).
+
+## 6. Backlog zadań (od użytkownika, 2026-07-17)
+
+Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach.
+
+### Priorytet WYSOKI
+
+1. **SKM Gdańsk — zawyżone czasy przejazdu.** Przykład: Zaspa → Wrzeszcz pokazuje kilka minut, realnie ~1 min. Zdiagnozować dlaczego. Punkty zaczepienia: `stop_times.txt` feedu SKM (czasy postoju? granulacja minutowa?), `timeToMin` w `tools/build-data.mjs` (obcina sekundy), deduplikacja profili czasowych, tryb „ogólnie" (minimalne czasy odcinków — powinien być optymistyczny, a nie zawyżony).
+2. **Koleje Mazowieckie dla Warszawy + weryfikacja czasów.** Mechanizm gotowy: filtr `keepAgency` w build-data (dodany przy PKM, §2). Wpis w `warszawa.feeds`: `{ "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }` — bez `keepBbox` (KM regionalne, sięga Działdowa/Skierniewic — dalekie stacje jako fallback `outside`). Decyzja użytkownika (sesja 2026-07-17): cała agencja KM, z autobusami ZKA (wpadną pod 🚌). Po dodaniu zweryfikować czasy przejazdów (analogicznie do punktu 1).
+
+### Priorytet ŚREDNI
+
+3. **Przesiadki autobus/tramwaj → metro w Warszawie — weryfikacja.** Sprawdzić, czy przesiadki na metro działają poprawnie (zespoły przystankowe: nazwy stacji metra vs przystanków naziemnych mogą się nie sklejać; metro jest częstotliwościowe — `frequencies.txt`).
+4. **Przekraczanie wody — czasy fali nierealnie krótkie.** Nowy Port → Westerplatte „24 min pieszo" to ZA KRÓTKO (naokoło kanału portowego realnie dużo dalej). Podejrzenie: przeciek przez korytarz mostu (§1: `lineWidth` ~50 m może fałszywie łączyć brzegi wąskiego kanału wzdłuż mostu równoległego do brzegu) albo za optymistyczna metryka fali (8 sąsiadów, brak krętości realnych ulic). Zdiagnozować, którędy fala „przechodzi" (zwizualizować gridTime).
+5. **Tryb „tylko pieszo".** Nowy środek transportu w panelu: izochrona samego spaceru (bez pojazdów). Siatka piesza już istnieje (`walkgrid.js`) — seed = tylko origin, cap 90 min.
+6. **Rower jako dojście (rower + komunikacja).** Rower zamiast spaceru w dojściu do/od przystanków (wyższa prędkość na tej samej siatce z barierą wody; do rozstrzygnięcia: przewóz roweru w pojeździe czy rower zostaje na przystanku).
+7. **Kolej podmiejska w Krakowie (dojazd z Wieliczki).** SKA/Koleje Małopolskie — w `polish_trains.zip` agencja `KML` (13 linii). Mechanizm: wpis w `krakow.feeds` z `keepAgency: ["KML"]` (ew. + `keepBbox` na Małopolskę, bo KML jeździ też np. do Tarnowa). Uwaga: pociągi wymagają klucza `rail` w `veh` Krakowa (dziś tylko tram/bus).
+
+### Priorytet NISKI
+
+8. **Ładne screenshoty.** Tryb „czysty widok": zwinięte menu, widoczna tylko legenda + adres strony + niezbędne informacje — do robienia zrzutów ekranu przez użytkowników.
+9. **Stopka w menu.** Wyróżnić adres e-mail, dodać linki do social mediów, przenieść przycisk Suppi wyżej.
