@@ -17,7 +17,13 @@ Pozostałe znane luki mechanizmu (kandydaci na dalszą pracę):
 
 ## 2. Ostatnie modyfikacje
 
-### Ta sesja (2026-07-15, niezacommitowane) — spójny dobór przystanku w dymku trasy
+### Sesja 2026-07-17 (niezacommitowane) — WKD dla Warszawy (poza tematem wody)
+
+- **`data/cities.json`**: do `warszawa.feeds` dodany feed `{ "name": "wkd", "url": "https://mkuran.pl/gtfs/wkd.zip" }`; drugi wpis w `credits` (WKD). `veh` bez zmian — WKD to `route_type 2`, wpada w istniejący klucz `rail` (🚆 Kolej). Trasa ZKA WKD (`route_type 3`) wpadłaby pod 🚌, ale nie kursuje w wybranych dniach.
+- **`data/warszawa/{workday,saturday,sunday,meta}.json`**: przebudowane (`node tools/fetch-feeds.mjs warszawa gtfs-src/warszawa` + `node tools/build-data.mjs warszawa gtfs-src/warszawa/wtp gtfs-src/warszawa/wkd`). Wspólny zakres dat WTP∩WKD = 20260717–20260816. Weryfikacja: trasa `WKD`, 144 kursy/dzień roboczy, stacje Podkowa Leśna…Śródmieście WKD; z Podkowej strefa sięga w głąb Warszawy (70% powierzchni w paśmie „ponad 60"), zero błędów konsoli.
+- **Koleje Mazowieckie: ODŁOŻONE.** Brak osiągalnego feedu tylko-KM (mkuran usunął `kolejemazowieckie.zip` 2026-03-31, przyjazdy.pl padł). Jedyne źródło z KM to ogólnopolski `mkuran.pl/gtfs/polish_trains.zip` (28 MB; też PKP IC/PolRegio/KD/…). `agency_id=KM` jest tam czyste (41 linii, prefiks `KM_`), ale build-data nie filtruje po agencji — wpięcie KM wymaga filtra (opcjonalne pole w feedzie cities.json + lookup po `path.basename(dir)` w build-data). Decyzja użytkownika: dodać dopiero po ustaleniu źródła/filtra.
+
+### Sesja 2026-07-15 (niezacommitowane) — spójny dobór przystanku w dymku trasy
 
 - **`js/walkgrid.js`**: `UNREACH` (65535) teraz `export` — używane przez app.js do rozpoznania piksela nieosiągalnego pieszo po lądzie.
 - **`js/app.js`**:
