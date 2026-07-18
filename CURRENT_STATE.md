@@ -4,6 +4,16 @@ Stan na 2026-07-18, na bazie commitu `994f52e` (wdrożony na https://transport.e
 
 ## 1. Ostatnie modyfikacje
 
+### Sesja 2026-07-18 (cd., niezacommitowane) — Koleje Mazowieckie dla Warszawy (backlog #2)
+
+Mechanizm gotowy (`keepAgency`, dodany przy PKM). Decyzja użytkownika (2026-07-17): cała agencja KM, z autobusami ZKA.
+
+- **`data/cities.json`**: do `warszawa.feeds` dodany `{ "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }` (bez `keepBbox` — KM regionalne, sięga Działdowa/Skierniewic; dalekie stacje jako fallback `outside`). Trzeci wpis w `credits` (Koleje Mazowieckie). `veh` bez zmian — KM `route_type 2` wpada w istniejący `rail` (🚆 Kolej), ZKA `route_type 3` w `bus` (🚌).
+- **`gtfs-src/warszawa/km`**: skopiowany z `gtfs-src/trojmiasto/polregio` (ten sam plik `polish_trains.zip`, już rozpakowany) — nie pobierano ponownie 28 MB.
+- **`data/warszawa/{workday,saturday,sunday,meta}.json`**: przebudowane (3 feedy: wtp+wkd+km). Filtr `keepAgency` zostawił tylko KM (31 155 wierszy stop_times z całego polish_trains). Wzorce 2341→2583, kursy 35621→36712, plik 2.18→2.45 MB.
+- **Agencja KM w feedzie**: 41 tras — 32 kolejowe (type 2) + 9 ZKA (type 3). Uwaga: `keepAgency:["KM"]` NIE bierze SKM Warszawa (osobna agencja `SKM`); linie S1–S4 w apce pochodzą z feedu WTP (zintegrowane w WTP), nie z tego wpisu.
+- **Weryfikacja (preview, import modułów)**: linie KM obecne (R1–R9, RE1–RE92, RL) + WKD + S1–S4 (z WTP). Z Centrum 12:00: Mińsk Mazowiecki 63 min (R2 47 min jazdy), Żyrardów 82 min (R1 50 min) — realny rząd wielkości. **Czasy KM minutowe** (feed ma `arrival_time == departure_time`, całe minuty), więc bug sekund/postoju z #1 nie dotyczy KM (dwell=0). Stacje Sochaczew/Mińsk/Żyrardów/Legionowo/Otwock osiągalne. Stopka pokazuje 3 kredyty. Zero błędów konsoli.
+
 ### Sesja 2026-07-18 (cd., niezacommitowane) — SKM Gdańsk zawyżone czasy: sekundy + rozdział jazda/postój (backlog #1)
 
 Problem: SKM Zaspa→Wrzeszcz pokazywał ~3 min, realnie ~1,6 min. Dwie przyczyny w prekompilacji: (1) `timeToMin` obcinał sekundy (feed SKM ma sekundy: dep 18:52:18, arr 18:53:54), (2) model trzymał jeden czas per przystanek i liczył deltę **odjazd−odjazd**, wliczając POSTÓJ na przystanku docelowym (Wrzeszcz dwell 66 s). Błąd hopu = 84 s = 66 s postój + 18 s obcięcie. Żaden feed poza SKM nie ma sub-minutowych czasów ani postojów (arr==dep) — bug dotyczył praktycznie tylko kolei SKM/PKM.
@@ -123,7 +133,7 @@ Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach. Zadania 10–12
 ### Priorytet WYSOKI
 
 1. ~~**SKM Gdańsk — zawyżone czasy przejazdu.**~~ **ROZWIĄZANE** (2026-07-18, §1/§5): obcięcie sekund + delta odjazd−odjazd wliczająca postój. Format v3 (sekundy + rozdział jazda/postój).
-2. **Koleje Mazowieckie dla Warszawy + weryfikacja czasów.** Mechanizm gotowy: filtr `keepAgency` w build-data (dodany przy PKM, §1). Wpis w `warszawa.feeds`: `{ "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }` — bez `keepBbox` (KM regionalne, sięga Działdowa/Skierniewic — dalekie stacje jako fallback `outside`). Decyzja użytkownika (sesja 2026-07-17): cała agencja KM, z autobusami ZKA (wpadną pod 🚌). Po dodaniu zweryfikować czasy przejazdów (analogicznie do punktu 1).
+2. ~~**Koleje Mazowieckie dla Warszawy + weryfikacja czasów.**~~ **ROZWIĄZANE** (2026-07-18, §1/§5): wpis `keepAgency:["KM"]` w `warszawa.feeds`, rebuild. KM minutowe (arr==dep), bug #1 nie dotyczy.
 
 ### Priorytet ŚREDNI
 
@@ -144,6 +154,7 @@ Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach. Zadania 10–12
 Zadania z backlogu i luki mechanizmu przekraczania wody domknięte w kolejnych sesjach (szczegóły techniczne w §1 „Ostatnie modyfikacje").
 
 - **Zasięg pieszy po lądzie (rdzeń mechanizmu przekraczania wody).** Problem wyjściowy: spacer liczony okręgami w linii prostej „przechodził przez wodę" — np. Westerplatte kolorowane z przystanków Nowego Portu przez kanał portowy; maska `water.json` wycinała wodę tylko WIZUALNIE, ląd za wodą nadal wpadał w promień. Rozwiązanie: zasięg pieszy liczony falowo po siatce lądu (`js/walkgrid.js`), woda = bariera, mosty/kładki/mola = przejezdne korytarze. Zweryfikowane: Westerplatte (fiolet zamiast żółci przez kanał), Warszawa (Praga przez mosty, przewężenia przy przeprawach). Commit `994f52e`.
+- **Koleje Mazowieckie dla Warszawy (backlog #2).** Wpis `{ "name": "km", "url": ".../polish_trains.zip", "keepAgency": ["KM"] }` w `warszawa.feeds` + kredyt; rebuild (wtp+wkd+km). Cała agencja KM (32 tras kolejowych + 9 ZKA). Zweryfikowane: linie R/RE/S, dalekie stacje osiągalne, czasy w rzędzie wielkości. Kod: `data/cities.json`, rebuild `data/warszawa/*`. Sesja 2026-07-18 (§1, niezacommitowane).
 - **SKM Gdańsk — zawyżone czasy przejazdu (backlog #1).** Przyczyna: `timeToMin` obcinał sekundy + delta odjazd−odjazd wliczała postój na przystanku docelowym (feed SKM ma sekundy i realne postoje). Zaspa→Wrzeszcz: 180 s zamiast 96 s. Rozwiązanie: format danych v3 (sekundy + osobno odjazd/przyjazd, czysta jazda = arr[i+1]−dep[i]). Kod: `tools/build-data.mjs`, `js/data.js` (dekoder v2/v3 wstecznie zgodny), `js/router.js`; rebuild trojmiasto+warszawa. Sesja 2026-07-18 (§1, niezacommitowane).
 - **Tryb bez spaceru — koła bez bariery wody (backlog #7).** `walk=false` rysował stałe koła 200 m crow-fly (mogły przeciąć wąski kanał). Rozwiązanie: siatka lądu też dla `walk=false` (`computeNoWalkGrid` w `js/walkgrid.js`) — strefa 200 m wokół przystanku mierzona po lądzie, woda blokuje, kolor = pasmo przyjazdu przystanku (bez czasu dojścia). Kod: `js/isochrone.js` (export `NO_WALK_RADIUS_M`), `js/walkgrid.js`, `js/app.js`. Zweryfikowane syntetycznie (bariera/cap/nakładanie) + realnie (Trójmiasto). Dalekie stacje poza bboxem nadal koła crow-fly = osobny backlog #10. Sesja 2026-07-18 (§1, niezacommitowane).
 - **Popup trasy — spójny dobór przystanku (`pickTargetStop`).** Dobór przystanku docelowego w dymku trasy liczył dojście crow-fly przez wodę; przepisane na łączny czas z fali po lądzie (`gridTime[idx]`), crow-fly tylko poza bboxem siatki / w trybie bez spaceru. Sesja 2026-07-15 (§1, niezacommitowane).

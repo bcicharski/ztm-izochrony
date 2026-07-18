@@ -199,7 +199,8 @@
     "name": "Warszawa",
     "feeds": [
       { "name": "wtp", "url": "https://mkuran.pl/gtfs/warsaw.zip" },
-      { "name": "wkd", "url": "https://mkuran.pl/gtfs/wkd.zip" }
+      { "name": "wkd", "url": "https://mkuran.pl/gtfs/wkd.zip" },
+      { "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }
     ],
     "bbox": [52.05, 20.75, 52.40, 21.30],
     "boundaries": ["Warszawa"],
@@ -217,7 +218,8 @@
     ],
     "credits": [
       { "label": "Warszawski Transport Publiczny (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" },
-      { "label": "Warszawska Kolej Dojazdowa (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
+      { "label": "Warszawska Kolej Dojazdowa (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" },
+      { "label": "Koleje Mazowieckie (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
     ]
   },
   "wroclaw": {

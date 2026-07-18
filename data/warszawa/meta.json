@@ -1,6 +1,6 @@
 {
   "city": "warszawa",
-  "generated": "2026-07-17T23:56:50.113Z",
+  "generated": "2026-07-18T00:32:52.017Z",
   "feedEndDate": "20260816",
   "dates": {
     "workday": "20260721",
@@ -9,6 +9,7 @@
   },
   "sources": [
     "Warszawski Transport Publiczny (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/",
-    "Warszawska Kolej Dojazdowa (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
+    "Warszawska Kolej Dojazdowa (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/",
+    "Koleje Mazowieckie (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
   ]
 }
