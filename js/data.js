@@ -10,6 +10,16 @@ export const DAY_LABELS = { workday: 'dzień roboczy', saturday: 'sobota', sunda
 export const WALK_MPS = 4.5 / 3.6 / 1.3;
 /** Minimalny czas przesiadki [s]. */
 export const MIN_TRANSFER_S = 60;
+/**
+ * Promień węzła przesiadkowego [m] — tryb bez spaceru. Zespoły przystankowe
+ * z GTFS klastrują się po DOKŁADNEJ nazwie, a jeden węzeł w terenie bywa
+ * nazwany różnie w feedzie (Warszawa: stacja metra „Świętokrzyska" vs
+ * przystanek autobusowy „Metro Świętokrzyska", „Pl. Wilsona" vs
+ * „Plac Wilsona"). Przystanki bliżej niż ten promień traktujemy jak jeden
+ * węzeł niezależnie od nazwy — i przy doborze przystanków startowych
+ * (findAccessStops), i przy przesiadkach w trakcie podróży (sameGroupAdj).
+ */
+export const COMPLEX_MAX_M = 150;
 /** Stała odwrócenia czasu dla wyszukiwania "do miejsca" [s]. */
 export const REV_C = 48 * 3600;
 
@@ -78,7 +88,8 @@ export function decodeNetwork(raw) {
     transferAdj[b].push(a, s);
   }
 
-  // przesiadki w ramach tego samego zespołu przystankowego (tryb bez spaceru)
+  // przesiadki w ramach tego samego węzła (tryb bez spaceru): zespół przystankowy
+  // z GTFS + pary bliżej niż COMPLEX_MAX_M, które klastrowanie po nazwie rozdzieliło
   const byGroup = new Map();
   for (let i = 0; i < n; i++) {
     if (!byGroup.has(group[i])) byGroup.set(group[i], []);
@@ -94,6 +105,15 @@ export function decodeNetwork(raw) {
         sameGroupAdj[j].push(i, sec);
       }
     }
+  }
+  // dołożenie par spoza zespołu, ale w promieniu węzła (transfers są ≤500 m,
+  // więc zawierają komplet kandydatów; pary z tego samego zespołu już dodane)
+  for (const [a, b, sec] of raw.transfers) {
+    if (group[a] === group[b]) continue;
+    if (distM(lat[a], lon[a], lat[b], lon[b]) > COMPLEX_MAX_M) continue;
+    const s = Math.max(sec, MIN_TRANSFER_S);
+    sameGroupAdj[a].push(b, s);
+    sameGroupAdj[b].push(a, s);
   }
 
   const net = {

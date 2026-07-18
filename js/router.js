@@ -6,11 +6,10 @@
  * Oprócz czasów zwraca wskaźniki rodziców, z których można odtworzyć trasę.
  */
 
-import { WALK_MPS, MIN_TRANSFER_S, REV_C, distM } from './data.js';
+import { WALK_MPS, MIN_TRANSFER_S, REV_C, distM, COMPLEX_MAX_M } from './data.js';
 
 const MAX_ROUNDS = 5;          // maks. 4 przesiadki
 const HORIZON_S = 180 * 60;    // ogranicznik wyszukiwania (3 h)
-const NEAREST_EXTRA_M = 150;   // tryb bez spaceru: przystanki tuż obok najbliższego zespołu
 
 // Tryb ostrożny: heurystyczny margines na opóźnienia (do czasu zebrania
 // rzeczywistych profili opóźnień). Bufor przesiadkowy rośnie z 1 do 4 minut,
@@ -110,7 +109,7 @@ export function findAccessStops(g, lat, lon, walk) {
     if (nearest < 0) return out;
     const grp = g.group[nearest];
     for (let i = 0; i < g.nStops; i++) {
-      if (g.group[i] === grp || distM(g.lat[nearest], g.lon[nearest], g.lat[i], g.lon[i]) <= NEAREST_EXTRA_M) {
+      if (g.group[i] === grp || distM(g.lat[nearest], g.lon[nearest], g.lat[i], g.lon[i]) <= COMPLEX_MAX_M) {
         out.push(i, 0);
       }
     }
