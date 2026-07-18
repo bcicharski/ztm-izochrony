@@ -287,6 +287,38 @@ export function renderTimeGrid(grid, time) {
   return canvas;
 }
 
+/**
+ * Statystyka: maksymalna odległość w linii prostej od punktu odniesienia
+ * osiągnięta w każdym paśmie — liczona po siatce, więc zgodna z narysowanymi
+ * strefami (uwzględnia obejścia wody), w odróżnieniu od przybliżenia kołowego
+ * w `stats.js`. Siatka jest równokątna o stałym `res` w metrach na obu osiach,
+ * więc odległość to zwykły dystans pikselowy × `res` (bez trygonometrii).
+ * @param {object} grid       siatka z `buildWalkGrid`
+ * @param {Uint16Array} time  czasy z `computeTimeGrid`/`computeNoWalkGrid`
+ * @param {number} originIdx  indeks piksela punktu odniesienia (−1 = brak)
+ * @returns {Array<number>|null} kilometry w kolejności BANDS, kumulatywnie
+ */
+export function maxBandDistances(grid, time, originIdx) {
+  if (originIdx < 0) return null;
+  const { W, res } = grid;
+  const x0 = originIdx % W, y0 = (originIdx / W) | 0;
+  const best = new Array(BAND_RGBA.length).fill(0);
+  for (let i = 0; i < time.length; i++) {
+    const t = time[i];
+    if (t >= UNREACH) continue;
+    let b = BAND_RGBA.length - 1;
+    for (let k = 0; k < BAND_RGBA.length; k++) {
+      if (t <= BAND_RGBA[k].limit) { b = k; break; }
+    }
+    const dx = (i % W) - x0, dy = ((i / W) | 0) - y0;
+    const d = Math.sqrt(dx * dx + dy * dy) * res;
+    if (d > best[b]) best[b] = d;
+  }
+  // kumulatywnie: pasmo ≤20 zawiera też ≤10, więc zasięg nie może maleć
+  let cum = 0;
+  return best.map(v => { cum = Math.max(cum, v); return cum / 1000; });
+}
+
 /** Statystyka: % powierzchni lądowej miasta w zasięgu każdego pasma. */
 export function areaPercents(grid, time) {
   if (!grid.cityMask || !grid.cityLandPx) return null;

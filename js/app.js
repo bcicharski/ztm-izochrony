@@ -9,7 +9,7 @@ import { computeReachability } from './router.js';
 import { buildZones, BANDS, NO_WALK_RADIUS_M } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { computeStats } from './stats.js';
-import { buildWalkGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, UNREACH } from './walkgrid.js';
+import { buildWalkGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
 
 const CITIES = await loadCities();
 const DEFAULT_CITY = 'trojmiasto';
@@ -46,6 +46,15 @@ function allowedTypes() {
   if (groups.every(g => state.veh[g.key])) return null;
   return new Set(groups.filter(g => state.veh[g.key]).flatMap(g => g.types));
 }
+
+/**
+ * Tryb „tylko pieszo": odznaczone wszystkie środki transportu. Zasięg to sama
+ * fala piesza po lądzie z punktu (bez pojazdów), więc pomijamy routing —
+ * czasy dojazdu do przystanków są wtedy nieistotne, a ich użycie jako źródeł
+ * fali przepuszczałoby spacer przez wodę (dojście do przystanku liczy się
+ * w linii prostej). Przełącznik „Uwzględnij spacer" traci w tym trybie sens.
+ */
+const isWalkOnly = () => cityCfg().veh.every(g => !state.veh[g.key]);
 
 // --- stan z adresu URL (linki do udostępniania) -----------------------------
 
@@ -188,6 +197,7 @@ function renderVehControls() {
     input.checked = state.veh[group.key] !== false;
     input.addEventListener('change', () => {
       state.veh[group.key] = input.checked;
+      syncWalkToggle();
       recompute();
     });
     const span = document.createElement('span');
@@ -195,6 +205,19 @@ function renderVehControls() {
     label.append(input, span);
     grid.appendChild(label);
   }
+  syncWalkToggle();
+}
+
+/**
+ * W trybie „tylko pieszo" spacer jest jedynym środkiem lokomocji, więc
+ * przełącznik „Uwzględnij spacer" nic nie zmienia — wygaszamy go, żeby nie
+ * sugerował działania (stan w `state.walk` zostaje nietknięty, wraca sam
+ * po zaznaczeniu dowolnego pojazdu).
+ */
+function syncWalkToggle() {
+  const walkOnly = isWalkOnly();
+  $('walkToggle').disabled = walkOnly;
+  $('walkToggle').closest('fieldset').classList.toggle('dimmed', walkOnly);
 }
 
 $('safeToggle').addEventListener('change', e => { state.safe = e.target.checked; recompute(); });
@@ -341,8 +364,8 @@ $('collapseBtn').addEventListener('click', () => {
 
 // --- tabela statystyk ---------------------------------------------------------
 
-function renderStats(rows) {
-  $('areaHead').hidden = !state.walk;
+function renderStats(rows, showArea) {
+  $('areaHead').hidden = !showArea;
   const body = $('statsBody');
   body.innerHTML = '';
   for (const row of rows) {
@@ -364,7 +387,7 @@ function renderStats(rows) {
     tdDist.textContent = row.maxKm > 0 ? `${row.maxKm.toFixed(1)} km` : '—';
     tr.appendChild(tdDist);
 
-    if (state.walk) {
+    if (showArea) {
       const tdArea = document.createElement('td');
       tdArea.className = 'num';
       tdArea.textContent = row.areaPct == null ? '—'
@@ -487,8 +510,36 @@ function journeyHeader(totalMin) {
   return `<h4>≈ ${Math.round(totalMin)} min${extra}</h4>`;
 }
 
+/**
+ * Dymek w trybie „tylko pieszo": brak przystanków i etapów, więc czas czytamy
+ * wprost z fali po lądzie. Poza siatką (albo bez geometrii miasta) zostaje
+ * przybliżenie w linii prostej od punktu — jak rysowane wtedy koła.
+ */
+function walkOnlyPopupHtml(latlng) {
+  const { grid, gridTime } = lastCompute;
+  let sec = null;
+  const idx = grid && gridTime ? pixelIndex(grid, latlng.lat, latlng.lng) : -1;
+  if (idx >= 0) {
+    if (gridTime[idx] < UNREACH) sec = gridTime[idx];
+  } else if (!state.compare) {
+    sec = distM(latlng.lat, latlng.lng, state.point.lat, state.point.lng) / WALK_MPS;
+  }
+  if (sec == null || sec / 60 > 90) {
+    return `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${
+      sec == null ? 'Nie da się tam dojść pieszo (woda lub brak przejścia).' : 'Spacer zająłby ponad 90 minut.'
+    }</span></div>`;
+  }
+  const min = Math.round(sec / 60);
+  const who = state.compare ? ' (wolniejsza osoba)' : '';
+  return `<div class="journey">${journeyHeader(sec / 60)}<ol><li>🚶 ${min} min pieszo${who}</li></ol></div>`;
+}
+
 function showJourneyPopup(latlng) {
   if (!lastCompute) return;
+  if (lastCompute.walkOnly) {
+    L.popup({ maxWidth: 300 }).setLatLng(latlng).setContent(walkOnlyPopupHtml(latlng)).openOn(map);
+    return;
+  }
   const target = pickTargetStop(latlng);
   let html;
   if (!target || target.total > 90) {
@@ -515,7 +566,13 @@ function showJourneyPopup(latlng) {
 let computeSeq = 0;
 
 /** Czytelny opis bieżącego widoku do paska statusu. */
-function statusText() {
+function statusText(walkOnly) {
+  if (walkOnly) {
+    // rozkład i godzina nie mają wpływu na sam spacer
+    return state.compare
+      ? 'Wspólny zasięg pieszo dwóch punktów.'
+      : (state.direction === 'from' ? 'Zasięg pieszo z punktu.' : 'Obszar z dojściem pieszo do punktu.');
+  }
   const what = state.compare
     ? (state.direction === 'from' ? 'Wspólny zasięg dwóch punktów' : 'Obszar z dojazdem do obu punktów')
     : (state.direction === 'from' ? 'Zasięg z punktu' : 'Obszar z dojazdem do punktu');
@@ -551,22 +608,29 @@ async function recompute() {
       delays,
       dayType: DAY_TYPE[dayKey],
     };
-    const res = computeReachability(net, {
-      ...optsBase, lat: state.point.lat, lon: state.point.lng,
-    });
-    let minutes = res.minutes;
-    let res2 = null;
-    if (state.compare) {
-      // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
-      res2 = computeReachability(net, {
-        ...optsBase, lat: state.point2.lat, lon: state.point2.lng,
+    // tryb „tylko pieszo" pomija routing — zasięg wyznacza sama fala po lądzie
+    const walkOnly = isWalkOnly();
+    let res = null, res2 = null;
+    let minutes;
+    if (walkOnly) {
+      minutes = new Float64Array(net.nStops).fill(Infinity);
+    } else {
+      res = computeReachability(net, {
+        ...optsBase, lat: state.point.lat, lon: state.point.lng,
       });
-      minutes = new Float64Array(res.minutes.length);
-      for (let i = 0; i < minutes.length; i++) {
-        minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
+      minutes = res.minutes;
+      if (state.compare) {
+        // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
+        res2 = computeReachability(net, {
+          ...optsBase, lat: state.point2.lat, lon: state.point2.lng,
+        });
+        minutes = new Float64Array(res.minutes.length);
+        for (let i = 0; i < minutes.length; i++) {
+          minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
+        }
       }
     }
-    lastCompute = { net, res, res2, minutes, walk: state.walk, mode: state.mode, direction: state.direction, grid: null, gridTime: null };
+    lastCompute = { net, res, res2, minutes, walk: state.walk, walkOnly, mode: state.mode, direction: state.direction, grid: null, gridTime: null };
     map.closePopup();
 
     let gridTime = null, grid = null;
@@ -589,7 +653,20 @@ async function recompute() {
         }
         return seeds;
       };
-      if (state.walk) {
+      if (walkOnly) {
+        // źródłem fali jest wyłącznie punkt (pojazdy odznaczone); cap 90 min
+        const originSeed = pt => {
+          const idx = pixelIndex(grid, pt.lat, pt.lng);
+          return idx >= 0 ? [[idx, 0]] : [];
+        };
+        if (state.compare) {
+          const t1 = computeTimeGrid(grid, originSeed(state.point)).slice();
+          const t2 = computeTimeGrid(grid, originSeed(state.point2));
+          gridTime = maxTimeGrid(grid, t1, t2);
+        } else {
+          gridTime = computeTimeGrid(grid, originSeed(state.point));
+        }
+      } else if (state.walk) {
         if (state.compare) {
           const t1 = computeTimeGrid(grid, seedsFor(res.minutes, state.point)).slice();
           const t2 = computeTimeGrid(grid, seedsFor(res2.minutes, state.point2));
@@ -622,10 +699,12 @@ async function recompute() {
       }
       zoneLayer.setZones(anyOutside ? buildZones(net, outside, { walk: state.walk, origin: null }) : null);
     } else {
+      // brak geometrii miasta: koła crow-fly. W trybie „tylko pieszo" zostają
+      // same koła wokół punktu (bez przystanków), więc origin jest niezbędny
       zoneLayer.setGrid(null);
       zoneLayer.setZones(buildZones(net, minutes, {
-        walk: state.walk,
-        origin: state.compare ? null : { lat: state.point.lat, lon: state.point.lng },
+        walk: state.walk || walkOnly,
+        origin: state.compare && !walkOnly ? null : { lat: state.point.lat, lon: state.point.lng },
       }));
     }
     // dymek trasy korzysta z tej samej siatki co strefy (spójny dobór przystanku)
@@ -634,20 +713,27 @@ async function recompute() {
 
     if (!state.compare && state.stats) {
       const statRows = computeStats(net, minutes, {
-        walk: state.walk,
+        walk: state.walk || walkOnly,
         origin: { lat: state.point.lat, lon: state.point.lng },
       });
       if (gridTime && grid) {
         const pct = areaPercents(grid, gridTime);
         if (pct) statRows.forEach((row, i) => { row.areaPct = pct[i]; });
+        if (walkOnly) {
+          // bez pojazdów nie ma przystanków, więc przybliżenie kołowe z
+          // computeStats dałoby stałe limit×tempo niezależnie od wody; zasięg
+          // bierzemy z siatki, spójnie z narysowanymi strefami
+          const km = maxBandDistances(grid, gridTime, pixelIndex(grid, state.point.lat, state.point.lng));
+          if (km) statRows.forEach((row, i) => { row.maxKm = km[i]; });
+        }
       }
-      renderStats(statRows);
+      renderStats(statRows, state.walk || walkOnly);
     }
 
     const reachable = minutes.reduce((s, v) => s + (v <= 90 ? 1 : 0), 0);
-    status.textContent = reachable === 0
-      ? 'Brak przystanków w zasięgu — wybierz punkt bliżej Trójmiasta.'
-      : statusText();
+    status.textContent = (reachable === 0 && !walkOnly)
+      ? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.'
+      : statusText(walkOnly);
   } catch (err) {
     console.error(err);
     if (seq === computeSeq) status.textContent = 'Błąd wczytywania danych rozkładowych.';

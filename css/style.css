@@ -217,6 +217,12 @@ html, body {
   border: 0;
 }
 
+/* kontrolka bez wpływu w bieżącym trybie (np. spacer przy „tylko pieszo") */
+.control.dimmed {
+  opacity: 0.45;
+}
+.control.dimmed label { cursor: default; }
+
 .control legend {
   padding: 0;
   margin-bottom: 6px;

@@ -49,6 +49,8 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
   „do miejsca": obszar z dojazdem do obu punktów.
 - **Środki transportu** — analiza może być ograniczona do wybranych pojazdów
   (tramwaj / autobus / trolejbus / kolej SKM/PKM); parametr URL `veh=`.
+  Odznaczenie wszystkich włącza tryb **tylko pieszo**: izochrona samego
+  spaceru (do 90 min), liczona falowo po lądzie z pominięciem routingu.
 - **Trasa** — prawy klik (na telefonie przytrzymanie) w dowolne miejsce mapy
   pokazuje proponowaną trasę: dojścia piesze, linie, przesiadki i godziny
   (rekonstrukcja ścieżki z RAPTOR-a/Dijkstry); w porównaniu — trasy obu osób.
