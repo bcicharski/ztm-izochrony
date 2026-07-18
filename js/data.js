@@ -58,7 +58,9 @@ export function decodeNetwork(raw) {
   }
   const group = Int32Array.from(raw.stops.group);
 
-  const patterns = raw.patterns.map(decodePattern);
+  // v3: czasy w sekundach + postoje (pole d); v2: minuty, bez postojów
+  const scale = (raw.version | 0) >= 3 ? 1 : 60;
+  const patterns = raw.patterns.map(p => decodePattern(p, scale));
 
   // indeks: przystanek -> [pattern, pozycja] (spłaszczone pary)
   const patternsAtStop = Array.from({ length: n }, () => []);
@@ -111,21 +113,33 @@ export function decodeNetwork(raw) {
   return net;
 }
 
-function decodePattern(p) {
+/**
+ * @param {object} p      wzorzec z JSON
+ * @param {number} scale  1 dla v3 (sekundy), 60 dla v2 (minuty)
+ */
+function decodePattern(p, scale) {
   const stops = Int32Array.from(p.s);
   const nStops = stops.length;
   const flags = p.f === 0 ? null : Uint8Array.from(p.f);
-  // profile -> skumulowane sekundy od startu kursu
+  // profCum: skumulowane sekundy ODJAZDÓW od startu kursu
   const profCum = p.p.map(deltas => {
     const cum = new Int32Array(nStops);
-    for (let i = 0; i < deltas.length; i++) cum[i + 1] = cum[i] + deltas[i] * 60;
+    for (let i = 0; i < deltas.length; i++) cum[i + 1] = cum[i] + deltas[i] * scale;
     return cum;
+  });
+  // profArr: skumulowane sekundy PRZYJAZDÓW (odjazd − postój); brak pola d = postój 0.
+  // Rozdzielenie: przejazd = arr[i+1]−dep[i], wysiadanie na przyjeździe (bez postoju).
+  const profArr = profCum.map((cum, k) => {
+    const arr = new Int32Array(nStops);
+    const dw = p.d ? p.d[k] : null;
+    for (let pos = 0; pos < nStops; pos++) arr[pos] = cum[pos] - (dw ? dw[pos] * scale : 0);
+    return arr;
   });
   const nTrips = p.t.length;
   const tripStart = new Int32Array(nTrips);
   const tripProf = new Int32Array(nTrips);
   for (let i = 0; i < nTrips; i++) {
-    tripStart[i] = p.t[i][0] * 60;
+    tripStart[i] = p.t[i][0] * scale;
     tripProf[i] = p.t[i][1];
   }
   // odjazdy per pozycja×kurs — do szybkiego wyszukiwania najwcześniejszego kursu
@@ -134,7 +148,7 @@ function decodePattern(p) {
     const cum = profCum[tripProf[t]];
     for (let pos = 0; pos < nStops; pos++) depAt[pos * nTrips + t] = tripStart[t] + cum[pos];
   }
-  return { route: p.r, stops, flags, profCum, tripStart, tripProf, depAt, nTrips };
+  return { route: p.r, stops, flags, profCum, profArr, tripStart, tripProf, depAt, nTrips };
 }
 
 /**
@@ -155,17 +169,27 @@ function reverseNetwork(net) {
         flags[i] = ((f & 1) ? 2 : 0) | ((f & 2) ? 1 : 0);
       }
     }
-    const profCum = p.profCum.map(cum => {
-      const total = cum[nStops - 1];
+    // odwrócenie czasu zamienia role odjazd↔przyjazd (postój zachowany):
+    // rev_odjazd(X) = REV_C − przyjazd_fwd(X), rev_przyjazd(X) = REV_C − odjazd_fwd(X)
+    const profCum = p.profCum.map((depF, k) => {
+      const arrF = p.profArr[k];
+      const totalArr = arrF[nStops - 1];
       const rev = new Int32Array(nStops);
-      for (let i = 0; i < nStops; i++) rev[i] = total - cum[nStops - 1 - i];
+      for (let i = 0; i < nStops; i++) rev[i] = totalArr - arrF[nStops - 1 - i];
       return rev;
     });
-    // start kursu odwróconego = REV_C − (przyjazd na ostatni przystanek)
+    const profArr = p.profCum.map((depF, k) => {
+      const arrF = p.profArr[k];
+      const totalArr = arrF[nStops - 1];
+      const rev = new Int32Array(nStops);
+      for (let i = 0; i < nStops; i++) rev[i] = totalArr - depF[nStops - 1 - i];
+      return rev;
+    });
+    // start kursu odwróconego = REV_C − (przyjazd na ostatni przystanek fwd)
     const trips = [];
     for (let t = 0; t < p.nTrips; t++) {
-      const total = p.profCum[p.tripProf[t]][nStops - 1];
-      trips.push([REV_C - (p.tripStart[t] + total), p.tripProf[t]]);
+      const totalArr = p.profArr[p.tripProf[t]][nStops - 1];
+      trips.push([REV_C - (p.tripStart[t] + totalArr), p.tripProf[t]]);
     }
     trips.sort((a, b) => a[0] - b[0]);
     const tripStart = new Int32Array(p.nTrips);
@@ -176,7 +200,7 @@ function reverseNetwork(net) {
       const cum = profCum[tripProf[t]];
       for (let pos = 0; pos < nStops; pos++) depAt[pos * p.nTrips + t] = tripStart[t] + cum[pos];
     }
-    return { route: p.route, stops, flags, profCum, tripStart, tripProf, depAt, nTrips: p.nTrips };
+    return { route: p.route, stops, flags, profCum, profArr, tripStart, tripProf, depAt, nTrips: p.nTrips };
   });
 
   const patternsAtStop = Array.from({ length: net.nStops }, () => []);

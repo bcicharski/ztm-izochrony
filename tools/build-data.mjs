@@ -12,6 +12,12 @@
  *   - pełny calendar.txt z flagami dni tygodnia + wyjątki (Kraków, Wrocław),
  *   - kursy częstotliwościowe frequencies.txt (metro warszawskie).
  *
+ * Format wyjścia v3: czasy w SEKUNDACH (v2 był w minutach — obcinał sekundy,
+ * zawyżając krótkie odcinki, np. SKM Gdańsk). Każdy przystanek ma osobno odjazd
+ * (delty w polu p) i postój (pole d, dep−arr); czysty przejazd = arr[i+1]−dep[i].
+ * Pole d pomijane, gdy wszystkie postoje zerowe (feedy z rozdzielczością minutową,
+ * gdzie arrival_time == departure_time). Dekoder w js/data.js czyta v2 i v3.
+ *
  * Opcjonalne per-feed filtry (pola w danym feedzie w data/cities.json, dopasowane
  * po nazwie katalogu = feed.name); używane do wyłuskania jednego przewoźnika/
  * regionu z feedu zbiorczego (np. PolRegio-Pomorze z ogólnopolskiego
@@ -78,10 +84,10 @@ function readCsvSync(file) {
   });
 }
 
-/** "28:16:00" -> minuty od północy (może przekraczać 1440). */
-function timeToMin(t) {
-  const [h, m] = t.split(':');
-  return (+h) * 60 + (+m);
+/** "28:16:30" -> sekundy od północy (może przekraczać 86400). */
+function timeToSec(t) {
+  const [h, m, s] = t.split(':');
+  return (+h) * 3600 + (+m) * 60 + (+s || 0);
 }
 
 function dateToWeekday(yyyymmdd) {
@@ -201,8 +207,8 @@ feedDirs.forEach((dir, f) => {
     if (!tripMeta.has(key)) continue;
     if (!frequencies.has(key)) frequencies.set(key, []);
     frequencies.get(key).push([
-      timeToMin(r.start_time) * 60 + (+r.start_time.split(':')[2] || 0),
-      timeToMin(r.end_time) * 60 + (+r.end_time.split(':')[2] || 0),
+      timeToSec(r.start_time),
+      timeToSec(r.end_time),
       +r.headway_secs,
     ]);
   }
@@ -257,7 +263,10 @@ feedDirs.forEach((dir, f) => {
 
 // --- 4. stop_times (streaming, wszystkie feedy) ----------------------------
 
-// tripKey -> tablica [stopSeq, stopIndex, depMin, flags]
+// tripKey -> tablica [stopSeq, stopIndex, depSec, arrSec, flags]
+// depSec i arrSec osobno: różnica arr[i+1]−dep[i] to czysty przejazd (bez postoju),
+// a dep[i]−arr[i] to postój — rozdzielenie usuwa zawyżanie czasów (np. SKM, gdzie
+// rozkład ma sekundy i realne postoje; feedy minutowe mają arr==dep, więc postój=0)
 const tripStops = new Map();
 for (let f = 0; f < feedDirs.length; f++) {
   const rl = readline.createInterface({
@@ -265,12 +274,13 @@ for (let f = 0; f < feedDirs.length; f++) {
     crlfDelay: Infinity,
   });
   let header = null, n = 0;
-  let iTrip, iDep, iStop, iSeq, iPickup, iDrop;
+  let iTrip, iDep, iArr, iStop, iSeq, iPickup, iDrop;
   for await (const line of rl) {
     if (!header) {
       header = splitCsv(line.replace(/^﻿/, '')).map(h => h.trim());
       iTrip = header.indexOf('trip_id');
       iDep = header.indexOf('departure_time');
+      iArr = header.indexOf('arrival_time');
       iStop = header.indexOf('stop_id');
       iSeq = header.indexOf('stop_sequence');
       iPickup = header.indexOf('pickup_type');
@@ -285,9 +295,11 @@ for (let f = 0; f < feedDirs.length; f++) {
     // flags: bit0 = zakaz wsiadania (pickup_type=1), bit1 = zakaz wysiadania (drop_off_type=1)
     const flags = ((iPickup >= 0 && c[iPickup] === '1') ? 1 : 0) |
                   ((iDrop >= 0 && c[iDrop] === '1') ? 2 : 0);
+    const depSec = timeToSec(c[iDep]);
+    const arrSec = iArr >= 0 && c[iArr] ? timeToSec(c[iArr]) : depSec;
     let arr = tripStops.get(tripKey);
     if (!arr) { arr = []; tripStops.set(tripKey, arr); }
-    arr.push([+c[iSeq], sIdx, timeToMin(c[iDep]), flags]);
+    arr.push([+c[iSeq], sIdx, depSec, arrSec, flags]);
     if (++n % 500000 === 0) console.log(`  stop_times feed ${f}: ${n}…`);
   }
   console.log(`Feed ${f}: wierszy stop_times w wybranych dniach: ${n}`);
@@ -336,8 +348,9 @@ function buildDay(dayIdx) {
     if (!(meta.dayMask & (1 << dayIdx))) continue;
     arr.sort((a, b) => a[0] - b[0]);
     const stopSeq = arr.map(x => x[1]);
-    const flagSeq = arr.map(x => x[3]);
-    const times = arr.map(x => x[2]);
+    const flagSeq = arr.map(x => x[4]);
+    const times = arr.map(x => x[2]); // odjazdy [s]
+    const arrs = arr.map(x => x[3]);  // przyjazdy [s]
     let ok = true;
     for (let i = 1; i < times.length; i++) if (times[i] < times[i - 1]) { ok = false; break; }
     if (!ok || times.length < 2) continue;
@@ -350,25 +363,30 @@ function buildDay(dayIdx) {
         flags: flagSeq,
         profiles: new Map(),
         profileList: [],
+        dwellList: [],
         trips: [],
       };
       patterns.set(key, p);
     }
+    // delty odjazd-odjazd [s] + postoje [s] (dep−arr; skrajne przystanki = 0)
     const deltas = [];
     for (let i = 1; i < times.length; i++) deltas.push(times[i] - times[i - 1]);
-    const dKey = deltas.join(',');
+    const dwell = times.map((dep, i) =>
+      (i === 0 || i === times.length - 1) ? 0 : Math.max(0, dep - arrs[i]));
+    const dKey = deltas.join(',') + ';' + dwell.join(',');
     let profIdx = p.profiles.get(dKey);
     if (profIdx === undefined) {
       profIdx = p.profileList.length;
       p.profiles.set(dKey, profIdx);
       p.profileList.push(deltas);
+      p.dwellList.push(dwell);
     }
     const freq = frequencies.get(tripKey);
     if (freq) {
       // kurs częstotliwościowy: starty co headway w każdym oknie
       for (const [startSec, endSec, headway] of freq) {
         for (let s = startSec; s < endSec; s += headway) {
-          p.trips.push([Math.round(s / 60), profIdx]);
+          p.trips.push([s, profIdx]);
         }
       }
     } else {
@@ -378,13 +396,17 @@ function buildDay(dayIdx) {
   const out = [];
   for (const p of patterns.values()) {
     p.trips.sort((a, b) => a[0] - b[0]);
-    out.push({
+    // pole d (postoje) pomijamy, gdy wszystkie zerowe (feedy minutowe) — mniejszy plik
+    const anyDwell = p.dwellList.some(dw => dw.some(x => x));
+    const entry = {
       r: p.route,
       s: p.stops,
       f: p.flags.some(f => f) ? p.flags : 0,
       p: p.profileList,
       t: p.trips,
-    });
+    };
+    if (anyDwell) entry.d = p.dwellList;
+    out.push(entry);
   }
   return out;
 }
@@ -432,7 +454,7 @@ for (let d = 0; d < dayTypes.length; d++) {
   const nTrips = patterns.reduce((s, p) => s + p.t.length, 0);
   const file = path.join(outDir, `${dayTypes[d].key}.json`);
   const payload = {
-    version: 2,
+    version: 3, // v3: czasy w sekundach + opcjonalne postoje (pole d); v2 = minuty, bez d
     day: dayTypes[d].key,
     date: dayTypes[d].date,
     routes: routeNames,

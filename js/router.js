@@ -183,16 +183,16 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
       // dość danych, inaczej heurystyczny mnożnik czasu jazdy wg typu pojazdu
       const routeName = g.routes[p.route].n;
       const fac = cautious ? rideFactor(g.routes[p.route].t) : 1;
-      let trip = -1, tripCum = null, tripStartT = 0, boardStop = -1, boardDep = 0, boardPos = 0;
+      let trip = -1, tripCum = null, tripArr = null, tripStartT = 0, boardStop = -1, boardDep = 0, boardPos = 0;
       for (let pos = startPos; pos < nStops; pos++) {
         const stop = p.stops[pos];
         const fl = p.flags ? p.flags[pos] : 0;
-        // wysiądź, jeśli poprawia wynik
+        // wysiądź, jeśli poprawia wynik — na PRZYJEŹDZIE (bez postoju na tym przystanku)
         if (trip >= 0 && !(fl & 2)) {
-          let arrT = tripStartT + tripCum[pos];
+          let arrT = tripStartT + tripArr[pos];
           if (cautious) {
             const d = delayLookup(delays, routeName, dayType, boardDep);
-            arrT += d != null ? d : Math.round((tripCum[pos] - tripCum[boardPos]) * (fac - 1));
+            arrT += d != null ? d : Math.round((tripArr[pos] - tripCum[boardPos]) * (fac - 1));
           }
           if (arrT < best[stop] && arrT <= cap) {
             best[stop] = arrT;
@@ -215,6 +215,7 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
               if (dep < currentDep) {
                 trip = t;
                 tripCum = p.profCum[p.tripProf[t]];
+                tripArr = p.profArr[p.tripProf[t]];
                 tripStartT = p.tripStart[t];
                 boardStop = stop;
                 boardDep = dep;
@@ -286,9 +287,12 @@ function rideAdjacency(g, types, cautious) {
     for (let pos = 0; pos + 1 < p.stops.length; pos++) {
       const u = p.stops[pos], v = p.stops[pos + 1];
       if (u === v) continue;
+      // czysty przejazd = przyjazd na v − odjazd z u (bez postoju na v)
       let w = Infinity;
-      for (const cum of p.profCum) w = Math.min(w, cum[pos + 1] - cum[pos]);
-      w = Math.round(w * fac);
+      for (let k = 0; k < p.profCum.length; k++) {
+        w = Math.min(w, p.profArr[k][pos + 1] - p.profCum[k][pos]);
+      }
+      w = Math.round(Math.max(0, w) * fac);
       const k = u * 100000 + v;
       const cur = minEdge.get(k);
       if (cur === undefined || w < cur[0]) minEdge.set(k, [w, p.route]);

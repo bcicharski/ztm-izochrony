@@ -1,22 +1,32 @@
 # CURRENT_STATE — mechanizm przekraczania wody (zasięg pieszy)
 
-Stan na 2026-07-18, na bazie commitu `994f52e` (wdrożony na https://transport.excelninja.pro). Niezacommitowane: naprawa `pickTargetStop` (dymek trasy po siatce) — patrz §2 (sesja 2026-07-15) — oraz uszczelnienie maski wody o linie waterway=river/canal — patrz §2 (sesja 2026-07-18).
+Stan na 2026-07-18, na bazie commitu `994f52e` (wdrożony na https://transport.excelninja.pro). Niezacommitowane: naprawa `pickTargetStop` (dymek trasy po siatce) — patrz §1 (sesja 2026-07-15) — oraz uszczelnienie maski wody o linie waterway=river/canal — patrz §1 (sesja 2026-07-18).
 
-## 1. Cel bieżący
+## 1. Ostatnie modyfikacje
 
-Problem wyjściowy (zgłoszony przez użytkownika): spacer liczony okręgami w linii prostej „przechodził przez wodę" — np. Westerplatte kolorowane z przystanków Nowego Portu przez kanał portowy. Maska wody (`data/<miasto>/water.json`) wycinała wodę tylko WIZUALNIE; ląd za wodą nadal wpadał w promień.
+### Sesja 2026-07-18 (cd., niezacommitowane) — SKM Gdańsk zawyżone czasy: sekundy + rozdział jazda/postój (backlog #1)
 
-Rozwiązanie WDROŻONE: zasięg pieszy liczony falowo po siatce lądu (`js/walkgrid.js`), woda = bariera, mosty/kładki/mola = przejezdne korytarze. Zweryfikowane: Westerplatte (fiolet zamiast żółci przez kanał), Warszawa (Praga przez mosty, przewężenia przy przeprawach).
+Problem: SKM Zaspa→Wrzeszcz pokazywał ~3 min, realnie ~1,6 min. Dwie przyczyny w prekompilacji: (1) `timeToMin` obcinał sekundy (feed SKM ma sekundy: dep 18:52:18, arr 18:53:54), (2) model trzymał jeden czas per przystanek i liczył deltę **odjazd−odjazd**, wliczając POSTÓJ na przystanku docelowym (Wrzeszcz dwell 66 s). Błąd hopu = 84 s = 66 s postój + 18 s obcięcie. Żaden feed poza SKM nie ma sub-minutowych czasów ani postojów (arr==dep) — bug dotyczył praktycznie tylko kolei SKM/PKM.
 
-Pozostałe znane luki mechanizmu (kandydaci na dalszą pracę):
-- **Tryb bez spaceru** (`walk=false`): przystanki rysowane stałymi kołami 200 m (`js/isochrone.js`, `NO_WALK_RADIUS_M`) — koło może przeciąć wąski kanał; siatka tam nie działa.
-- **Przystanki poza bboxem miasta** (np. Lębork, Tczew w feedzie SKM; bbox z `data/cities.json`): fallback = stare koła crow-fly bez bariery wody (app.js, zmienna `outside`).
-- ~~**Popup trasy** (`pickTargetStop` w app.js): dobór przystanku docelowego liczył dojście crow-fly przez wodę.~~ **NAPRAWIONE** (ta sesja, §2): wewnątrz siatki łączny czas z `gridTime[idx]`, crow-fly tylko poza bboxem / bez spaceru.
-- **Szerokość korytarza mostu**: `ctx.lineWidth = max(1.5, 50/res)` px (~50 m) — przy równoległych bliskich brzegach (wąskie kanały portowe) korytarz może fałszywie połączyć oba brzegi wzdłuż mostu biegnącego równolegle do kanału. Sprawdzone dla Nowego Portu / Trójmiasto (2026-07-18): fala z origin nie przecieka kanału portowego (wszystkie punkty za kanałem = UNREACH); dedykowany case nie potwierdzony, ale ryzyko teoretyczne pozostaje.
-- ~~Dziury w masce wody na dużych rzekach (Wisła w Warszawie poniżej Śródmieścia, Motława/Kanał Portowy w Trójmieście itp.): raster obejmował tylko poligony `natural=water`, brakowało `waterway=river/canal`.~~ **NAPRAWIONE** (sesja 2026-07-18, §2): dodane linie waterway do `water.json` + stroke 100 m w rasterze.
-- Brak siatki ulic: płoty, tory, tereny zamknięte (stocznia!) nieuwzględnione — pełny routing pieszy OSM to osobny, duży temat.
+Rozwiązanie: format danych **v3** — czasy w SEKUNDACH + osobno odjazd i przyjazd per przystanek (postój = dep−arr). Czysty przejazd = `arr[i+1]−dep[i]`; wysiadanie w RAPTOR na przyjeździe (bez postoju).
 
-## 2. Ostatnie modyfikacje
+- **`tools/build-data.mjs`**: `timeToMin`→`timeToSec` (h*3600+m*60+s). stop_times czyta `arrival_time` (fallback→dep). `buildDay`: delty odjazd−odjazd [s] + tablica postojów `dwell` (dep−arr, skrajne przystanki=0), dedup profilu po (delty;postoje). Wyjście `version:3`, pole `d`=postoje per profil, pomijane gdy wszystkie zerowe (feedy minutowe zostają lekkie). JSDoc w nagłówku.
+- **`js/data.js`**: dekoder rozpoznaje wersję (`scale=1` v3 / `60` v2 — **wsteczna zgodność**: 16 miast bez lokalnych feedów zostaje na v2 do planowego rebuildu). `decodePattern(p, scale)` buduje `profCum` (odjazdy) + `profArr` (przyjazdy = odjazd−postój). `reverseNetwork`: odwrócenie czasu zamienia role odjazd↔przyjazd (`rev_odjazd(X)=REV_C−przyjazd_fwd(X)`), buduje oba profile.
+- **`js/router.js`**: RAPTOR wysiada na `tripStartT + tripArr[pos]` (przyjazd); Dijkstra `rideAdjacency` krawędź = `profArr[pos+1]−profCum[pos]` (czysta jazda, clamp ≥0); mnożnik ostrożny liczony od przyjazdu.
+- **`data/trojmiasto/*` + `data/warszawa/*`**: przebudowane do v3 (jedyne z feedami lokalnymi). Rozmiary bez zmian (~1.2/2.2 MB). Pozostałe 16 miast: v2, działają przez back-compat, przejdą na v3 przy najbliższym cotygodniowym workflow.
+- **Weryfikacja (preview, import modułów)**: odcinek SKM Zaspa→Wrzeszcz `arr−dep` = **96 s** (dawniej dep−dep 162 s → v2 obcięte do 180 s) w trybie ogólnym I godzinowym; RAPTOR dep 12:02:18→arr 12:03:54 (realny rozkład, sekundy zachowane). Sieć odwrócona (kierunek „do") = 96 s. Bus (feed minutowy, arr==dep) = 60 s bez zmian. Warszawa v3 (metro frequencies) 2341 wzorców OK. Kraków **v2 back-compat** 538 wzorców, 3436 przystanków w zasięgu OK. Zero błędów konsoli.
+- **Uwaga**: feedy minutowe (ZTM Gdańsk, ZKM Gdynia, tram/bus wszędzie) mają granulację 1 min i arr==dep — ich czasy pozostają minutowe (fix nic nie psuje ani nie poprawia; dwell=0). Realny zysk tylko tam, gdzie feed daje sekundy/postoje (SKM; potencjalnie inne koleje).
+
+### Sesja 2026-07-18 (cd., niezacommitowane) — tryb bez spaceru (`walk=false`) na siatce lądu (backlog #7)
+
+Problem: przy „Uwzględnij spacer" WYŁĄCZONYM strefy rysowano stałymi kołami `NO_WALK_RADIUS_M`=200 m (crow-fly, `js/isochrone.js buildZones walk:false`) — bez bariery wody. Koło mogło przeciąć wąski kanał (ta sama regresja co pierwotny problem, tylko dla `walk=false`; siatka piesza budowała się wyłącznie przy `state.walk`). Wybrany kierunek B: zbudować siatkę też dla `walk=false`, seed = same przystanki (bez origin), propagacja ograniczona do 200 m po lądzie.
+
+- **`js/isochrone.js`**: `NO_WALK_RADIUS_M` (200 m) teraz `export` (używane przez app.js jako promień strefy no-walk).
+- **`js/walkgrid.js` `computeNoWalkGrid(grid, seeds, radiusM)` (NOWA)**: flood po lądzie do `radiusM` (woda blokuje jak w `computeTimeGrid`), ale BEZ dodawania czasu dojścia — piksel dostaje czysty czas przyjazdu przystanku-źródła (kolor = pasmo przystanku, jak dawne koła, tylko przycięte wodą). Kubełki po czasie przyjazdu (rosnąco) → wcześniejszy przyjazd koloruje pierwszy; wewnątrz kubełka BFS po lądzie do promienia, `spread` (metry od źródła) w lokalnym `Uint16Array`. Seed na wodzie → przeniesienie na sąsiada lądowego (jak w computeTimeGrid). JSDoc opisuje zachowawcze podpikselowe niedopokrycie na styku dwóch stref.
+- **`js/app.js`**: warunek siatki `state.walk && cityAssets` → `cityAssets` (obie gałęzie na siatce). `seedsFor(mins, origin)` wyciągnięte przed `if` (reużyte, no-walk woła z `origin=null`). Gałąź `else` (bez spaceru): `computeNoWalkGrid(..., NO_WALK_RADIUS_M)`, compare → `t1/t2` + `maxTimeGrid` (wspólny zasięg = oba przystanki w promieniu). Fallback kołowy poza bboxem: `buildZones(..., {walk: state.walk, origin:null})`. Import `computeNoWalkGrid`, `NO_WALK_RADIUS_M`.
+- **Bez zmian**: `pickTargetStop` (klucz `walk` false → nadal crow-fly ≤300 m, siatka nie ruszona); statystyki % powierzchni (kolumna ukryta dla no-walk jak dotąd — `areaHead.hidden = !state.walk`).
+- **Weryfikacja**: (1) syntetyczna siatka 11×1 z wodą w x=5, seed x=0, promień 200 m → lewy brzeg x0–4 = 300 s (jednolicie), woda i cały drugi brzeg x6–10 = UNREACH mimo <200 m. (2) cap: promień 100 m → x4 kolor, x5 UNREACH. (3) nakładanie: seedy arr 600 i 300 → środek = 300 (wcześniejszy wygrywa). (4) realna apka Trójmiasto Nowy Port `walk=0` tryb ogólny: raster 184k px, `walk=1` 780k px, zero błędów konsoli.
+- **Poza bboxem siatki**: dalekie stacje (Lębork/Tczew) nadal koła crow-fly bez bariery — to udokumentowany backlog #10, nie ten temat.
 
 ### Sesja 2026-07-18 (niezacommitowane) — uszczelnienie maski wody o linie waterway=river/canal
 
@@ -87,7 +97,7 @@ Problem: linia PKM (Pomorska Kolej Metropolitalna) miała w apce **stacje, ale z
 - **`tools/geo.mjs`**: `fetchOverpass` — rotacja mirrorów `overpass-api.de` ↔ `overpass.kumi.systems` przy retry (GZM przechodził tylko przez kumi); obsługa błędów sieciowych (catch → pseudo-status).
 - **`index.html`** (pomoc, sekcja „Dojście piesze") i **`README.md`** (Ograniczenia): opis „po lądzie, mosty przepuszczają".
 
-## 3. Struktury danych
+## 2. Struktury danych
 
 - **`data/<miasto>/water.json`**: `{polys: [[[lat*1e5, lon*1e5], ...], ...], lines: [[[lat*1e5, lon*1e5], ...], ...]}`. Pierścienie wody (`polys`) obieg CW (matematycznie, x=lon y=lat), wyspy CCW → wypełnianie canvas regułą **nonzero** daje dziury na wyspach i odporność na nakładanie. Linie rzek/kanałów (`lines`) uzupełniają dziury w poligonach — rysowane w `walkgrid.js` i `map.js` jako `stroke` szerokości ~100 m. Generowane przez `tools/build-water.mjs` (Overpass: coastline + natural=water + waterway=river/canal; miasta nadmorskie mają `seaClose` w cities.json).
 - **`data/<miasto>/bridges.json`**: `{lines: [[[lat*1e5, lon*1e5], ...], ...]}` — polilinie (NIE poligony) mostów/kładek/mol.
@@ -97,7 +107,7 @@ Problem: linia PKM (Pomorska Kolej Metropolitalna) miała w apce **stacje, ale z
 - **Stałe**: `WALK_MPS = 4.5/3.6/1.3 ≈ 0.96` (data.js); pasma `BANDS` w `js/isochrone.js` (limity 10/20/30/45/60/90 min + kolory).
 - **Fallback kołowy**: `buildZones` (isochrone.js) — promień `(limit − t)*60*WALK_MPS`, crow-fly, bez bariery wody.
 
-## 4. Zablokowane pomysły
+## 3. Zablokowane pomysły
 
 - **Ray-casting / clipowanie okręgów do „widoczności" przez wodę** (cień 2D z pierścieni wody jako okluderów): odrzucone — blokuje także mosty (regresja w centrach miast), koszt promienie×segmenty wysoki. Każde podejście bez jawnych mostów przegrywa.
 - **Stary raster statystyk (`stats.js: initStats/computeAreas`, koła na osobnej siatce 25 m)**: zastąpiony `areaPercents` na siatce pieszej — dwie osobne siatki dawałyby niespójne wyniki (koła przez wodę vs strefy po lądzie). Nie wracać.
@@ -106,32 +116,37 @@ Problem: linia PKM (Pomorska Kolej Metropolitalna) miała w apce **stacje, ale z
 - **Overpass pojedynczym endpointem**: GZM (bbox 2543 km²) stale 504 na overpass-api.de — działa tylko przez mirror kumi.systems + timeout 240 s (już w geo.mjs).
 - **Synteza `dblclick`/`click` w preview-browser**: Leaflet ignoruje syntetyczne dblclick (zoom nie działa); klik przez `preview_click`/`computer` ma offset współrzędnych — testować przez `element.click()` w JS albo parametry URL, nie przez symulację myszy.
 
-## 5. Kolejny krok
+## 4. Backlog zadań (od użytkownika, 2026-07-17)
 
-Dymek trasy (`pickTargetStop`) załatwiony (§2). Następny kandydat z §1 — **tryb bez spaceru** (`walk=false`): przystanki rysowane stałymi kołami `NO_WALK_RADIUS_M`=200 m w `js/isochrone.js`, bez bariery wody — koło może przeciąć wąski kanał (regresja tego samego typu co pierwotny problem, tylko dla `walk=false`). Do rozważenia: przyciąć koła geometrią `water.json` przy rysowaniu (warstwa i tak eraseuje wodę w `map.js`, więc wizualnie znika, ale statystyki/„osiągalność" liczą się z pełnego koła), albo — spójniej — zbudować siatkę pieszą też dla `walk=false` z zerowym promieniem dojścia (tylko piksel przystanku jako seed), co wymaga oddzielenia „progu dojścia" od budowy siatki. Alternatywnie: przystanki poza bboxem siatki (`outside` w `recompute()`) wciąż crow-fly — mniejszy priorytet (dalekie stacje SKM, rzadkie kliknięcia).
-
-Priorytety zadań na kolejne sesje: patrz §6 (backlog od użytkownika, 2026-07-17).
-
-## 6. Backlog zadań (od użytkownika, 2026-07-17)
-
-Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach.
+Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach. Zadania 10–12 to pozostałe luki mechanizmu przekraczania wody (przeniesione z dawnej sekcji „Cel bieżący"). Zadanie 7 (tryb bez spaceru — koła bez bariery wody) rozwiązane, patrz §5.
 
 ### Priorytet WYSOKI
 
-1. **SKM Gdańsk — zawyżone czasy przejazdu.** Przykład: Zaspa → Wrzeszcz pokazuje kilka minut, realnie ~1 min. Zdiagnozować dlaczego. Punkty zaczepienia: `stop_times.txt` feedu SKM (czasy postoju? granulacja minutowa?), `timeToMin` w `tools/build-data.mjs` (obcina sekundy), deduplikacja profili czasowych, tryb „ogólnie" (minimalne czasy odcinków — powinien być optymistyczny, a nie zawyżony).
-2. **Koleje Mazowieckie dla Warszawy + weryfikacja czasów.** Mechanizm gotowy: filtr `keepAgency` w build-data (dodany przy PKM, §2). Wpis w `warszawa.feeds`: `{ "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }` — bez `keepBbox` (KM regionalne, sięga Działdowa/Skierniewic — dalekie stacje jako fallback `outside`). Decyzja użytkownika (sesja 2026-07-17): cała agencja KM, z autobusami ZKA (wpadną pod 🚌). Po dodaniu zweryfikować czasy przejazdów (analogicznie do punktu 1).
+1. ~~**SKM Gdańsk — zawyżone czasy przejazdu.**~~ **ROZWIĄZANE** (2026-07-18, §1/§5): obcięcie sekund + delta odjazd−odjazd wliczająca postój. Format v3 (sekundy + rozdział jazda/postój).
+2. **Koleje Mazowieckie dla Warszawy + weryfikacja czasów.** Mechanizm gotowy: filtr `keepAgency` w build-data (dodany przy PKM, §1). Wpis w `warszawa.feeds`: `{ "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }` — bez `keepBbox` (KM regionalne, sięga Działdowa/Skierniewic — dalekie stacje jako fallback `outside`). Decyzja użytkownika (sesja 2026-07-17): cała agencja KM, z autobusami ZKA (wpadną pod 🚌). Po dodaniu zweryfikować czasy przejazdów (analogicznie do punktu 1).
 
 ### Priorytet ŚREDNI
 
 3. **Przesiadki autobus/tramwaj → metro w Warszawie — weryfikacja.** Sprawdzić, czy przesiadki na metro działają poprawnie (zespoły przystankowe: nazwy stacji metra vs przystanków naziemnych mogą się nie sklejać; metro jest częstotliwościowe — `frequencies.txt`).
-4. ~~**Przekraczanie wody — czasy fali nierealnie krótkie.**~~ **NAPRAWIONE** (sesja 2026-07-18, §2). Diagnoza (2026-07-18): dwa różne przypadki użytkownika:
-   (a) Trójmiasto Nowy Port → Muzeum Westerplatte „21 min" = autobus (Terminal Promowy, 20.58 min, objazd mostem Sucharskiego) + 1 min spacer. Fala pieszo z origin do Westerplatte / Twierdza Wisłoujście / Terminal Promowy = UNREACH — nie przecieka. Wynik autobusowy poprawny (dlaczego autobus w apce 20 min a Google „1h 30 min" transportem publicznym — do sprawdzenia osobno, prawdopodobnie chodzi o różnicę SKM vs autobus miejski w widoku Google).
-   (b) Warszawa Saska Kępa → Bartycka Siekierki, bez autobusów: apka „48 min" pieszo, Google „1h 12 min". FAKTYCZNY PRZECIEK — raster wody miał dziury na Wiśle poniżej Śródmieścia. Fix: dodane linie `waterway=river/canal` do maski wody. Po fixie: Bartycka = UNREACH (realny objazd mostem >90 min). Kod: `tools/build-water.mjs`, `js/data.js`, `js/walkgrid.js`, `js/map.js`, `js/app.js`; rebuild wszystkich 18 miast.
-5. **Tryb „tylko pieszo".** Nowy środek transportu w panelu: izochrona samego spaceru (bez pojazdów). Siatka piesza już istnieje (`walkgrid.js`) — seed = tylko origin, cap 90 min.
-6. **Rower jako dojście (rower + komunikacja).** Rower zamiast spaceru w dojściu do/od przystanków (wyższa prędkość na tej samej siatce z barierą wody; do rozstrzygnięcia: przewóz roweru w pojeździe czy rower zostaje na przystanku).
-7. **Kolej podmiejska w Krakowie (dojazd z Wieliczki).** SKA/Koleje Małopolskie — w `polish_trains.zip` agencja `KML` (13 linii). Mechanizm: wpis w `krakow.feeds` z `keepAgency: ["KML"]` (ew. + `keepBbox` na Małopolskę, bo KML jeździ też np. do Tarnowa). Uwaga: pociągi wymagają klucza `rail` w `veh` Krakowa (dziś tylko tram/bus).
-
+4. **Tryb „tylko pieszo".** Nowy środek transportu w panelu: izochrona samego spaceru (bez pojazdów). Siatka piesza już istnieje (`walkgrid.js`) — seed = tylko origin, cap 90 min.
+5. **Rower jako dojście (rower + komunikacja).** Rower zamiast spaceru w dojściu do/od przystanków (wyższa prędkość na tej samej siatce z barierą wody; do rozstrzygnięcia: przewóz roweru w pojeździe czy rower zostaje na przystanku).
+6. **Kolej podmiejska w Krakowie (dojazd z Wieliczki).** SKA/Koleje Małopolskie — w `polish_trains.zip` agencja `KML` (13 linii). Mechanizm: wpis w `krakow.feeds` z `keepAgency: ["KML"]` (ew. + `keepBbox` na Małopolskę, bo KML jeździ też np. do Tarnowa). Uwaga: pociągi wymagają klucza `rail` w `veh` Krakowa (dziś tylko tram/bus).
 ### Priorytet NISKI
 
 8. **Ładne screenshoty.** Tryb „czysty widok": zwinięte menu, widoczna tylko legenda + adres strony + niezbędne informacje — do robienia zrzutów ekranu przez użytkowników.
 9. **Stopka w menu.** Wyróżnić adres e-mail, dodać linki do social mediów, przenieść przycisk Suppi wyżej.
+10. **Przystanki poza bboxem miasta.** Np. Lębork, Tczew w feedzie SKM (bbox z `data/cities.json`): fallback = stare koła crow-fly bez bariery wody (app.js, zmienna `outside`). Mniejszy priorytet — dalekie stacje SKM, rzadkie kliknięcia.
+11. **Szerokość korytarza mostu.** `ctx.lineWidth = max(1.5, 50/res)` px (~50 m) — przy równoległych bliskich brzegach (wąskie kanały portowe) korytarz może fałszywie połączyć oba brzegi wzdłuż mostu biegnącego równolegle do kanału. Sprawdzone dla Nowego Portu / Trójmiasto (2026-07-18): fala z origin nie przecieka kanału portowego (wszystkie punkty za kanałem = UNREACH); dedykowany case nie potwierdzony, ale ryzyko teoretyczne pozostaje.
+12. **Brak siatki ulic.** Płoty, tory, tereny zamknięte (stocznia!) nieuwzględnione — pełny routing pieszy OSM to osobny, duży temat.
+
+## 5. ROZWIĄZANE
+
+Zadania z backlogu i luki mechanizmu przekraczania wody domknięte w kolejnych sesjach (szczegóły techniczne w §1 „Ostatnie modyfikacje").
+
+- **Zasięg pieszy po lądzie (rdzeń mechanizmu przekraczania wody).** Problem wyjściowy: spacer liczony okręgami w linii prostej „przechodził przez wodę" — np. Westerplatte kolorowane z przystanków Nowego Portu przez kanał portowy; maska `water.json` wycinała wodę tylko WIZUALNIE, ląd za wodą nadal wpadał w promień. Rozwiązanie: zasięg pieszy liczony falowo po siatce lądu (`js/walkgrid.js`), woda = bariera, mosty/kładki/mola = przejezdne korytarze. Zweryfikowane: Westerplatte (fiolet zamiast żółci przez kanał), Warszawa (Praga przez mosty, przewężenia przy przeprawach). Commit `994f52e`.
+- **SKM Gdańsk — zawyżone czasy przejazdu (backlog #1).** Przyczyna: `timeToMin` obcinał sekundy + delta odjazd−odjazd wliczała postój na przystanku docelowym (feed SKM ma sekundy i realne postoje). Zaspa→Wrzeszcz: 180 s zamiast 96 s. Rozwiązanie: format danych v3 (sekundy + osobno odjazd/przyjazd, czysta jazda = arr[i+1]−dep[i]). Kod: `tools/build-data.mjs`, `js/data.js` (dekoder v2/v3 wstecznie zgodny), `js/router.js`; rebuild trojmiasto+warszawa. Sesja 2026-07-18 (§1, niezacommitowane).
+- **Tryb bez spaceru — koła bez bariery wody (backlog #7).** `walk=false` rysował stałe koła 200 m crow-fly (mogły przeciąć wąski kanał). Rozwiązanie: siatka lądu też dla `walk=false` (`computeNoWalkGrid` w `js/walkgrid.js`) — strefa 200 m wokół przystanku mierzona po lądzie, woda blokuje, kolor = pasmo przyjazdu przystanku (bez czasu dojścia). Kod: `js/isochrone.js` (export `NO_WALK_RADIUS_M`), `js/walkgrid.js`, `js/app.js`. Zweryfikowane syntetycznie (bariera/cap/nakładanie) + realnie (Trójmiasto). Dalekie stacje poza bboxem nadal koła crow-fly = osobny backlog #10. Sesja 2026-07-18 (§1, niezacommitowane).
+- **Popup trasy — spójny dobór przystanku (`pickTargetStop`).** Dobór przystanku docelowego w dymku trasy liczył dojście crow-fly przez wodę; przepisane na łączny czas z fali po lądzie (`gridTime[idx]`), crow-fly tylko poza bboxem siatki / w trybie bez spaceru. Sesja 2026-07-15 (§1, niezacommitowane).
+- **Przekraczanie wody — czasy fali nierealnie krótkie (backlog #4).** Diagnoza (2026-07-18) rozdzieliła dwa przypadki użytkownika:
+  - (a) Trójmiasto Nowy Port → Muzeum Westerplatte „21 min" = autobus (Terminal Promowy 20.58 min, objazd mostem Sucharskiego) + 1 min spacer. Fala pieszo z origin do Westerplatte / Twierdza Wisłoujście / Terminal Promowy = UNREACH — NIE przecieka. Wynik autobusowy poprawny. (Otwarte, osobno: dlaczego autobus w apce 20 min a Google „1h 30 min" transportem publicznym — prawdopodobnie różnica SKM vs autobus miejski w widoku Google.)
+  - (b) Warszawa Saska Kępa → Bartycka Siekierki bez autobusów: apka „48 min" pieszo, Google „1h 12 min". FAKTYCZNY PRZECIEK — raster wody miał dziury na Wiśle poniżej Śródmieścia (tylko poligony `natural=water`, brak `waterway=river/canal`). Fix: dodane linie `waterway=river/canal` do maski wody + stroke ~100 m w rasterze. Po fixie Bartycka = UNREACH (realny objazd mostem >90 min). Kod: `tools/build-water.mjs`, `js/data.js`, `js/walkgrid.js`, `js/map.js`, `js/app.js`; rebuild wszystkich 18 miast. Commit `85c7121`.
