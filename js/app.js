@@ -6,10 +6,10 @@
 
 import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, DAY_LABELS, distM, WALK_MPS } from './data.js';
 import { computeReachability } from './router.js';
-import { buildZones, BANDS } from './isochrone.js';
+import { buildZones, BANDS, NO_WALK_RADIUS_M } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { computeStats } from './stats.js';
-import { buildWalkGrid, computeTimeGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, UNREACH } from './walkgrid.js';
+import { buildWalkGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, UNREACH } from './walkgrid.js';
 
 const CITIES = await loadCities();
 const DEFAULT_CITY = 'trojmiasto';
@@ -570,8 +570,10 @@ async function recompute() {
     map.closePopup();
 
     let gridTime = null, grid = null;
-    if (state.walk && cityAssets) {
-      // zasięg pieszy po lądzie: woda blokuje, mosty przepuszczają
+    if (cityAssets) {
+      // strefy na siatce lądu: woda blokuje, mosty przepuszczają.
+      // walk=true — fala pieszo (czas dojazdu + dojście); walk=false — koła 200 m
+      // wokół przystanków przycięte wodą (bez czasu dojścia)
       grid = buildWalkGrid(state.city, cityCfg(), cityAssets.water, cityAssets.bridges, cityAssets.city);
       const seedsFor = (mins, origin) => {
         const seeds = [];
@@ -587,12 +589,23 @@ async function recompute() {
         }
         return seeds;
       };
-      if (state.compare) {
-        const t1 = computeTimeGrid(grid, seedsFor(res.minutes, state.point)).slice();
-        const t2 = computeTimeGrid(grid, seedsFor(res2.minutes, state.point2));
-        gridTime = maxTimeGrid(grid, t1, t2);
+      if (state.walk) {
+        if (state.compare) {
+          const t1 = computeTimeGrid(grid, seedsFor(res.minutes, state.point)).slice();
+          const t2 = computeTimeGrid(grid, seedsFor(res2.minutes, state.point2));
+          gridTime = maxTimeGrid(grid, t1, t2);
+        } else {
+          gridTime = computeTimeGrid(grid, seedsFor(minutes, state.point));
+        }
       } else {
-        gridTime = computeTimeGrid(grid, seedsFor(minutes, state.point));
+        // bez spaceru: origin nie jest źródłem (dojście tylko od przystanku)
+        if (state.compare) {
+          const t1 = computeNoWalkGrid(grid, seedsFor(res.minutes, null), NO_WALK_RADIUS_M).slice();
+          const t2 = computeNoWalkGrid(grid, seedsFor(res2.minutes, null), NO_WALK_RADIUS_M);
+          gridTime = maxTimeGrid(grid, t1, t2);
+        } else {
+          gridTime = computeNoWalkGrid(grid, seedsFor(minutes, null), NO_WALK_RADIUS_M);
+        }
       }
       zoneLayer.setGrid({
         canvas: renderTimeGrid(grid, gridTime),
@@ -607,7 +620,7 @@ async function recompute() {
           anyOutside = true;
         }
       }
-      zoneLayer.setZones(anyOutside ? buildZones(net, outside, { walk: true, origin: null }) : null);
+      zoneLayer.setZones(anyOutside ? buildZones(net, outside, { walk: state.walk, origin: null }) : null);
     } else {
       zoneLayer.setGrid(null);
       zoneLayer.setZones(buildZones(net, minutes, {

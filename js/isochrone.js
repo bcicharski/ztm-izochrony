@@ -18,7 +18,7 @@ export const BANDS = [
 ];
 
 /** Promień wizualny przystanku w trybie bez spaceru [m]. */
-const NO_WALK_RADIUS_M = 200;
+export const NO_WALK_RADIUS_M = 200;
 /** Minimalny rysowany promień [m] — żeby strefa nie znikała przy t ≈ limit. */
 const MIN_RADIUS_M = 60;
 

@@ -174,6 +174,80 @@ export function computeTimeGrid(grid, seeds) {
   return time;
 }
 
+/**
+ * Tryb bez spaceru: strefy o promieniu `radiusM` wokół przystanków, mierzone
+ * PO LĄDZIE (woda blokuje, jak w `computeTimeGrid`), ale bez dodawania czasu
+ * dojścia — każdy piksel dostaje czysty czas przyjazdu przystanku-źródła
+ * (kolor = pasmo przystanku, tak jak dawne stałe koła 200 m, tylko przycięte
+ * geometrią wody). Przy nakładaniu stref wygrywa wcześniejszy przyjazd
+ * (mniejsze sekundy), a przy remisie — bliższy przystanek (mniejszy `spread`);
+ * to samo pierwszeństwo, co rysowanie kół „najcieplejsza na wierzchu".
+ *
+ * Uwaga: przy nakładających się strefach dwóch przystanków propagacja nie
+ * przechodzi przez piksele już zajęte przez wcześniejszy przyjazd, więc na
+ * styku może wystąpić minimalne (podpikselowe przy res 25–40 m) niedopokrycie
+ * po stronie zachowawczej — bez wpływu wizualnego.
+ *
+ * @param {object} grid   siatka z `buildWalkGrid`
+ * @param {Array<[number, number]>} seeds  [pxIndex, sekundy przyjazdu] (bez origin)
+ * @param {number} radiusM  promień strefy wokół przystanku [m]
+ * @returns {Uint16Array} grid.time (sekundy przyjazdu, UNREACH = poza strefami)
+ */
+export function computeNoWalkGrid(grid, seeds, radiusM) {
+  const { W, H, res, land, time } = grid;
+  time.fill(UNREACH);
+  const spread = new Uint16Array(W * H).fill(0xffff); // metry po lądzie od przystanku-źródła
+  const orth = res;
+  const diag = Math.round(res * Math.SQRT2);
+  const buckets = new Array(CAP_SEC + 1);
+
+  const push = (idx, arr, sp) => {
+    if (sp > radiusM) return;
+    if (arr < time[idx] || (arr === time[idx] && sp < spread[idx])) {
+      time[idx] = arr;
+      spread[idx] = sp;
+      (buckets[arr] ??= []).push(idx);
+    }
+  };
+  for (const [idx0, sec] of seeds) {
+    if (idx0 < 0 || idx0 >= W * H) continue;
+    let idx = idx0;
+    if (!land[idx]) {
+      // przystanek na pikselu wody (pomost, błąd rastra) — przenieś na sąsiada lądowego
+      for (const d of [-1, 1, -W, W]) {
+        const j = idx + d;
+        if (j >= 0 && j < W * H && land[j]) { idx = j; break; }
+      }
+      if (!land[idx]) continue;
+    }
+    push(idx, Math.min(sec, CAP_SEC), 0);
+  }
+
+  // przetwarzanie kubełkami po czasie przyjazdu (rosnąco) = wcześniejszy koloruje pierwszy;
+  // wewnątrz kubełka BFS po lądzie do promienia (kubełek rośnie w trakcie iteracji)
+  for (let arr = 0; arr <= CAP_SEC; arr++) {
+    const bucket = buckets[arr];
+    if (!bucket) continue;
+    for (let bi = 0; bi < bucket.length; bi++) {
+      const idx = bucket[bi];
+      if (time[idx] !== arr) continue; // przejęty przez wcześniejszy przyjazd
+      const sp = spread[idx];
+      const x = idx % W, y = (idx / W) | 0;
+      const left = x > 0, right = x < W - 1, up = y > 0, down = y < H - 1;
+      if (left && land[idx - 1]) push(idx - 1, arr, sp + orth);
+      if (right && land[idx + 1]) push(idx + 1, arr, sp + orth);
+      if (up && land[idx - W]) push(idx - W, arr, sp + orth);
+      if (down && land[idx + W]) push(idx + W, arr, sp + orth);
+      if (left && up && land[idx - W - 1]) push(idx - W - 1, arr, sp + diag);
+      if (right && up && land[idx - W + 1]) push(idx - W + 1, arr, sp + diag);
+      if (left && down && land[idx + W - 1]) push(idx + W - 1, arr, sp + diag);
+      if (right && down && land[idx + W + 1]) push(idx + W + 1, arr, sp + diag);
+    }
+    buckets[arr] = undefined;
+  }
+  return time;
+}
+
 /** Punkt (lat, lon) -> indeks piksela albo -1 poza siatką. */
 export function pixelIndex(grid, lat, lon) {
   const x = Math.round(grid.toX(lon)), y = Math.round(grid.toY(lat));
