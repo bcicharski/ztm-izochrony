@@ -25,7 +25,8 @@ const NO_FOOT = /motorway|trunk|construction|proposed|raceway/;
 
 for (const cityKey of keys) {
   const cfg = cities[cityKey];
-  const [s, w, n, e] = cfg.bbox;
+  // ten sam prostokąt co siatka piesza i maska wody (patrz build-water.mjs)
+  const [s, w, n, e] = cfg.gridBbox ?? cfg.bbox;
   const query = `[out:json][timeout:240];(
   way["bridge"]["highway"](${s},${w},${n},${e});
   way["man_made"="pier"](${s},${w},${n},${e});

@@ -133,7 +133,10 @@ linia brzegowa, czyli praktycznie nigdy).
   feed SKM sięga jednak aż po Wejherowo/Lębork i Tczew.
 - Dojście piesze liczone falowo po siatce lądu (~25–40 m; woda blokuje,
   mosty/kładki/mola z OSM przepuszczają — `tools/build-bridges.mjs` →
-  `data/<miasto>/bridges.json`), bez rzeczywistej siatki ulic; przystanki
-  poza bboxem miasta (dalekie stacje kolejowe) mają uproszczony zasięg kołowy.
+  `data/<miasto>/bridges.json`), bez rzeczywistej siatki ulic. Siatka pokrywa
+  `gridBbox` z `cities.json` (bbox miasta poszerzony o przystanki do ~5 km za
+  jego granicą, np. Pruszcz Gdański, Wieliczka); dalekie stacje kolejowe
+  (Lębork, Tczew, Działdowo) leżą poza nią i mają uproszczony zasięg kołowy
+  ograniczony do 1 km, bez bariery wody.
 - Tryb „ogólnie" jest optymistyczny: skleja najszybsze odcinki różnych
   kursów i nie wlicza oczekiwania.

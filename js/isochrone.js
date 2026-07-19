@@ -19,25 +19,34 @@ export const BANDS = [
 
 /** Promień wizualny przystanku w trybie bez spaceru [m]. */
 export const NO_WALK_RADIUS_M = 200;
+/**
+ * Cap promienia dla przystanków POZA siatką pieszą (dalekie stacje: Lębork,
+ * Tczew, Działdowo). Pełny promień pasma to nawet 5,2 km (90 min × tempo), a bez
+ * siatki nie ma bariery wody ani lądu — takie koło malowało pół powiatu i zlewało
+ * się w jedną plamę. 1 km ≈ 17 min marszu: uczciwy zasięg stacji, nie kontynent.
+ */
+export const OUTSIDE_MAX_RADIUS_M = 1000;
 /** Minimalny rysowany promień [m] — żeby strefa nie znikała przy t ≈ limit. */
 const MIN_RADIUS_M = 60;
 
 /**
  * @param {object} net     sieć (dla współrzędnych przystanków)
  * @param {Float64Array} minutes  czas dojazdu per przystanek
- * @param {{walk: boolean, origin: {lat:number, lon:number}}} opts
+ * @param {{walk: boolean, origin: {lat:number, lon:number}, maxRadiusM?: number}} opts
+ *        `maxRadiusM` — górny cap promienia (fallback dla przystanków poza siatką)
  * @returns {Array<{color: string, circles: Array<[lat, lon, radiusM]>}>}
  *          kolejność: od najchłodniejszej (rysować pierwszą) do najcieplejszej
  */
 export function buildZones(net, minutes, opts) {
   const zones = BANDS.map(b => ({ limit: b.limit, color: b.color, circles: [] }));
+  const cap = opts.maxRadiusM ?? Infinity;
 
   if (opts.walk) {
     // punkt startowy zachowuje się jak przystanek o czasie 0
     // (w trybie porównania origin jest pomijany — obszar wyznaczają przystanki)
     if (opts.origin) {
       for (let b = 0; b < BANDS.length; b++) {
-        zones[b].circles.push([opts.origin.lat, opts.origin.lon, BANDS[b].limit * 60 * WALK_MPS]);
+        zones[b].circles.push([opts.origin.lat, opts.origin.lon, Math.min(BANDS[b].limit * 60 * WALK_MPS, cap)]);
       }
     }
     for (let i = 0; i < net.nStops; i++) {
@@ -45,7 +54,7 @@ export function buildZones(net, minutes, opts) {
       if (t > 90) continue;
       for (let b = 0; b < BANDS.length; b++) {
         if (t <= BANDS[b].limit) {
-          const r = Math.max((BANDS[b].limit - t) * 60 * WALK_MPS, MIN_RADIUS_M);
+          const r = Math.max(Math.min((BANDS[b].limit - t) * 60 * WALK_MPS, cap), MIN_RADIUS_M);
           zones[b].circles.push([net.lat[i], net.lon[i], r]);
         }
       }

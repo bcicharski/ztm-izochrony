@@ -45,6 +45,7 @@
       { "name": "zdzit-olsztyn", "url": "https://cdn.zbiorkom.live/gtfs/olsztyn.zip" }
     ],
     "bbox": [53.68, 20.3, 53.86, 20.6],
+    "gridBbox": [53.62, 20.22, 53.92, 20.69],
     "boundaries": ["Olsztyn"],
     "areaLabel": "% Olsztyna",
     "center": [53.778, 20.48],
@@ -66,6 +67,7 @@
       { "name": "mzk-torun", "url": "https://mkuran.pl/gtfs/torun.zip" }
     ],
     "bbox": [52.9, 18.45, 53.09, 18.75],
+    "gridBbox": [52.9, 18.38, 53.15, 18.84],
     "boundaries": ["Toruń"],
     "areaLabel": "% Torunia",
     "center": [53.012, 18.605],
@@ -87,6 +89,7 @@
       { "name": "ztm-kielce", "url": "https://mkuran.pl/gtfs/kielce.zip" }
     ],
     "bbox": [50.78, 20.5, 50.94, 20.78],
+    "gridBbox": [50.72, 20.41, 51, 20.87],
     "boundaries": ["Kielce"],
     "areaLabel": "% Kielc",
     "center": [50.87, 20.63],
@@ -107,6 +110,7 @@
       { "name": "mzk-opole", "url": "https://cdn.zbiorkom.live/gtfs/opole.zip" }
     ],
     "bbox": [50.6, 17.85, 50.74, 18.02],
+    "gridBbox": [50.56, 17.77, 50.79, 18.02],
     "boundaries": ["Opole"],
     "areaLabel": "% Opola",
     "center": [50.667, 17.925],
@@ -127,6 +131,7 @@
       { "name": "mzk-zg", "url": "https://www.mzk.zgora.pl/storage/website/dla_deweloperow_74ib2.zip" }
     ],
     "bbox": [51.83, 15.42, 52.0, 15.68],
+    "gridBbox": [51.83, 15.42, 52.02, 15.68],
     "boundaries": ["Zielona Góra"],
     "areaLabel": "% Zielonej Góry",
     "center": [51.938, 15.505],
@@ -147,6 +152,7 @@
       { "name": "mzk-gorzow", "url": "https://cdn.zbiorkom.live/gtfs/gorzow.zip" }
     ],
     "bbox": [52.68, 15.05, 52.81, 15.38],
+    "gridBbox": [52.68, 15.03, 52.83, 15.38],
     "boundaries": ["Gorzów Wielkopolski"],
     "areaLabel": "% Gorzowa",
     "center": [52.735, 15.235],
@@ -172,6 +178,7 @@
       { "name": "polregio", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["PR"], "keepBbox": [54.25, 18.0, 54.72, 19.15] }
     ],
     "bbox": [54.28, 18.05, 54.68, 19.10],
+    "gridBbox": [54.22, 18.01, 54.73, 19.1],
     "seaClose": { "n": 54.85, "e": 19.25 },
     "boundaries": ["Gdańsk", "Sopot", "Gdynia", "Reda", "Rumia", "Wejherowo"],
     "areaLabel": "% obszaru",
@@ -203,6 +210,7 @@
       { "name": "km", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KM"] }
     ],
     "bbox": [52.05, 20.75, 52.40, 21.30],
+    "gridBbox": [51.99, 20.66, 52.46, 21.38],
     "boundaries": ["Warszawa"],
     "areaLabel": "% Warszawy",
     "center": [52.23, 21.01],
@@ -228,6 +236,7 @@
       { "name": "mpk", "url": "https://api.open-data.cui.wroclaw.pl/od2/6/", "resolve": "wroclaw-od2" }
     ],
     "bbox": [50.95, 16.8, 51.22, 17.2],
+    "gridBbox": [50.95, 16.71, 51.26, 17.29],
     "boundaries": ["Wrocław"],
     "areaLabel": "% Wrocławia",
     "center": [51.11, 17.03],
@@ -251,6 +260,7 @@
       { "name": "ztp-mobilis", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_M.zip" }
     ],
     "bbox": [49.95, 19.75, 50.15, 20.25],
+    "gridBbox": [49.89, 19.66, 50.21, 20.33],
     "boundaries": ["Kraków"],
     "areaLabel": "% Krakowa",
     "center": [50.06, 19.95],
@@ -280,6 +290,7 @@
       { "name": "ztm-gzm", "url": "https://otwartedane.metropoliagzm.pl/api/3/action/package_show?id=rozklady-jazdy-gtfs-wersja-tymczasowa", "resolve": "ckan-latest" }
     ],
     "bbox": [50.05, 18.35, 50.65, 19.55],
+    "gridBbox": [49.99, 18.35, 50.65, 19.55],
     "boundaries": ["Górnośląsko-Zagłębiowska Metropolia"],
     "adminLevel": 5,
     "areaLabel": "% metropolii",
@@ -304,6 +315,7 @@
       { "name": "ztm-poznan", "url": "https://www.ztm.poznan.pl/pl/dla-deweloperow/getGTFSFile", "accept": "application/octet-stream" }
     ],
     "bbox": [52.25, 16.70, 52.55, 17.15],
+    "gridBbox": [52.19, 16.61, 52.6, 17.24],
     "boundaries": ["Poznań"],
     "areaLabel": "% Poznania",
     "center": [52.408, 16.925],
@@ -326,6 +338,7 @@
       { "name": "zditm", "url": "https://www.zditm.szczecin.pl/storage/gtfs/gtfs.zip" }
     ],
     "bbox": [53.3, 14.4, 53.6, 14.9],
+    "gridBbox": [53.27, 14.32, 53.6, 14.9],
     "boundaries": ["Szczecin"],
     "areaLabel": "% Szczecina",
     "center": [53.43, 14.56],
@@ -348,6 +361,7 @@
       { "name": "ztm-lublin", "url": "https://mkuran.pl/gtfs/lublin.zip" }
     ],
     "bbox": [51.14, 22.45, 51.32, 22.7],
+    "gridBbox": [51.08, 22.36, 51.38, 22.79],
     "boundaries": ["Lublin"],
     "areaLabel": "% Lublina",
     "center": [51.245, 22.565],
@@ -369,6 +383,7 @@
       { "name": "zdmikp", "url": "https://mkuran.pl/gtfs/bydgoszcz.zip" }
     ],
     "bbox": [53.05, 17.85, 53.2, 18.2],
+    "gridBbox": [53, 17.78, 53.26, 18.28],
     "boundaries": ["Bydgoszcz"],
     "areaLabel": "% Bydgoszczy",
     "center": [53.125, 18.01],
@@ -390,6 +405,7 @@
       { "name": "zdit-lodz", "url": "https://cdn.zbiorkom.live/gtfs/lodz.zip" }
     ],
     "bbox": [51.68, 19.28, 51.87, 19.68],
+    "gridBbox": [51.63, 19.19, 51.93, 19.77],
     "boundaries": ["Łódź"],
     "areaLabel": "% Łodzi",
     "center": [51.759, 19.457],

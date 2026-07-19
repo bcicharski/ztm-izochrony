@@ -19,7 +19,7 @@ const gridCache = new Map(); // cityKey -> grid
 /**
  * Buduje statyczną siatkę lądu dla miasta (raz, cache).
  * @param {string} cityKey
- * @param {object} cfg          wpis z cities.json (bbox)
+ * @param {object} cfg          wpis z cities.json (`gridBbox`, w razie braku `bbox`)
  * @param {{polys:Array,lines:Array}|null} water  poligony akwenów + linie rzek/kanałów
  * @param {Array|null} bridges  linie mostów [[ [lat,lon], ...], ...]
  * @param {Array|null} city     granice miasta (do statystyk % powierzchni)
@@ -27,7 +27,10 @@ const gridCache = new Map(); // cityKey -> grid
 export function buildWalkGrid(cityKey, cfg, water, bridges, city) {
   if (gridCache.has(cityKey)) return gridCache.get(cityKey);
 
-  const [latS, lonW, latN, lonE] = cfg.bbox;
+  // gridBbox = bbox poszerzony o przystanki tuż za granicą sieci (Pruszcz Gdański,
+  // Wieliczka…). Bez tego wpadały do fallbacku kołowego i dostawały koła crow-fly
+  // bez bariery wody. Maski wody/mostów są budowane na tym samym prostokącie.
+  const [latS, lonW, latN, lonE] = cfg.gridBbox ?? cfg.bbox;
   const mPerDegLon = M_PER_DEG_LAT * Math.cos(((latN + latS) / 2) * Math.PI / 180);
   const spanX = (lonE - lonW) * mPerDegLon;
   const spanY = (latN - latS) * M_PER_DEG_LAT;

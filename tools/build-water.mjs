@@ -31,7 +31,10 @@ if (!cities[cityKey]) {
   process.exit(1);
 }
 const cfg = cities[cityKey];
-const BBOX = { s: cfg.bbox[0], w: cfg.bbox[1], n: cfg.bbox[2], e: cfg.bbox[3] };
+// maska musi pokrywać CAŁĄ siatkę pieszą, więc bierze `gridBbox` (bbox poszerzony
+// o przystanki tuż za granicą sieci); brak pola = stary bbox
+const gb = cfg.gridBbox ?? cfg.bbox;
+const BBOX = { s: gb[0], w: gb[1], n: gb[2], e: gb[3] };
 const SEA = cfg.seaClose ?? null; // domknięcie morza — tylko miasta nadmorskie
 const MIN_AREA_KM2 = 0.02;   // pomijaj oczka mniejsze niż ~2 ha
 const SIMPLIFY_M = 15;       // tolerancja upraszczania Douglas-Peucker

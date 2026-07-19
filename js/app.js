@@ -6,7 +6,7 @@
 
 import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, DAY_LABELS, distM, WALK_MPS } from './data.js';
 import { computeReachability } from './router.js';
-import { buildZones, BANDS, NO_WALK_RADIUS_M } from './isochrone.js';
+import { buildZones, BANDS, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { computeStats } from './stats.js';
 import { buildWalkGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
@@ -688,7 +688,9 @@ async function recompute() {
         canvas: renderTimeGrid(grid, gridTime),
         latN: grid.latN, lonW: grid.lonW, latS: grid.latS, lonE: grid.lonE,
       });
-      // koła tylko dla przystanków poza bboxem siatki (np. dalekie stacje SKM)
+      // koła tylko dla przystanków poza bboxem siatki (np. Lębork, Tczew w feedzie
+      // SKM). Promień ograniczony capem — pełny promień pasma (do 5,2 km) rysowany
+      // bez bariery wody zlewał się w plamę większą niż zasięg siatki
       const outside = new Float64Array(minutes.length).fill(Infinity);
       let anyOutside = false;
       for (let i = 0; i < net.nStops; i++) {
@@ -697,7 +699,9 @@ async function recompute() {
           anyOutside = true;
         }
       }
-      zoneLayer.setZones(anyOutside ? buildZones(net, outside, { walk: state.walk, origin: null }) : null);
+      zoneLayer.setZones(anyOutside
+        ? buildZones(net, outside, { walk: state.walk, origin: null, maxRadiusM: OUTSIDE_MAX_RADIUS_M })
+        : null);
     } else {
       // brak geometrii miasta: koła crow-fly. W trybie „tylko pieszo" zostają
       // same koła wokół punktu (bez przystanków), więc origin jest niezbędny
