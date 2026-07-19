@@ -4,7 +4,7 @@ Statyczna strona pokazująca, jak daleko można dotrzeć komunikacją miejską
 (z przesiadkami, opcjonalnie z dojściem pieszym) w ciągu
 10 / 20 / 30 / 45 / 60 / ponad 60 minut. Obsługiwane miasta: **Trójmiasto**
 (ZTM Gdańsk + ZKM Gdynia + SKM/PKM), **Warszawa** (tramwaje, autobusy, metro,
-kolej miejska), **Wrocław**, **Kraków** (z autobusami aglomeracyjnymi),
+kolej miejska), **Wrocław**, **Kraków** (z autobusami aglomeracyjnymi i koleją SKA),
 **Poznań** i **Łódź**.
 Całość liczy się w przeglądarce — bez backendu; wszystko, co miejskie
 (feedy GTFS, granice, maski wody, punkty domyślne, grupy pojazdów, atrybucje),

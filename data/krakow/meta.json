@@ -1,13 +1,14 @@
 {
   "city": "krakow",
-  "generated": "2026-07-13T11:53:21.165Z",
-  "feedEndDate": "20261008",
+  "generated": "2026-07-19T23:36:06.589Z",
+  "feedEndDate": "20260829",
   "dates": {
-    "workday": "20260714",
-    "saturday": "20260718",
-    "sunday": "20260719"
+    "workday": "20260721",
+    "saturday": "20260725",
+    "sunday": "20260726"
   },
   "sources": [
-    "ZTP Kraków — https://gtfs.ztp.krakow.pl/"
+    "ZTP Kraków — https://gtfs.ztp.krakow.pl/",
+    "Koleje Małopolskie / SKA (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
   ]
 }

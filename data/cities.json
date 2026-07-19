@@ -257,7 +257,8 @@
     "feeds": [
       { "name": "ztp-bus", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_A.zip" },
       { "name": "ztp-tram", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_T.zip" },
-      { "name": "ztp-mobilis", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_M.zip" }
+      { "name": "ztp-mobilis", "url": "https://gtfs.ztp.krakow.pl/GTFS_KRK_M.zip" },
+      { "name": "ska", "url": "https://mkuran.pl/gtfs/polish_trains.zip", "keepAgency": ["KML"], "keepBbox": [49.9, 19.55, 50.25, 20.4] }
     ],
     "bbox": [49.95, 19.75, 50.15, 20.25],
     "gridBbox": [49.89, 19.66, 50.21, 20.33],
@@ -270,10 +271,12 @@
     "viewbox": "19.75,50.15,20.25,49.95",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [900, 0] },
-      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
+      { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
+      { "key": "rail", "label": "🚆 SKA", "types": [2] }
     ],
     "credits": [
-      { "label": "ZTP Kraków", "url": "https://gtfs.ztp.krakow.pl/" }
+      { "label": "ZTP Kraków", "url": "https://gtfs.ztp.krakow.pl/" },
+      { "label": "Koleje Małopolskie / SKA (GTFS: mkuran.pl)", "url": "https://mkuran.pl/gtfs/" }
     ],
     "rt": {
       "type": "gtfsrt",
