@@ -1,11 +1,11 @@
 {
   "city": "wroclaw",
-  "generated": "2026-07-13T11:53:08.883Z",
-  "feedEndDate": "20260726",
+  "generated": "2026-07-20T06:33:15.888Z",
+  "feedEndDate": "20260808",
   "dates": {
-    "workday": "20260714",
-    "saturday": "20260718",
-    "sunday": "20260719"
+    "workday": "20260721",
+    "saturday": "20260725",
+    "sunday": "20260726"
   },
   "sources": [
     "Wrocław Otwarte Dane (MPK) — https://open-data.cui.wroclaw.pl"
