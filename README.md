@@ -36,9 +36,9 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
 - **Kierunek** — *Z miejsca*: dokąd dotrę z punktu; *Do miejsca*: skąd zdążę
   dotrzeć do punktu.
 - **Dojście piesze** — wliczone dojście do przystanków i od przystanku
-  docelowego (4,5 km/h ÷ współczynnik krętości ulic 1,3); po wyłączeniu
-  liczy się wyłącznie od najbliższego zespołu przystankowego, a przesiadki
-  tylko w ramach tego samego zespołu.
+  docelowego, liczone **po realnej sieci ulic, chodników i ścieżek z OSM**
+  (4,5 km/h); po wyłączeniu liczy się wyłącznie od najbliższego zespołu
+  przystankowego, a przesiadki tylko w ramach tego samego zespołu.
 - **Ogólnie** — suma czasów przejazdu i przejść, bez czekania na pojazdy
   (algorytm Dijkstry na minimalnych czasach odcinków).
 - **O godzinie** — rzeczywisty rozkład z oczekiwaniem na przesiadki
@@ -104,12 +104,14 @@ css/style.css          style (paleta UI: 5 kolorów)
 js/app.js              stan aplikacji i spięcie kontrolek
 js/data.js             ładowanie i dekodowanie data/*.json
 js/router.js           RAPTOR (tryb godzinowy) + Dijkstra (tryb ogólny)
+js/walknet.js          routing pieszy po grafie ulic z OSM
 js/isochrone.js        czasy dojazdu -> geometria stref (koła spacerowe)
 js/map.js              Leaflet + warstwa canvas rysująca strefy
 js/stats.js            statystyki: maks. zasięg i % powierzchni miasta
 data/cities.json       konfiguracja miast (feedy, granice, pojazdy, punkty)
 tools/fetch-feeds.mjs  pobieranie i rozpakowanie feedów miasta
 tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/<miasto>/*.json
+tools/build-walknet.mjs graf dróg pieszych z OSM -> data/<miasto>/walknet.json
 tools/build-water.mjs  maska wody z OSM/Overpass -> data/<miasto>/water.json
 tools/build-city.mjs   granice administracyjne -> data/<miasto>/city.json
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*
@@ -131,12 +133,20 @@ linia brzegowa, czyli praktycznie nigdy).
 
 - Bez połączeń regionalnych spoza sieci miejskiej (Polregio, PKS itd.);
   feed SKM sięga jednak aż po Wejherowo/Lębork i Tczew.
-- Dojście piesze liczone falowo po siatce lądu (~25–40 m; woda blokuje,
-  mosty/kładki/mola z OSM przepuszczają — `tools/build-bridges.mjs` →
-  `data/<miasto>/bridges.json`), bez rzeczywistej siatki ulic. Siatka pokrywa
-  `gridBbox` z `cities.json` (bbox miasta poszerzony o przystanki do ~5 km za
-  jego granicą, np. Pruszcz Gdański, Wieliczka); dalekie stacje kolejowe
-  (Lębork, Tczew, Działdowo) leżą poza nią i mają uproszczony zasięg kołowy
-  ograniczony do 1 km, bez bariery wody.
+- Dojście piesze liczone po grafie dróg z OSM (`tools/build-walknet.mjs` →
+  `data/<miasto>/walknet.json`); od sieci strefa rozlewa się na ~75 m po
+  rastrze lądu, więc wnętrza dużych zamkniętych kwartałów zostają puste.
+  Zanim graf się dociągnie (~1 MB), strefy rysuje sama fala po rastrze lądu
+  (woda blokuje, mosty/kładki/mola z OSM przepuszczają), która nie zna ulic.
+  Zakres jak siatka — `gridBbox` z `cities.json` (bbox miasta poszerzony
+  o przystanki do ~5 km za jego granicą, np. Pruszcz Gdański, Wieliczka);
+  dalekie stacje kolejowe (Lębork, Tczew, Działdowo) leżą poza nim i mają
+  uproszczony zasięg kołowy ograniczony do 1 km, bez bariery wody.
+- Czasy dojścia **wewnątrz silnika rozkładowego** (dobór przystanków
+  startowych i przesiadki piesze ≤500 m) są nadal liczone w linii prostej
+  z ryczałtem na krętość ulic 1,3 — graf wpływa na kształt stref i na czasy
+  pokazywane na mapie, ale nie na to, które przesiadki RAPTOR uzna za możliwe.
+- Sieć piesza nie rozróżnia przewyższeń, schodów ani jakości nawierzchni:
+  wszystkie drogi przechodzi się z tą samą prędkością 4,5 km/h.
 - Tryb „ogólnie" jest optymistyczny: skleja najszybsze odcinki różnych
   kursów i nie wlicza oczekiwania.

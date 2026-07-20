@@ -269,6 +269,24 @@ export async function loadCity(cityKey) {
   return loadRings(`data/${cityKey}/city.json`);
 }
 
+/**
+ * Sieć piesza z OSM (graf ulic i ścieżek) — `null`, gdy miasto jej nie ma
+ * (wtedy zasięg pieszy liczy sam raster lądu, jak przed wprowadzeniem grafu).
+ * Plik jest największym zasobem miasta (~1 MB po kompresji), więc ładowany
+ * jest osobno i asynchronicznie — aplikacja działa, zanim dojedzie.
+ */
+export async function loadWalkNet(cityKey) {
+  const url = `data/${cityKey}/walknet.json`;
+  if (!cache.has(url)) {
+    cache.set(url, fetch(url).then(async r => {
+      if (!r.ok) return null;
+      const { decodeWalkNet } = await import('./walknet.js');
+      return decodeWalkNet(await r.json());
+    }).catch(() => null));
+  }
+  return cache.get(url);
+}
+
 /** Mosty/kładki/mola (przejezdne korytarze przez wodę w siatce pieszej). */
 export async function loadBridges(cityKey) {
   const url = `data/${cityKey}/bridges.json`;

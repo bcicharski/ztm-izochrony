@@ -128,30 +128,57 @@ export const UNREACH = 65535;
 /**
  * Propagacja czasu po lądzie od źródeł [pxIndex, sekundy].
  * Wynik w grid.time (sekundy, UNREACH = nieosiągalne).
+ *
+ * `maxSpreadM` ogranicza odległość po lądzie od źródła. Używane przy routingu
+ * po sieci pieszej (js/walknet.js): źródłami są wtedy piksele leżące na
+ * ulicach, a rozlanie na pół kwartału zamienia pajęczynę linii w obszar, nie
+ * pozwalając jednocześnie skrócić sobie drogi przez środek dużego kwartału.
+ * Bez limitu (domyślnie) zachowanie jest takie jak dotąd.
+ *
+ * Uwaga: pamiętany jest zasięg ścieżki, która dała NAJKRÓTSZY czas — piksel
+ * osiągalny dłuższą, ale krótszą przestrzennie drogą może zostać ucięty.
+ * Odchylenie jest zachowawcze (nigdy nie zawyża zasięgu) i podpikselowe przy
+ * typowych proporcjach `maxSpreadM` do `res`.
  */
-export function computeTimeGrid(grid, seeds) {
+export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
   const { W, H, res, land, time } = grid;
-  time.fill(UNREACH);
+  if (seeds) time.fill(UNREACH);
   const orth = Math.max(1, Math.round(res / WALK_MPS));
   const diag = Math.round(orth * Math.SQRT2);
+  const limited = Number.isFinite(maxSpreadM);
+  const spread = limited ? new Uint16Array(W * H) : null;
 
   // kolejka kubełkowa po sekundach
   const buckets = new Array(CAP_SEC + 1);
   let pending = 0;
-  const push = (idx, t) => {
+  const push = (idx, t, sp = 0) => {
     if (t > CAP_SEC || t >= time[idx]) return;
+    if (limited) {
+      if (sp > maxSpreadM) return;
+      spread[idx] = sp;
+    }
     time[idx] = t;
     (buckets[t] ??= []).push(idx);
     pending++;
   };
-  for (const [idx, sec] of seeds) {
-    if (idx >= 0 && idx < W * H && land[idx]) push(idx, Math.min(sec, CAP_SEC));
-    else if (idx >= 0 && idx < W * H) {
-      // przystanek na pikselu wody (pomost, błąd rastra) — spróbuj sąsiadów
-      for (const d of [-1, 1, -W, W]) {
-        const j = idx + d;
-        if (j >= 0 && j < W * H && land[j]) { push(j, Math.min(sec, CAP_SEC)); break; }
+  if (seeds) {
+    for (const [idx, sec] of seeds) {
+      if (idx >= 0 && idx < W * H && land[idx]) push(idx, Math.min(sec, CAP_SEC));
+      else if (idx >= 0 && idx < W * H) {
+        // przystanek na pikselu wody (pomost, błąd rastra) — spróbuj sąsiadów
+        for (const d of [-1, 1, -W, W]) {
+          const j = idx + d;
+          if (j >= 0 && j < W * H && land[j]) { push(j, Math.min(sec, CAP_SEC)); break; }
+        }
       }
+    }
+  } else {
+    // bufor jest już zasiany (js/walknet.js paintNetwork) — zbierz do kubełków
+    for (let i = 0; i < time.length; i++) {
+      const t = time[i];
+      if (t >= UNREACH) continue;
+      (buckets[t] ??= []).push(i);
+      pending++;
     }
   }
 
@@ -161,16 +188,18 @@ export function computeTimeGrid(grid, seeds) {
     for (const idx of bucket) {
       pending--;
       if (time[idx] !== t) continue; // nieaktualny wpis
+      const sp = limited ? spread[idx] : 0;
+      const spO = sp + res, spD = sp + res * Math.SQRT2;
       const x = idx % W, y = (idx / W) | 0;
       const left = x > 0, right = x < W - 1, up = y > 0, down = y < H - 1;
-      if (left && land[idx - 1]) push(idx - 1, t + orth);
-      if (right && land[idx + 1]) push(idx + 1, t + orth);
-      if (up && land[idx - W]) push(idx - W, t + orth);
-      if (down && land[idx + W]) push(idx + W, t + orth);
-      if (left && up && land[idx - W - 1]) push(idx - W - 1, t + diag);
-      if (right && up && land[idx - W + 1]) push(idx - W + 1, t + diag);
-      if (left && down && land[idx + W - 1]) push(idx + W - 1, t + diag);
-      if (right && down && land[idx + W + 1]) push(idx + W + 1, t + diag);
+      if (left && land[idx - 1]) push(idx - 1, t + orth, spO);
+      if (right && land[idx + 1]) push(idx + 1, t + orth, spO);
+      if (up && land[idx - W]) push(idx - W, t + orth, spO);
+      if (down && land[idx + W]) push(idx + W, t + orth, spO);
+      if (left && up && land[idx - W - 1]) push(idx - W - 1, t + diag, spD);
+      if (right && up && land[idx - W + 1]) push(idx - W + 1, t + diag, spD);
+      if (left && down && land[idx + W - 1]) push(idx + W - 1, t + diag, spD);
+      if (right && down && land[idx + W + 1]) push(idx + W + 1, t + diag, spD);
     }
     buckets[t] = undefined;
   }

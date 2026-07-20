@@ -4,7 +4,8 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, DAY_LABELS, distM, WALK_MPS } from './data.js';
+import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, loadWalkNet, DAY_LABELS, distM, WALK_MPS } from './data.js';
+import { snapNode, computeNodeTimes, paintNetwork, SPREAD_M, NET_WALK_MPS } from './walknet.js';
 import { computeReachability } from './router.js';
 import { buildZones, BANDS, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
@@ -564,6 +565,70 @@ function showJourneyPopup(latlng) {
 // --- przeliczanie -------------------------------------------------------------
 
 let computeSeq = 0;
+let walkNet = null; // graf dróg pieszych bieżącego miasta (null = zostaje raster)
+
+/** Cap fali pieszej [s] — jak CAP_SEC w walkgrid.js (pasmo „ponad 60" do 90 min). */
+const WALK_CAP_SEC = 90 * 60;
+
+/**
+ * Przyłączenie przystanków do sieci pieszej. Liczone raz na parę
+ * (sieć piesza × sieć rozkładowa) i pamiętane przy grafie — snapowanie
+ * kilku tysięcy przystanków przy każdym przeliczeniu byłoby marnotrawstwem.
+ * @returns {Int32Array} indeks węzła grafu per przystanek (−1 = poza zasięgiem)
+ */
+function stopNodes(wnet, net) {
+  wnet.stopCache ??= new WeakMap();
+  let snapped = wnet.stopCache.get(net);
+  if (!snapped) {
+    snapped = new Int32Array(net.nStops);
+    for (let i = 0; i < net.nStops; i++) snapped[i] = snapNode(wnet, net.lat[i], net.lon[i]);
+    wnet.stopCache.set(net, snapped);
+  }
+  return snapped;
+}
+
+/**
+ * Fala piesza policzona po sieci ulic: czasy w węzłach grafu → źródła rastra
+ * → rozlanie na `SPREAD_M` od sieci. Zwraca `grid.time` albo `null`, gdy grafu
+ * nie ma (jeszcze się ładuje albo miasto go nie ma) — wtedy wywołujący spada
+ * do dawnej fali po rastrze lądu.
+ * @param {object} grid   siatka rastrowa
+ * @param {object} net    sieć rozkładowa (współrzędne przystanków)
+ * @param {Float64Array|null} mins  czasy dojazdu per przystanek; null = sam spacer
+ * @param {{lat:number, lng:number}|null} origin  punkt użytkownika
+ */
+function walkWaveOnNet(grid, net, mins, origin) {
+  if (!walkNet) return null;
+  const seeds = [];
+  // dojście od punktu/przystanku do najbliższej ulicy jest częścią podróży —
+  // węzeł dostaje czas startu powiększony o ten dojazd (w linii prostej,
+  // bo poza siecią nie ma po czym prowadzić trasy)
+  const linkSec = (lat, lon, node) =>
+    Math.round(distM(lat, lon, walkNet.lat[node], walkNet.lon[node]) / NET_WALK_MPS);
+  const extraSeeds = []; // źródła nanoszone wprost na raster (okolica punktu)
+  if (origin) {
+    const node = snapNode(walkNet, origin.lat, origin.lng);
+    if (node >= 0) seeds.push([node, linkSec(origin.lat, origin.lng, node)]);
+    // punkt zawsze koloruje swoje najbliższe otoczenie, nawet gdy leży
+    // daleko od jakiejkolwiek drogi (pole, plaża) i nie przyłączył się
+    const oIdx = pixelIndex(grid, origin.lat, origin.lng);
+    if (oIdx >= 0) extraSeeds.push([oIdx, 0]);
+  }
+  if (mins) {
+    const snapped = stopNodes(walkNet, net);
+    for (let i = 0; i < net.nStops; i++) {
+      const t = mins[i];
+      if (!(t <= 90) || snapped[i] < 0) continue;
+      seeds.push([snapped[i], Math.round(t * 60) + linkSec(net.lat[i], net.lon[i], snapped[i])]);
+    }
+  }
+  if (!seeds.length) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
+  const nodeTime = computeNodeTimes(walkNet, seeds, WALK_CAP_SEC);
+  // paintNetwork zasiewa grid.time wprost, więc computeTimeGrid dostaje null
+  paintNetwork(walkNet, nodeTime, grid, pixelIndex, UNREACH, WALK_CAP_SEC);
+  for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
+  return computeTimeGrid(grid, null, SPREAD_M);
+}
 
 /** Czytelny opis bieżącego widoku do paska statusu. */
 function statusText(walkOnly) {
@@ -641,7 +706,7 @@ async function recompute() {
       grid = buildWalkGrid(state.city, cityCfg(), cityAssets.water, cityAssets.bridges, cityAssets.city);
       const seedsFor = (mins, origin) => {
         const seeds = [];
-        for (let i = 0; i < net.nStops; i++) {
+        for (let i = 0; mins && i < net.nStops; i++) {
           const t = mins[i];
           if (!(t <= 90)) continue;
           const idx = pixelIndex(grid, net.lat[i], net.lon[i]);
@@ -653,26 +718,20 @@ async function recompute() {
         }
         return seeds;
       };
-      if (walkOnly) {
-        // źródłem fali jest wyłącznie punkt (pojazdy odznaczone); cap 90 min
-        const originSeed = pt => {
-          const idx = pixelIndex(grid, pt.lat, pt.lng);
-          return idx >= 0 ? [[idx, 0]] : [];
-        };
+      // fala piesza: po sieci ulic, gdy graf jest już wczytany; inaczej po rastrze
+      // (mins === null w trybie „tylko pieszo" — źródłem jest sam punkt)
+      const waveFor = (mins, origin) =>
+        walkWaveOnNet(grid, net, mins, origin) ?? computeTimeGrid(grid, seedsFor(mins, origin));
+
+      if (walkOnly || state.walk) {
+        const minsA = walkOnly ? null : (state.compare ? res.minutes : minutes);
         if (state.compare) {
-          const t1 = computeTimeGrid(grid, originSeed(state.point)).slice();
-          const t2 = computeTimeGrid(grid, originSeed(state.point2));
+          const minsB = walkOnly ? null : res2.minutes;
+          const t1 = waveFor(minsA, state.point).slice();
+          const t2 = waveFor(minsB, state.point2);
           gridTime = maxTimeGrid(grid, t1, t2);
         } else {
-          gridTime = computeTimeGrid(grid, originSeed(state.point));
-        }
-      } else if (state.walk) {
-        if (state.compare) {
-          const t1 = computeTimeGrid(grid, seedsFor(res.minutes, state.point)).slice();
-          const t2 = computeTimeGrid(grid, seedsFor(res2.minutes, state.point2));
-          gridTime = maxTimeGrid(grid, t1, t2);
-        } else {
-          gridTime = computeTimeGrid(grid, seedsFor(minutes, state.point));
+          gridTime = waveFor(minsA, state.point);
         }
       } else {
         // bez spaceru: origin nie jest źródłem (dojście tylko od przystanku)
@@ -771,6 +830,13 @@ async function loadCityAssets() {
     zoneLayer.setWater(water ?? { polys: [], lines: [] });
     cityAssets = { water, city, bridges };
     recompute(); // przelicz strefy na siatce pieszej po załadowaniu geometrii
+    // sieć piesza jest największym zasobem miasta — dociąga się osobno, a po
+    // jej przyjściu strefy przeliczają się jeszcze raz, już po realnych ulicach
+    loadWalkNet(key).then(wn => {
+      if (state.city !== key || !wn) return;
+      walkNet = wn;
+      recompute();
+    });
   } catch { /* brak maski wody/granicy nie blokuje działania */ }
 }
 
@@ -787,6 +853,7 @@ function switchCity(key) {
   map.closePopup();
   map.setView(cityCfg().center, cityCfg().zoom);
   cityAssets = null; // geometria poprzedniego miasta nie pasuje do nowego
+  walkNet = null;
   zoneLayer.setGrid(null);
   loadCityAssets();
   recompute();
