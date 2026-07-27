@@ -1,11 +1,11 @@
 {
   "city": "rzeszow",
-  "generated": "2026-07-20T06:32:13.749Z",
+  "generated": "2026-07-27T06:48:58.019Z",
   "feedEndDate": "20260831",
   "dates": {
-    "workday": "20260721",
-    "saturday": "20260725",
-    "sunday": "20260726"
+    "workday": "20260728",
+    "saturday": "20260801",
+    "sunday": "20260802"
   },
   "sources": [
     "ZTM Rzeszów (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
