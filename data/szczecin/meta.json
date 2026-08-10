@@ -1,11 +1,11 @@
 {
   "city": "szczecin",
-  "generated": "2026-08-03T06:45:28.235Z",
+  "generated": "2026-08-10T05:08:37.493Z",
   "feedEndDate": "20261031",
   "dates": {
-    "workday": "20260804",
-    "saturday": "20260808",
-    "sunday": "20260809"
+    "workday": "20260811",
+    "saturday": "20260815",
+    "sunday": "20260816"
   },
   "sources": [
     "ZDiTM Szczecin — https://www.zditm.szczecin.pl/pl/zditm/dla-deweloperow/gtfs"

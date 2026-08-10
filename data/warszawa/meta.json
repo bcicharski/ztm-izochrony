@@ -1,11 +1,11 @@
 {
   "city": "warszawa",
-  "generated": "2026-08-03T06:44:53.462Z",
-  "feedEndDate": "20260830",
+  "generated": "2026-08-10T05:07:59.985Z",
+  "feedEndDate": "20260831",
   "dates": {
-    "workday": "20260804",
-    "saturday": "20260808",
-    "sunday": "20260809"
+    "workday": "20260811",
+    "saturday": "20260815",
+    "sunday": "20260816"
   },
   "sources": [
     "Warszawski Transport Publiczny (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/",
