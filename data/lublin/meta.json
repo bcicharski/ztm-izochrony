@@ -1,11 +1,11 @@
 {
   "city": "lublin",
-  "generated": "2026-08-10T05:08:38.938Z",
-  "feedEndDate": "20261026",
+  "generated": "2026-08-17T04:12:34.703Z",
+  "feedEndDate": "20261130",
   "dates": {
-    "workday": "20260811",
-    "saturday": "20260815",
-    "sunday": "20260816"
+    "workday": "20260818",
+    "saturday": "20260822",
+    "sunday": "20260823"
   },
   "sources": [
     "ZTM Lublin (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
