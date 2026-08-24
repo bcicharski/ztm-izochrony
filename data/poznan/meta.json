@@ -1,11 +1,9 @@
 {
   "city": "poznan",
-  "generated": "2026-08-17T04:12:29.642Z",
-  "feedEndDate": "20260830",
+  "generated": "2026-08-24T04:15:55.836Z",
+  "feedEndDate": "20260827",
   "dates": {
-    "workday": "20260818",
-    "saturday": "20260822",
-    "sunday": "20260823"
+    "workday": "20260825"
   },
   "sources": [
     "ZTM Poznań — https://www.ztm.poznan.pl/otwarte-dane/"

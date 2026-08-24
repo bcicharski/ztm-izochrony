@@ -1,11 +1,11 @@
 {
   "city": "olsztyn",
-  "generated": "2026-08-17T04:11:11.057Z",
+  "generated": "2026-08-24T04:13:17.156Z",
   "feedEndDate": "20260831",
   "dates": {
-    "workday": "20260818",
-    "saturday": "20260822",
-    "sunday": "20260823"
+    "workday": "20260825",
+    "saturday": "20260829",
+    "sunday": "20260830"
   },
   "sources": [
     "ZDZiT Olsztyn (via zbiorkom.live) — https://otwartedane.olsztyn.eu/index.php/gtfs-zdzit"
