@@ -1,11 +1,11 @@
 {
   "city": "kielce",
-  "generated": "2026-08-24T04:13:19.474Z",
+  "generated": "2026-08-31T09:59:31.930Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20260825",
-    "saturday": "20260829",
-    "sunday": "20260830"
+    "workday": "20260901",
+    "saturday": "20260905",
+    "sunday": "20260906"
   },
   "sources": [
     "ZTM Kielce (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"

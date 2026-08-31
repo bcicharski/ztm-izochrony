@@ -1,11 +1,11 @@
 {
   "city": "krakow",
-  "generated": "2026-08-24T04:15:43.994Z",
+  "generated": "2026-08-31T10:00:50.249Z",
   "feedEndDate": "20261024",
   "dates": {
-    "workday": "20260825",
-    "saturday": "20260829",
-    "sunday": "20260830"
+    "workday": "20260901",
+    "saturday": "20260905",
+    "sunday": "20260906"
   },
   "sources": [
     "ZTP Kraków — https://gtfs.ztp.krakow.pl/",
