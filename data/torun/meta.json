@@ -1,11 +1,11 @@
 {
   "city": "torun",
-  "generated": "2026-08-31T09:59:30.474Z",
-  "feedEndDate": "20261012",
+  "generated": "2026-09-07T08:32:59.157Z",
+  "feedEndDate": "20261031",
   "dates": {
-    "workday": "20260901",
-    "saturday": "20260905",
-    "sunday": "20260906"
+    "workday": "20260908",
+    "saturday": "20260912",
+    "sunday": "20260913"
   },
   "sources": [
     "MZK Toruń (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
