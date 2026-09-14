@@ -1,11 +1,11 @@
 {
   "city": "opole",
-  "generated": "2026-09-07T08:33:01.482Z",
+  "generated": "2026-09-14T09:10:39.198Z",
   "feedEndDate": "20260930",
   "dates": {
-    "workday": "20260908",
-    "saturday": "20260912",
-    "sunday": "20260913"
+    "workday": "20260915",
+    "saturday": "20260919",
+    "sunday": "20260920"
   },
   "sources": [
     "MZK Opole (via zbiorkom.live) — https://zbiorkom.live"

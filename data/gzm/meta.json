@@ -1,11 +1,11 @@
 {
   "city": "gzm",
-  "generated": "2026-08-31T10:00:57.119Z",
-  "feedEndDate": "20260919",
+  "generated": "2026-09-14T09:12:05.268Z",
+  "feedEndDate": "20261004",
   "dates": {
-    "workday": "20260901",
-    "saturday": "20260905",
-    "sunday": "20260906"
+    "workday": "20260915",
+    "saturday": "20260919",
+    "sunday": "20260920"
   },
   "sources": [
     "ZTM (Metropolia GZM) — https://otwartedane.metropoliagzm.pl"
