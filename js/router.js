@@ -9,7 +9,13 @@
 import { WALK_MPS, MIN_TRANSFER_S, REV_C, distM, COMPLEX_MAX_M } from './data.js';
 
 const MAX_ROUNDS = 5;          // maks. 4 przesiadki
-const HORIZON_S = 180 * 60;    // ogranicznik wyszukiwania (3 h)
+/**
+ * Ogranicznik wyszukiwania [s]. Mapa rysuje do 90 min i tyle samo pokazuje
+ * dymek, więc dawne 3 h liczyły dwa razy więcej czasu, niż kiedykolwiek
+ * trafiało na ekran (w GZM/Warszawie to zauważalna część RAPTOR-a).
+ * Minuta zapasu, żeby przystanek dokładnie na granicy pasma nie wypadał.
+ */
+export const HORIZON_S = 91 * 60;
 
 // Tryb ostrożny: heurystyczny margines na opóźnienia (do czasu zebrania
 // rzeczywistych profili opóźnień). Bufor przesiadkowy rośnie z 1 do 4 minut

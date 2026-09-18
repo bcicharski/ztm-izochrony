@@ -38,6 +38,11 @@ function localSlot(date = new Date()) {
   return { dayType, hour };
 }
 
+/** Data lokalna yyyy-mm-dd (Europe/Warsaw) — klucz dziennej pamięci deduplikacji. */
+function localDate(date = new Date()) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' }).format(date);
+}
+
 function bucketIndex(delaySec) {
   for (let i = 0; i < BUCKETS.length; i++) if (delaySec < BUCKETS[i]) return i;
   return BUCKETS.length;
@@ -127,17 +132,31 @@ for (const [cityKey, cfg] of Object.entries(cities)) {
 
   const file = path.join(outDir, `${cityKey}.json`);
   const agg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
-  for (const { route, delaySec } of obs.values()) {
+  // Deduplikacja: ten sam kurs widziany w kolejnych odpytaniach liczył się
+  // wielokrotnie (co 10 min = kilka próbek jednego pojazdu), więc próg MIN_OBS
+  // osiągał jeden autobus w jedno popołudnie. Każdy kurs wchodzi do agregatu
+  // raz na godzinę w danym dniu (pierwsza obserwacja); pamięć w polu `_seen`,
+  // zerowana przy zmianie daty. build-delays.mjs pomija klucze zaczynające
+  // się od `_`.
+  const today = localDate();
+  const seen = agg._seen?.date === today ? agg._seen : { date: today, keys: {} };
+  let added = 0, dup = 0;
+  for (const [tripKey, { route, delaySec }] of obs) {
+    const seenKey = `${tripKey}|${hour}`;
+    if (seen.keys[seenKey]) { dup++; continue; }
+    seen.keys[seenKey] = 1;
     const key = `${route}|${dayType}|${hour}`;
     const row = agg[key] ?? [0, 0, 0, 0, 0, 0, 0, 0];
     row[0] += 1;
     row[1] += delaySec;
     row[2 + bucketIndex(delaySec)] += 1;
     agg[key] = row;
+    added++;
   }
+  agg._seen = seen;
   fs.writeFileSync(file, JSON.stringify(agg));
-  totalObs += obs.size;
-  console.log(`${cityKey}: ${obs.size} obserwacji (slot ${dayType}/${hour}), kluczy: ${Object.keys(agg).length}`);
+  totalObs += added;
+  console.log(`${cityKey}: ${obs.size} obserwacji, nowych ${added}, powtórzonych ${dup} (slot ${dayType}/${hour}), kluczy: ${Object.keys(agg).length - 1}`);
 }
 
 console.log(`Razem: ${totalObs} obserwacji.`);

@@ -160,7 +160,10 @@ export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
   const orth = Math.max(1, Math.round(res / WALK_MPS));
   const diag = Math.round(orth * Math.SQRT2);
   const limited = Number.isFinite(maxSpreadM);
-  const spread = limited ? new Uint16Array(W * H) : null;
+  // bufor zasięgu trzymany przy siatce (8 MB przy 4 mln komórek — alokacja
+  // przy każdym przeliczeniu to zbędna praca dla GC); stare wartości nie są
+  // czytane, bo odczyt dotyczy tylko komórek wpisanych w tym przebiegu
+  const spread = limited ? (grid.spread ??= new Uint16Array(W * H)) : null;
 
   // kolejka kubełkowa po sekundach
   const buckets = new Array(CAP_SEC + 1);
@@ -242,7 +245,8 @@ export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
 export function computeNoWalkGrid(grid, seeds, radiusM) {
   const { W, H, res, land, time } = grid;
   time.fill(UNREACH);
-  const spread = new Uint16Array(W * H).fill(0xffff); // metry po lądzie od przystanku-źródła
+  const spread = (grid.spread ??= new Uint16Array(W * H)); // metry po lądzie od przystanku-źródła
+  spread.fill(0xffff);
   const orth = res;
   const diag = Math.round(res * Math.SQRT2);
   const buckets = new Array(CAP_SEC + 1);

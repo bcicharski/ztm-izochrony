@@ -213,7 +213,8 @@ html, body {
   border-radius: 6px;
   cursor: pointer;
 }
-.search-results li:hover { background: var(--line); }
+.search-results li:hover,
+.search-results li.active { background: var(--line); }
 .search-results li.empty { color: var(--muted); cursor: default; }
 .search-results li.empty:hover { background: none; }
 

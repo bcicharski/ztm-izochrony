@@ -97,6 +97,15 @@ export const ZoneLayer = L.Layer.extend({
   /** Geometria wody {polys, lines} — wycinana ze stref (linie rzek stroke ~100 m). */
   setWater(water) {
     this._water = water;
+    // bbox każdego pierścienia/linii — przy przesuwaniu mapy rysowane są tylko
+    // te, które zahaczają o widok (Trójmiasto/GZM: dziesiątki tysięcy
+    // wierzchołków wody na każde moveend)
+    const bbox = pts => {
+      let s = 90, n = -90, w = 180, e = -180;
+      for (const [la, lo] of pts) { if (la < s) s = la; if (la > n) n = la; if (lo < w) w = lo; if (lo > e) e = lo; }
+      return [s, w, n, e];
+    };
+    this._waterBbox = water ? { polys: (water.polys ?? []).map(bbox), lines: (water.lines ?? []).map(bbox) } : null;
     this._redraw();
   },
 
@@ -158,10 +167,14 @@ export const ZoneLayer = L.Layer.extend({
 
     // wytnij wodę (reguła nonzero: wyspy w pierścieniach wody zostają)
     if (this._water?.polys?.length || this._water?.lines?.length) {
+      const vS = bounds.getSouth(), vN = bounds.getNorth(), vW = bounds.getWest(), vE = bounds.getEast();
+      const outside = bb => bb[2] < vS || bb[0] > vN || bb[3] < vW || bb[1] > vE;
       bctx.globalCompositeOperation = 'destination-out';
       if (this._water.polys?.length) {
         bctx.beginPath();
-        for (const ring of this._water.polys) {
+        for (let k = 0; k < this._water.polys.length; k++) {
+          if (outside(this._waterBbox.polys[k])) continue;
+          const ring = this._water.polys[k];
           for (let i = 0; i < ring.length; i++) {
             const p = map.latLngToContainerPoint(ring[i]);
             if (i === 0) bctx.moveTo(p.x, p.y);
@@ -176,7 +189,9 @@ export const ZoneLayer = L.Layer.extend({
         bctx.lineCap = 'round';
         bctx.lineJoin = 'round';
         bctx.beginPath();
-        for (const line of this._water.lines) {
+        for (let k = 0; k < this._water.lines.length; k++) {
+          if (outside(this._waterBbox.lines[k])) continue;
+          const line = this._water.lines[k];
           for (let i = 0; i < line.length; i++) {
             const p = map.latLngToContainerPoint(line[i]);
             if (i === 0) bctx.moveTo(p.x, p.y);

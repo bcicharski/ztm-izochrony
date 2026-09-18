@@ -338,6 +338,26 @@ for (let f = 0; f < feedDirs.length; f++) {
   console.log(`Feed ${f} (${path.basename(feedDirs[f])}): filtr bbox — zostawiono ${kept}, usunięto ${dropped} kursów`);
 }
 
+// --- 4c. przystanki bez kursów --------------------------------------------
+// Feedy zbiorcze (polish_trains.zip) wnoszą ~3000 stacji z całej Polski, które
+// żaden zachowany kurs nie odwiedza; puchły w JSON i w każdej pętli po
+// przystankach (dojścia, seedy fali, dymek). Zostają tylko odwiedzane, indeksy
+// w kursach są przenumerowane; grupy zespołów zachowują numery (mogą mieć luki).
+{
+  const used = new Uint8Array(stops.length);
+  for (const arr of tripStops.values()) for (const row of arr) used[row[1]] = 1;
+  const remap = new Int32Array(stops.length).fill(-1);
+  const kept = [];
+  for (let i = 0; i < stops.length; i++) if (used[i]) { remap[i] = kept.length; kept.push(stops[i]); }
+  if (kept.length < stops.length) {
+    for (const arr of tripStops.values()) for (const row of arr) row[1] = remap[row[1]];
+    for (const [key, idx] of stopIdx) { if (remap[idx] < 0) stopIdx.delete(key); else stopIdx.set(key, remap[idx]); }
+    console.log(`Przystanki bez kursów usunięte: ${stops.length - kept.length} (zostaje ${kept.length})`);
+    stops.length = 0;
+    stops.push(...kept);
+  }
+}
+
 // --- 5. wzorce tras per dzień --------------------------------------------
 
 const routeList = [];

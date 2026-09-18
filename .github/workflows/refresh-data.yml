@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write   # zgłoszenie, gdy miasto zostało pominięte albo rozkład wygasa
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +35,7 @@ jobs:
             fi
           done
           echo "Zbudowano: $ok, pominięto: $fail ($failed)"
+          echo "SKIPPED=$(echo $failed | tr ' ' ',')" >> "$GITHUB_ENV"
           # awaria zbiorcza (nic się nie zbudowało) = realny problem, oflaguj
           if [ "$ok" -eq 0 ]; then echo "::error::żadne miasto nie zbudowane"; exit 1; fi
 
@@ -55,4 +57,26 @@ jobs:
           else
             git commit -m "Automatyczne odświeżenie danych rozkładowych"
             git push
+          fi
+
+      # Dotąd miasto z zepsutym feedem po cichu zostawało przy starych danych.
+      # Teraz raport trafia do podsumowania workflowu i do jednego otwartego
+      # zgłoszenia z etykietą "dane" (komentarz, gdy już istnieje).
+      - name: Sprawdź stan danych i zgłoś problemy
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node tools/check-data.mjs --skipped "$SKIPPED" > report.md
+          status=$?
+          set -e
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -eq 0 ]; then echo "Dane w porządku."; exit 0; fi
+          gh label create dane --description "Stan danych rozkładowych" --color D93F0B --force >/dev/null 2>&1 || true
+          existing=$(gh issue list --label dane --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file report.md
+          else
+            gh issue create --title "Dane rozkładowe: problemy po odświeżeniu" --label dane --body-file report.md
           fi

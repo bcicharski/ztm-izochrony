@@ -265,12 +265,36 @@ async function searchAddress(query) {
   return r.json();
 }
 
-/** Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników. */
+/**
+ * Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników.
+ * Klawiatura: Enter szuka (albo wybiera podświetlony wynik), ↑/↓ przesuwają
+ * podświetlenie, Escape zamyka listę; klik poza listą też ją zamyka.
+ */
 function attachSearch(inputId, listId, onPick) {
   const input = $(inputId), ul = $(listId);
+  let rows = []; // [{li, latlng}]
+  let active = -1;
+  const hide = () => { ul.hidden = true; active = -1; };
+  const highlight = i => {
+    active = i;
+    rows.forEach((r, k) => {
+      r.li.classList.toggle('active', k === i);
+      r.li.setAttribute('aria-selected', String(k === i));
+    });
+    if (i >= 0) rows[i].li.scrollIntoView({ block: 'nearest' });
+  };
+  const pick = i => {
+    const r = rows[i];
+    if (!r) return;
+    hide();
+    input.value = r.li.textContent;
+    onPick(r.latlng);
+  };
   const showResults = items => {
     ul.innerHTML = '';
     ul.hidden = false;
+    rows = [];
+    active = -1;
     if (!items.length) {
       const li = document.createElement('li');
       li.className = 'empty';
@@ -278,19 +302,26 @@ function attachSearch(inputId, listId, onPick) {
       ul.appendChild(li);
       return;
     }
-    for (const item of items) {
+    items.forEach((item, i) => {
       const li = document.createElement('li');
+      li.setAttribute('role', 'option');
       li.textContent = item.display_name.split(', ').slice(0, 4).join(', ');
-      li.addEventListener('click', () => {
-        ul.hidden = true;
-        input.value = li.textContent;
-        onPick(L.latLng(+item.lat, +item.lon));
-      });
+      li.addEventListener('click', () => pick(i));
       ul.appendChild(li);
-    }
+      rows.push({ li, latlng: L.latLng(+item.lat, +item.lon) });
+    });
   };
   input.addEventListener('keydown', async e => {
+    const open = !ul.hidden && rows.length > 0;
+    if (e.key === 'Escape') { hide(); return; }
+    if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      const d = e.key === 'ArrowDown' ? 1 : -1;
+      highlight((active + d + rows.length) % rows.length);
+      return;
+    }
     if (e.key !== 'Enter') return;
+    if (open && active >= 0) { pick(active); return; }
     const query = input.value.trim();
     if (query.length < 3) return;
     try {
@@ -301,7 +332,10 @@ function attachSearch(inputId, listId, onPick) {
     }
   });
   input.addEventListener('input', () => {
-    if (!input.value) ul.hidden = true;
+    if (!input.value) hide();
+  });
+  document.addEventListener('click', e => {
+    if (!ul.hidden && !ul.contains(e.target) && e.target !== input) hide();
   });
 }
 
@@ -487,6 +521,8 @@ attachEngine();
 
 // --- dymek z trasą (prawy klik / przytrzymanie) --------------------------------
 
+let journeyPopup = null; // {popup, latlng} — otwarty dymek, odświeżany po przeliczeniu
+
 map.on('contextmenu', async e => {
   e.originalEvent.preventDefault();
   if (!cityReady) return;
@@ -494,8 +530,24 @@ map.on('contextmenu', async e => {
   let j = null;
   try { j = await engine.journey(latlng); } catch (err) { console.error(err); }
   if (!j) return;
-  L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(journeyHtml(j)).openOn(map);
+  const popup = L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(journeyHtml(j)).openOn(map);
+  journeyPopup = { popup, latlng };
 });
+
+/**
+ * Po przeliczeniu otwarty dymek dostaje świeżą trasę zamiast znikać —
+ * dotąd dociągnięcie grafu ulic kilka sekund po starcie zamykało dymek,
+ * który użytkownik właśnie czytał.
+ */
+async function refreshJourneyPopup() {
+  const jp = journeyPopup;
+  if (!jp || !jp.popup.isOpen()) { journeyPopup = null; return; }
+  let j = null;
+  try { j = await engine.journey(jp.latlng); } catch { /* bez dymka */ }
+  if (journeyPopup !== jp || !jp.popup.isOpen()) return;
+  if (!j) { map.closePopup(); journeyPopup = null; return; }
+  jp.popup.setContent(journeyHtml(j));
+}
 
 /** Sekundy doby → „GG:MM"; ujemne (wyjście przed północą przy „do miejsca") zawijane do poprzedniego dnia. */
 const HHMM = s => {
@@ -609,7 +661,6 @@ async function recompute() {
   updateUrl();
   const status = $('status');
   status.textContent = 'Obliczam zasięg…';
-  map.closePopup();
   const walkOnly = isWalkOnly();
   const types = allowedTypes();
   const params = {
@@ -640,6 +691,7 @@ async function recompute() {
         status.textContent = (msg.reachable === 0 && !walkOnly)
           ? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.'
           : statusText(walkOnly);
+        refreshJourneyPopup();
       } else if (msg.phase === 'contours') {
         zoneLayer.update({ contours: msg.contours });
       }

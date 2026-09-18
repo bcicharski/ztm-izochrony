@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dokąd dojadę? — izochrony komunikacji miejskiej</title>
   <meta name="description" content="Interaktywna mapa pokazująca, jak daleko można dotrzeć komunikacją miejską w największych polskich miastach i aglomeracjach (m.in. Warszawa, Trójmiasto, Śląsk, Kraków, Wrocław, Poznań, Łódź, Szczecin, Lublin, Bydgoszcz) w zadanym czasie.">
+  <link rel="canonical" href="https://transport.excelninja.pro/">
+  <!-- podgląd linku (LinkedIn, Messenger, Slack, X) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Dokąd dojadę?">
+  <meta property="og:title" content="Dokąd dojadę? — izochrony komunikacji miejskiej">
+  <meta property="og:description" content="Kliknij punkt na mapie i zobacz, dokąd dotrzesz tramwajem, autobusem, metrem i koleją w 10, 20, 30, 45 lub 60 minut. 18 polskich miast i aglomeracji, realne rozkłady, dojście po ulicach z OSM.">
+  <meta property="og:url" content="https://transport.excelninja.pro/">
+  <meta property="og:image" content="https://transport.excelninja.pro/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="pl_PL">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Dokąd dojadę? — izochrony komunikacji miejskiej">
+  <meta name="twitter:description" content="Dokąd dotrzesz komunikacją miejską w 10, 20, 30, 45 lub 60 minut? Mapa dla 18 polskich miast.">
+  <meta name="twitter:image" content="https://transport.excelninja.pro/assets/og-image.png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230d0887'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23b83289'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23febd2a'/%3E%3C/svg%3E">
@@ -63,14 +78,14 @@
                aria-label="Szukaj adresu punktu" autocomplete="off">
         <button id="locateBtn" title="Użyj mojej lokalizacji" aria-label="Użyj mojej lokalizacji">⌖</button>
       </div>
-      <ul class="search-results" id="searchResults" hidden></ul>
+      <ul class="search-results" id="searchResults" role="listbox" aria-label="Wyniki wyszukiwania" hidden></ul>
 
       <div class="search-row" id="searchRow2" hidden>
         <span class="dot dot-b" aria-hidden="true"></span>
         <input id="searchInput2" type="search" placeholder="Adres drugiego punktu (Enter)…"
                aria-label="Szukaj adresu drugiego punktu" autocomplete="off">
       </div>
-      <ul class="search-results" id="searchResults2" hidden></ul>
+      <ul class="search-results" id="searchResults2" role="listbox" aria-label="Wyniki wyszukiwania drugiego punktu" hidden></ul>
 
       <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
       <p class="warn" id="dataWarn" role="alert" hidden></p>

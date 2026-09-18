@@ -6,6 +6,7 @@
  */
 
 import { decodeNetwork } from '../js/data.js';
+import { HORIZON_S } from '../js/router.js';
 
 /** Deterministyczny RNG (mulberry32) — testy losowe muszą być powtarzalne. */
 export function rng(seed) {
@@ -89,7 +90,7 @@ export function makeWalkRaw(nodes, edges) {
  * @param {object} g  sieć (z decodeNetwork) — dla kierunku „do" podaj g.reversed
  * @param {number[]} sources  spłaszczone pary [stop, accessSec, ...]
  */
-export function oracleEarliest(g, sources, t0, walk, cautious = false, horizonSec = 180 * 60) {
+export function oracleEarliest(g, sources, t0, walk, cautious = false, horizonSec = HORIZON_S) {
   const INF = Infinity;
   const ACCESS = 1, RIDE = 2, FOOT = 3;
   const n = g.nStops;

@@ -65,6 +65,7 @@ for (const cityKey of Object.keys(cities)) {
   const profile = {};
   let kept = 0, total = 0, unknown = 0;
   for (const [key, row] of Object.entries(agg)) {
+    if (key.startsWith('_')) continue; // metadane kolektora (_seen), nie agregat
     total++;
     const n = row[0];
     if (n < MIN_OBS) continue;

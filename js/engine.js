@@ -231,11 +231,14 @@ export class Engine {
       const waveFor = (mins, origin) =>
         this.walkWaveOnNet(grid, net, mins, origin) ?? computeTimeGrid(grid, seedsFor(mins, origin));
 
+      // tryb porównania liczy dwie fale w tym samym buforze grid.time — pierwszą
+      // trzeba odłożyć; drugi bufor trzymany przy siatce zamiast kopii .slice()
+      const keep = t => { (grid.time2 ??= new Uint16Array(t.length)).set(t); return grid.time2; };
       if (p.walkOnly || p.walk) {
         const minsA = p.walkOnly ? null : (p.compare ? res.minutes : minutes);
         if (p.compare) {
           const minsB = p.walkOnly ? null : res2.minutes;
-          const t1 = waveFor(minsA, p.point).slice();
+          const t1 = keep(waveFor(minsA, p.point));
           const t2 = waveFor(minsB, p.point2);
           gridTime = maxTimeGrid(grid, t1, t2);
         } else {
@@ -243,7 +246,7 @@ export class Engine {
         }
       } else if (p.compare) {
         // bez spaceru: origin nie jest źródłem (dojście tylko od przystanku)
-        const t1 = computeNoWalkGrid(grid, seedsFor(res.minutes, null), NO_WALK_RADIUS_M).slice();
+        const t1 = keep(computeNoWalkGrid(grid, seedsFor(res.minutes, null), NO_WALK_RADIUS_M));
         const t2 = computeNoWalkGrid(grid, seedsFor(res2.minutes, null), NO_WALK_RADIUS_M);
         gridTime = maxTimeGrid(grid, t1, t2);
       } else {

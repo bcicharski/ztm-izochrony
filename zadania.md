@@ -88,8 +88,27 @@ Zrobione lokalnie, niewypchnięte do repo — do przejrzenia:
   zamrożenia). `data.js` buduje adresy danych względem modułu (`import.meta.url`),
   bo w workerze względne `fetch` liczy się od skryptu workera.
 
-Nietknięte: #5 (kopia `ztm-izochrony/` — czeka na decyzję), #11,
-#20, #21, #26, #27, #29, #30, #34, #35, #36.
+- **Reszta listy (2026-09-18, za zgodą na wszystko)** — #5 katalog
+  `ztm-izochrony/` usunięty; #11 `build-data.mjs` odrzuca przystanki bez
+  kursów (test Trójmiasto: 6465 → 3344, plik 1,16 → 1,03 MB; produkcja dostanie
+  to przy najbliższym buildzie); #20 `tools/check-data.mjs` + krok workflowu:
+  raport do podsumowania i zgłoszenie GitHub z etykietą `dane` (miasta
+  pominięte, brak dni, rozkład wygasły lub kończący się w 7 dni); #21 kolektor
+  liczy kurs raz na godzinę dziennie (`_seen`), `build-delays` pomija klucze
+  `_`; #26 bufory `spread`/`time2` przy siatce zamiast alokacji per
+  przeliczenie; #27 horyzont RAPTOR 3 h → 91 min (eksportowany `HORIZON_S`,
+  wyrocznia w testach używa tej samej wartości); #29 maska wody rysowana tylko
+  dla pierścieni w widoku (bbox); #30 wyszukiwarka: ↑/↓, Enter, Escape, klik
+  poza listą, `role=listbox/option`; #34 cron kolektora co 15 min; #35 Open
+  Graph + Twitter Card + `og-image.png` (generowany skryptem, bez bibliotek),
+  `robots.txt`, `sitemap.xml`, `canonical`. Dodatkowo: otwarty dymek trasy jest
+  odświeżany po przeliczeniu zamiast zamykany (dociągnięcie grafu ulic już go
+  nie gasi). Obserwacja: `data/delays/` jest śledzone na `main` (workflow
+  kopiuje agregaty z gałęzi `delays`), wpis w `.gitignore` był martwy — poprawiony.
+
+Otwarte pozostają wyłącznie udokumentowane ograniczenia modelu (#36) oraz
+tematy poza kodem: certyfikowany CMP dla Google (#4), przełączenie na własny
+klucz kafelków przy dużym ruchu (#0).
 
 ### P0 — krytyczne (błędne wyniki, dane, prawo)
 

@@ -2,8 +2,11 @@
 *.zip
 gtfs-src/
 
-# agregaty opóźnień żyją na gałęzi "delays" (workflow collect-delays)
-data/delays/
+# agregaty opóźnień: kolektor zapisuje je na gałęzi "delays", a workflow
+# refresh-data przy cotygodniowym buildzie kopiuje je także na main
+# (git checkout origin/delays -- data/delays trafia do indeksu) — pliki są
+# więc śledzone; wpis zostaje tylko dla lokalnych eksperymentów kolektora
+data/delays/*.tmp
 
 # zależności (eslint do lintu; gtfs-realtime-bindings instaluje workflow kolektora)
 node_modules/

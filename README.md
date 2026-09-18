@@ -107,9 +107,16 @@ node tools/fetch-feeds.mjs warszawa gtfs-src/warszawa
 node tools/build-data.mjs warszawa gtfs-src/warszawa/*/
 ```
 
+Po buildzie `tools/check-data.mjs` sprawdza każde miasto (komplet dni, termin
+ważności rozkładu, miasta pominięte z powodu błędu feedu) i przy problemach
+workflow zakłada zgłoszenie z etykietą `dane` (albo dopisuje komentarz do
+otwartego). Kolektor opóźnień (`collect-delays.yml`, co 15 min) liczy każdy
+kurs raz na godzinę w danym dniu — pole `_seen` w agregacie.
+
 `fetch-feeds.mjs` pobiera i rozpakowuje wszystkie feedy miasta (w tym
 dwustopniowe API Wrocławia). `build-data.mjs` łączy feedy (prefiksując
-identyfikatory), obsługuje kursowanie przez `calendar_dates`, pełny
+identyfikatory), odrzuca przystanki bez kursów (feedy zbiorcze wnoszą tysiące
+stacji z całej Polski), obsługuje kursowanie przez `calendar_dates`, pełny
 `calendar.txt` z flagami dni oraz kursy częstotliwościowe `frequencies.txt`
 (metro warszawskie), wybiera reprezentatywny dzień roboczy (wt–czw), sobotę
 i niedzielę ze wspólnego zakresu dat, buduje wzorce tras z deduplikacją
@@ -144,6 +151,9 @@ tools/build-bridges.mjs mosty/kładki/mola z OSM -> data/<miasto>/bridges.json
 tools/build-city.mjs   granice administracyjne -> data/<miasto>/city.json
 tools/collect-delays.mjs kolektor opóźnień (GTFS-RT / ZTM Gdańsk) -> gałąź delays
 tools/build-delays.mjs profile opóźnień -> data/<miasto>/delays.json
+tools/check-data.mjs   kontrola stanu danych po odświeżeniu (raport -> zgłoszenie GitHub)
+assets/og-image.png    obrazek podglądu linku (og:image), generowany skryptem bez zależności
+robots.txt, sitemap.xml  indeksowanie
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*
 tools/serve.mjs        serwer deweloperski
 tests/                 testy (node:test) + wyrocznia i generator sieci w helpers.mjs
