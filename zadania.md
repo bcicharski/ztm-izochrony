@@ -59,8 +59,37 @@ Zrobione lokalnie, niewypchnięte do repo — do przejrzenia:
   przesiadek (test na Trójmieście, dane przywrócone): 12 845 → 13 607 par.
   Pozostałe miasta dostaną nowe przesiadki przy najbliższym buildzie.
 
-Nietknięte: #5 (kopia `ztm-izochrony/` — czeka na decyzję), #9, #11,
-#19, #20, #21, #25, #26, #27, #29, #30, #34, #35, #36.
+- **#19 (2026-09-18)** — `package.json` (już nie ignorowany), ESLint 9 (`npm run
+  lint`), 24 testy `node:test` w `tests/` (`npm test`): dekoder v2/v3 i sieć
+  odwrócona, RAPTOR na sieciach ręcznych (bufor przesiadkowy, limit rund, kursy
+  nocne, profile opóźnień, rekonstrukcja trasy w obu kierunkach) i porównanie
+  z niezależną wyrocznią na 480 losowych scenariuszach (spacer × ostrożny ×
+  godzina × 40 sieci) oraz 40 dla kierunku „do", Dijkstra, fala po rastrze
+  (woda/most/promień), graf ulic (snap, czasy, malowanie). Workflow `ci.yml`
+  uruchamia lint + testy przy każdym pushu i PR. Przy okazji: literalne bajty BOM
+  w regexach `build-data.mjs` zamienione na `\uFEFF`.
+
+- **Ulepszenie 1 — gładkie strefy (2026-09-18)** — obrysy wektorowe pasm
+  z siatki przez marching squares (`buildContours` w `js/walkgrid.js`,
+  d3-contour zbudowany esbuildem do `vendor/d3-contour/`), rysowane jako
+  ścieżki canvas z regułą evenodd (`_drawContours` w `js/map.js`; rzut
+  Mercatora liczony wprost, pierścienie poza widokiem pomijane, wierzchołki
+  bliżej niż 0,7 px zlewane). Uproszczenie obrysu (punkty niemal współliniowe)
+  i filtr pierścieni jednokomórkowych. Raster zostaje jako podgląd do czasu
+  policzenia obrysów. Obrys 6 pasm na siatce 4 mln komórek: ~0,9 s.
+- **#9 / Ulepszenie 2 — obliczenia w tle (2026-09-18)** — cały tor obliczeń
+  wyniesiony do `js/engine.js` (bez DOM), uruchamiany w Web Workerze
+  (`js/worker.js`, OffscreenCanvas, wyniki w dwóch fazach: raster+koła+
+  statystyki, potem obrysy; kolejka „ostatni wygrywa"). `app.js` został
+  z UI i klientem silnika; dymek trasy liczy worker (`Engine.journey`),
+  HTML składa UI. Awaryjnie (brak OffscreenCanvas, błąd workera, `?engine=main`)
+  ten sam silnik liczy w wątku głównym. Pomiar (Trójmiasto, spacer): podczas
+  750 ms liczenia maksymalna przerwa wątku głównego 18 ms (wcześniej ~1,9 s
+  zamrożenia). `data.js` buduje adresy danych względem modułu (`import.meta.url`),
+  bo w workerze względne `fetch` liczy się od skryptu workera.
+
+Nietknięte: #5 (kopia `ztm-izochrony/` — czeka na decyzję), #11,
+#20, #21, #26, #27, #29, #30, #34, #35, #36.
 
 ### P0 — krytyczne (błędne wyniki, dane, prawo)
 

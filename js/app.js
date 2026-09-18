@@ -2,15 +2,11 @@
  * Spięcie UI: stan aplikacji, kontrolki, przeliczanie i rysowanie stref.
  */
 
-/* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, loadWalkNet, dropCityCache, DAY_KEYS, DAY_LABELS, distM, WALK_MPS } from './data.js';
-import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, paintNetwork, SPREAD_M } from './walknet.js';
-import { computeReachability } from './router.js';
-import { buildZones, BANDS, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
+import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, distM } from './data.js';
+import { BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
-import { computeStats } from './stats.js';
-import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
+import { Engine } from './engine.js';
 
 let CITIES;
 try {
@@ -409,13 +405,96 @@ function renderStats(rows, showArea) {
   }
 }
 
+// --- silnik: Web Worker (albo wątek główny, gdy brak OffscreenCanvas) ----------
+
+/**
+ * Klient silnika o jednym interfejsie: `setCity`, `compute(params, onPhase)`,
+ * `journey(latlng)`, `onWalkNet`. Domyślnie Web Worker — RAPTOR, fala po siatce
+ * i obrysy (w GZM ~2 s) schodzą z wątku UI, więc mapa i panel reagują w trakcie
+ * liczenia. Gdy przeglądarka nie ma OffscreenCanvas albo modułowych workerów,
+ * ten sam `Engine` liczy w wątku głównym (jak dotąd).
+ */
+function createEngineClient() {
+  const canWorker = typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined'
+    && new URLSearchParams(location.search).get('engine') !== 'main'; // ?engine=main — tryb awaryjny do testów
+  if (canWorker) {
+    try { return createWorkerClient(); } catch (err) { console.warn('Worker niedostępny — liczę w wątku głównym:', err); }
+  }
+  return createDirectClient();
+}
+
+function createDirectClient() {
+  const client = { onWalkNet: null, kind: 'direct' };
+  const eng = new Engine({
+    createCanvas: (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; },
+    onWalkNet: city => client.onWalkNet?.(city),
+  });
+  client.setCity = (city, cfg) => eng.setCity(city, cfg);
+  client.compute = (params, onPhase) => eng.compute(params, onPhase);
+  client.journey = async latlng => eng.journey(latlng);
+  return client;
+}
+
+function createWorkerClient() {
+  const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  const pending = new Map(); // id -> {onPhase, resolve, reject}
+  let nextId = 1;
+  const client = { onWalkNet: null, kind: 'worker' };
+  worker.onmessage = e => {
+    const m = e.data;
+    if (m.type === 'walknet') { client.onWalkNet?.(m.city); return; }
+    const p = pending.get(m.id);
+    if (!p) return;
+    if (m.type === 'result') { p.onPhase(m); return; }
+    pending.delete(m.id);
+    if (m.type === 'error' || m.message) p.reject(new Error(m.message));
+    else if (m.type === 'city') p.resolve(m.ok);
+    else if (m.type === 'journey') p.resolve(m.result);
+    else p.resolve();
+  };
+  worker.onerror = err => {
+    // worker padł (np. brak pliku, błąd modułu) — wszystkie oczekujące
+    // wywołania kończą się błędem, a UI przełącza się na wątek główny
+    console.error('Worker:', err.message ?? err);
+    for (const p of pending.values()) p.reject(new Error('Worker: ' + (err.message ?? 'błąd')));
+    pending.clear();
+    client.broken = true;
+    client.onBroken?.();
+  };
+  const call = (msg, onPhase) => new Promise((resolve, reject) => {
+    const id = nextId++;
+    pending.set(id, { onPhase, resolve, reject });
+    worker.postMessage({ ...msg, id });
+  });
+  client.setCity = (city, cfg) => call({ type: 'city', city, cfg });
+  client.compute = (params, onPhase) => call({ type: 'compute', params }, onPhase);
+  client.journey = latlng => call({ type: 'journey', latlng });
+  return client;
+}
+
+let engine = createEngineClient();
+let cityReady = false; // silnik ma geometrię bieżącego miasta — można liczyć
+
+function attachEngine() {
+  engine.onWalkNet = city => { if (city === state.city && cityReady) recompute(); };
+  engine.onBroken = () => {
+    engine = createDirectClient();
+    attachEngine();
+    loadCityAssets();
+  };
+}
+attachEngine();
+
 // --- dymek z trasą (prawy klik / przytrzymanie) --------------------------------
 
-let lastCompute = null;
-
-map.on('contextmenu', e => {
+map.on('contextmenu', async e => {
   e.originalEvent.preventDefault();
-  showJourneyPopup(e.latlng);
+  if (!cityReady) return;
+  const latlng = { lat: e.latlng.lat, lng: e.latlng.lng };
+  let j = null;
+  try { j = await engine.journey(latlng); } catch (err) { console.error(err); }
+  if (!j) return;
+  L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(journeyHtml(j)).openOn(map);
 });
 
 /** Sekundy doby → „GG:MM"; ujemne (wyjście przed północą przy „do miejsca") zawijane do poprzedniego dnia. */
@@ -426,85 +505,37 @@ const HHMM = s => {
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
-/**
- * Najlepszy przystanek docelowy dla klikniętego miejsca (wg łącznego czasu).
- *
- * W trybie pieszym, dla punktu wewnątrz siatki (`js/walkgrid.js`), łączny czas
- * bierze z fali po lądzie (`gridTime[idx]`) — spójnie ze strefami i bez
- * przechodzenia przez wodę. Przystanek do rekonstrukcji trasy wybiera spośród
- * tych, które mogły być źródłem fali (`minutes[i]*60 ≤ gridTime[idx]`),
- * biorąc najbliższy w linii prostej. Gdy żaden przystanek nie mógł być źródłem
- * fali (punkt osiągalny pieszo wprost od origin), a także poza siatką (dalekie
- * stacje) i w trybie bez spaceru — zostaje dobór crow-fly.
- * @param {{lat:number, lng:number}} latlng
- * @returns {{stop:number, total:number, walkMin:number}|null}
- */
-function pickTargetStop(latlng) {
-  const { net, minutes, walk, grid, gridTime } = lastCompute;
-  if (walk && grid && gridTime) {
-    const idx = pixelIndex(grid, latlng.lat, latlng.lng);
-    if (idx >= 0) {
-      // wewnątrz siatki ufamy wyłącznie fali po lądzie (bez crow-fly przez wodę)
-      const totalSec = gridTime[idx];
-      if (totalSec >= UNREACH) return null;
-      let best = -1, bestD = Infinity;
-      for (let i = 0; i < net.nStops; i++) {
-        if (!Number.isFinite(minutes[i]) || minutes[i] * 60 > totalSec + 1) continue;
-        const d = distM(latlng.lat, latlng.lng, net.lat[i], net.lon[i]);
-        if (d < bestD) { bestD = d; best = i; }
-      }
-      if (best >= 0) {
-        const total = totalSec / 60;
-        return { stop: best, total, walkMin: Math.max(0, total - minutes[best]) };
-      }
-      // brak przystanku-źródła: punkt osiągalny pieszo wprost od origin → crow-fly niżej
-    }
-    // idx < 0: punkt poza bboxem siatki — spada do crow-fly poniżej
-  }
-  let best = -1, bestTotal = Infinity, bestWalkMin = 0;
-  for (let i = 0; i < net.nStops; i++) {
-    if (!Number.isFinite(minutes[i])) continue;
-    const d = distM(latlng.lat, latlng.lng, net.lat[i], net.lon[i]);
-    if (!walk && d > 300) continue; // bez spaceru: tylko przystanek tuż obok
-    const wm = walk ? d / WALK_MPS / 60 : 0;
-    const total = minutes[i] + wm;
-    if (total < bestTotal) { bestTotal = total; best = i; bestWalkMin = wm; }
-  }
-  return best < 0 ? null : { stop: best, total: bestTotal, walkMin: bestWalkMin };
-}
-
-/** Lista etapów trasy jako HTML. */
-function legsHtml(legs, target) {
-  const { net, direction } = lastCompute;
+/** Lista etapów trasy jako HTML (etapy z nazwami przystanków — patrz Engine.describeLegs). */
+function legsHtml(legs, walkMin, targetName) {
+  const direction = state.direction;
   const items = [];
   for (const leg of legs) {
     if (leg.kind === 'access') {
       const min = Math.round(leg.durSec / 60);
       if (min >= 1) {
         items.push(direction === 'from'
-          ? `🚶 ${min} min do przystanku ${esc(net.stopName[leg.stop])}`
-          : `🚶 ${min} min od przystanku ${esc(net.stopName[leg.stop])} do celu`);
+          ? `🚶 ${min} min do przystanku ${esc(leg.stopName)}`
+          : `🚶 ${min} min od przystanku ${esc(leg.stopName)} do celu`);
       }
     } else if (leg.kind === 'walk') {
       const min = Math.max(1, Math.round(leg.durSec / 60));
-      const same = net.stopName[leg.fromStop] === net.stopName[leg.toStop];
-      items.push(same
+      items.push(leg.fromName === leg.toName
         ? `🚶 przesiadka (${min} min)`
-        : `🚶 ${min} min do: ${esc(net.stopName[leg.toStop])}`);
+        : `🚶 ${min} min do: ${esc(leg.toName)}`);
     } else {
       const icon = VEH_ICON[leg.route.t] ?? '🚌';
       const times = leg.depSec != null
         ? ` · ${HHMM(leg.depSec)}–${HHMM(leg.arrSec)}`
         : ` · ${Math.round(leg.durSec / 60)} min`;
-      items.push(`${icon} <strong>${esc(leg.route.n)}</strong>: ${esc(net.stopName[leg.fromStop])} → ${esc(net.stopName[leg.toStop])}${times}`);
+      items.push(`${icon} <strong>${esc(leg.route.n)}</strong>: ${esc(leg.fromName)} → ${esc(leg.toName)}${times}`);
     }
   }
   // spacer między klikniętym miejscem a przystankiem docelowym
-  const wm = Math.round(target.walkMin);
+  const wm = Math.round(walkMin);
   if (wm >= 1) {
     const walkItem = direction === 'from'
       ? `🚶 ${wm} min do celu`
-      : `🚶 ${wm} min do przystanku ${esc(net.stopName[target.stop])}`;
+      : `🚶 ${wm} min do przystanku ${esc(targetName)}`;
     if (direction === 'from') items.push(walkItem);
     else items.unshift(walkItem);
   }
@@ -512,10 +543,9 @@ function legsHtml(legs, target) {
 }
 
 function journeyHeader(totalMin) {
-  const { mode, direction } = lastCompute;
   let extra = '';
-  if (mode === 'time') {
-    const clock = direction === 'from'
+  if (state.mode === 'time') {
+    const clock = state.direction === 'from'
       ? `przyjazd ok. ${HHMM(state.timeMin * 60 + totalMin * 60)}`
       : `wyjście ok. ${HHMM(state.timeMin * 60 - totalMin * 60)}`;
     extra = ` <span class="muted">(${clock})</span>`;
@@ -525,175 +555,30 @@ function journeyHeader(totalMin) {
   return `<h4>≈ ${Math.round(totalMin)} min${extra}</h4>`;
 }
 
-/**
- * Dymek w trybie „tylko pieszo": brak przystanków i etapów, więc czas czytamy
- * wprost z fali po lądzie. Poza siatką (albo bez geometrii miasta) zostaje
- * przybliżenie w linii prostej od punktu — jak rysowane wtedy koła.
- */
-function walkOnlyPopupHtml(latlng) {
-  const { grid, gridTime } = lastCompute;
-  let sec = null, why = null;
-  const idx = grid && gridTime ? pixelIndex(grid, latlng.lat, latlng.lng) : -1;
-  if (idx >= 0) {
-    if (gridTime[idx] < UNREACH) sec = gridTime[idx];
-    else why = 'Nie da się tam dojść pieszo (woda lub brak przejścia).';
-  } else if (!state.compare) {
-    sec = distM(latlng.lat, latlng.lng, state.point.lat, state.point.lng) / WALK_MPS;
-  } else {
-    // poza siatką nie ma fali dla dwóch punktów — to nie jest „woda", tylko brak analizy
-    why = 'Miejsce poza obszarem analizy pieszej.';
+/** HTML dymka z wyniku `Engine.journey`. */
+function journeyHtml(j) {
+  const unreach = why => `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${why}</span></div>`;
+  if (j.kind === 'walkOnly') {
+    // tryb „tylko pieszo": brak przystanków i etapów, czas wprost z fali po lądzie
+    if (j.sec == null || j.sec / 60 > 90) return unreach(j.why ?? 'Spacer zająłby ponad 90 minut.');
+    const who = state.compare ? ' (wolniejsza osoba)' : '';
+    return `<div class="journey">${journeyHeader(j.sec / 60)}<ol><li>🚶 ${Math.round(j.sec / 60)} min pieszo${who}</li></ol></div>`;
   }
-  if (sec == null || sec / 60 > 90) {
-    return `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${
-      why ?? 'Spacer zająłby ponad 90 minut.'
-    }</span></div>`;
+  if (j.kind === 'unreach') return unreach(j.reason);
+  if (j.kind === 'single') {
+    return `<div class="journey">${journeyHeader(j.total)}${j.legs ? legsHtml(j.legs, j.walkMin, j.targetName) : ''}</div>`;
   }
-  const min = Math.round(sec / 60);
-  const who = state.compare ? ' (wolniejsza osoba)' : '';
-  return `<div class="journey">${journeyHeader(sec / 60)}<ol><li>🚶 ${min} min pieszo${who}</li></ol></div>`;
-}
-
-function showJourneyPopup(latlng) {
-  if (!lastCompute) return;
-  if (lastCompute.walkOnly) {
-    L.popup({ maxWidth: 300 }).setLatLng(latlng).setContent(walkOnlyPopupHtml(latlng)).openOn(map);
-    return;
-  }
-  const target = pickTargetStop(latlng);
-  let html;
-  if (!target || target.total > 90) {
-    html = `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${
-      !target ? 'Brak osiągalnego przystanku w pobliżu.' : 'Podróż zajęłaby ponad 90 minut.'}</span></div>`;
-  } else if (!state.compare) {
-    const legs = lastCompute.res.journeyTo(target.stop);
-    html = `<div class="journey">${journeyHeader(target.total)}${legs ? legsHtml(legs, target) : ''}</div>`;
-  } else {
-    const parts = [];
-    for (const [res, cls, name] of [[lastCompute.res, 'dot-a', 'Punkt niebieski'], [lastCompute.res2, 'dot-b', 'Punkt pomarańczowy']]) {
-      const totalMin = res.minutes[target.stop] + target.walkMin;
-      const legs = res.journeyTo(target.stop);
-      parts.push(`<div class="person"><span class="dot ${cls}"></span>${name} · ≈ ${Math.round(totalMin)} min</div>`
-        + (legs ? legsHtml(legs, target) : '<span class="muted">brak trasy</span>'));
-    }
-    html = `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(target.total)} min</h4>${parts.join('')}</div>`;
-  }
-  L.popup({ maxWidth: 300 }).setLatLng(latlng).setContent(html).openOn(map);
+  const parts = j.persons.map((p, i) => {
+    const [cls, name] = i === 0 ? ['dot-a', 'Punkt niebieski'] : ['dot-b', 'Punkt pomarańczowy'];
+    return `<div class="person"><span class="dot ${cls}"></span>${name} · ≈ ${Math.round(p.totalMin)} min</div>`
+      + (p.legs ? legsHtml(p.legs, j.walkMin, j.targetName) : '<span class="muted">brak trasy</span>');
+  });
+  return `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(j.total)} min</h4>${parts.join('')}</div>`;
 }
 
 // --- przeliczanie -------------------------------------------------------------
 
 let computeSeq = 0;
-let walkNet = null; // graf dróg pieszych bieżącego miasta (null = zostaje raster)
-
-/** Cap fali pieszej [s] — jak CAP_SEC w walkgrid.js (pasmo „ponad 60" do 90 min). */
-const WALK_CAP_SEC = 90 * 60;
-
-/**
- * Przyłączenie przystanków do sieci pieszej (rzut na krawędzie, patrz
- * `snapEdges`). Liczone raz na parę (sieć piesza × sieć rozkładowa)
- * i pamiętane przy grafie — snapowanie kilku tysięcy przystanków przy każdym
- * przeliczeniu byłoby marnotrawstwem.
- * @returns {Array<Array<object>>} lista kandydatek per przystanek (pusta = poza siecią)
- */
-function stopSnaps(wnet, net) {
-  wnet.stopCache ??= new WeakMap();
-  let snaps = wnet.stopCache.get(net);
-  if (!snaps) {
-    snaps = new Array(net.nStops);
-    for (let i = 0; i < net.nStops; i++) snaps[i] = snapEdges(wnet, net.lat[i], net.lon[i]);
-    wnet.stopCache.set(net, snaps);
-  }
-  return snaps;
-}
-
-/**
- * Czasy dojścia od punktu do KAŻDEGO przystanku, liczone po sieci ulic.
- *
- * Dotąd `findAccessStops` mierzył je w linii prostej z ryczałtem krętości 1,3,
- * więc przystanek po drugiej stronie rzeki wchodził do podróży jako start
- * w kilka minut marszu — graf naprawiał kształt stref, ale nie to, skąd
- * RAPTOR/Dijkstra w ogóle wyruszają.
- *
- * Punkt i przystanki są przyłączone rzutem na krawędzie (lista kandydatek):
- * fala startuje z końców każdej kandydatki punktu, a czas przystanku to
- * krótsza z dróg przez końce jego kandydatek (plus dojście z rzutu). Para na
- * tej samej krawędzi liczona wprost wzdłuż ulicy (`sameEdgeSec`).
- *
- * @param {object} net  sieć rozkładowa (współrzędne przystanków)
- * @param {{lat:number, lng:number}} point  punkt użytkownika
- * @returns {Float64Array|null} sekundy per przystanek: `Infinity` = graf zna
- *   przystanek, ale nie ma do niego dojścia w horyzoncie; `NaN` = przystanek
- *   poza grafem (router zostaje przy linii prostej). `null` = grafu nie ma
- *   albo punkt się do niego nie przyłączył — całość liczona jak dotąd.
- */
-function accessTimesOnNet(net, point) {
-  if (!walkNet) return null;
-  const origin = snapEdges(walkNet, point.lat, point.lng);
-  if (!origin.length) return null; // punkt daleko od jakiejkolwiek drogi (pole, plaża)
-  const nodeTime = computeNodeTimes(walkNet, snapSeeds(origin, 0), WALK_CAP_SEC);
-  const snaps = stopSnaps(walkNet, net);
-  const out = new Float64Array(net.nStops);
-  for (let i = 0; i < net.nStops; i++) {
-    const s = snaps[i];
-    if (!s.length) { out[i] = NaN; continue; }
-    const via = snapTime(nodeTime, s);
-    const t = Math.min(via < 0 ? Infinity : via, sameEdgeSec(origin, s));
-    out[i] = t > WALK_CAP_SEC ? Infinity : t;
-  }
-  return out;
-}
-
-/**
- * Fala piesza policzona po sieci ulic: czasy w węzłach grafu → źródła rastra
- * → rozlanie na `SPREAD_M` od sieci. Zwraca `grid.time` albo `null`, gdy grafu
- * nie ma (jeszcze się ładuje albo miasto go nie ma) — wtedy wywołujący spada
- * do dawnej fali po rastrze lądu.
- *
- * Każde źródło (punkt, przystanek) zasiewa oba końce swojej krawędzi, a przy
- * malowaniu (`paintNetwork`) wnętrze tej krawędzi dostaje czas liczony wprost
- * od rzutu — bez tego okolica źródła była kolorowana z czasem powiększonym
- * o marsz do skrzyżowania i z powrotem.
- * @param {object} grid   siatka rastrowa
- * @param {object} net    sieć rozkładowa (współrzędne przystanków)
- * @param {Float64Array|null} mins  czasy dojazdu per przystanek; null = sam spacer
- * @param {{lat:number, lng:number}|null} origin  punkt użytkownika
- */
-function walkWaveOnNet(grid, net, mins, origin) {
-  if (!walkNet) return null;
-  const seeds = [];
-  const edgeSeeds = new Map(); // krawędź -> [[t, sekundy w rzucie], ...]
-  const addSource = (snaps, startSec) => {
-    seeds.push(...snapSeeds(snaps, startSec));
-    for (const s of snaps) {
-      const list = edgeSeeds.get(s.edge) ?? [];
-      list.push([s.t, startSec + s.perpSec]);
-      edgeSeeds.set(s.edge, list);
-    }
-  };
-  const extraSeeds = []; // źródła nanoszone wprost na raster (okolica punktu)
-  if (origin) {
-    const snaps = snapEdges(walkNet, origin.lat, origin.lng);
-    if (snaps.length) addSource(snaps, 0);
-    // punkt zawsze koloruje swoje najbliższe otoczenie, nawet gdy leży
-    // daleko od jakiejkolwiek drogi (pole, plaża) i nie przyłączył się
-    const oIdx = pixelIndex(grid, origin.lat, origin.lng);
-    if (oIdx >= 0) extraSeeds.push([oIdx, 0]);
-  }
-  if (mins) {
-    const snaps = stopSnaps(walkNet, net);
-    for (let i = 0; i < net.nStops; i++) {
-      const t = mins[i];
-      if (!(t <= 90) || !snaps[i].length) continue;
-      addSource(snaps[i], Math.round(t * 60));
-    }
-  }
-  if (!seeds.length) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
-  const nodeTime = computeNodeTimes(walkNet, seeds, WALK_CAP_SEC);
-  // paintNetwork zasiewa grid.time wprost, więc computeTimeGrid dostaje null
-  paintNetwork(walkNet, nodeTime, grid, pixelIndex, UNREACH, WALK_CAP_SEC, edgeSeeds);
-  for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
-  return computeTimeGrid(grid, null, SPREAD_M);
-}
 
 /** Czytelny opis bieżącego widoku do paska statusu. */
 function statusText(walkOnly) {
@@ -713,157 +598,52 @@ function statusText(walkOnly) {
   return `${what} · ${when}${safe}.`;
 }
 
+/**
+ * Przeliczenie w silniku. Wynik przychodzi w dwóch fazach: raster + koła
+ * + statystyki (szybko), potem obrysy wektorowe. Nowsze żądanie unieważnia
+ * starsze (`computeSeq`) — spóźnione fazy są ignorowane.
+ */
 async function recompute() {
+  if (!cityReady) return; // loadCityAssets uruchomi przeliczenie, gdy miasto będzie gotowe
   const seq = ++computeSeq;
   updateUrl();
   const status = $('status');
   status.textContent = 'Obliczam zasięg…';
+  map.closePopup();
+  const walkOnly = isWalkOnly();
+  const types = allowedTypes();
+  const params = {
+    city: state.city,
+    dayKey: state.mode === 'time' ? state.day : 'workday', // tryb ogólny zawsze na dniu roboczym
+    direction: state.direction,
+    walk: state.walk,
+    mode: state.mode,
+    timeMin: state.timeMin,
+    types: types ? [...types] : null,
+    cautious: state.safe,
+    walkOnly,
+    compare: state.compare,
+    point: { lat: state.point.lat, lng: state.point.lng },
+    point2: { lat: state.point2.lat, lng: state.point2.lng },
+    stats: state.stats && !state.compare,
+  };
   try {
-    // tryb ogólny zawsze na rozkładzie dnia roboczego
-    const dayKey = state.mode === 'time' ? state.day : 'workday';
-    const DAY_TYPE = { workday: 0, saturday: 1, sunday: 2 };
-    const [net, delays] = await Promise.all([
-      loadDay(state.city, dayKey),
-      state.safe ? loadDelays(state.city) : Promise.resolve(null),
-    ]);
-    if (seq !== computeSeq) return; // w międzyczasie przyszło nowsze zapytanie
-
-    const optsBase = {
-      direction: state.direction,
-      walk: state.walk,
-      mode: state.mode,
-      timeMin: state.timeMin,
-      types: allowedTypes(),
-      cautious: state.safe,
-      delays,
-      dayType: DAY_TYPE[dayKey],
-    };
-    // tryb „tylko pieszo" pomija routing — zasięg wyznacza sama fala po lądzie
-    const walkOnly = isWalkOnly();
-    let res = null, res2 = null;
-    let minutes;
-    if (walkOnly) {
-      minutes = new Float64Array(net.nStops).fill(Infinity);
-    } else {
-      res = computeReachability(net, {
-        ...optsBase, lat: state.point.lat, lon: state.point.lng,
-        accessSec: state.walk ? accessTimesOnNet(net, state.point) : null,
-      });
-      minutes = res.minutes;
-      if (state.compare) {
-        // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
-        res2 = computeReachability(net, {
-          ...optsBase, lat: state.point2.lat, lon: state.point2.lng,
-          accessSec: state.walk ? accessTimesOnNet(net, state.point2) : null,
+    await engine.compute(params, msg => {
+      if (seq !== computeSeq) return; // w międzyczasie przyszło nowsze zapytanie
+      if (msg.phase === 'zones') {
+        zoneLayer.update({
+          grid: msg.image ? { canvas: msg.image, ...msg.bbox } : null,
+          zones: msg.zones,
+          contours: null,
         });
-        minutes = new Float64Array(res.minutes.length);
-        for (let i = 0; i < minutes.length; i++) {
-          minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
-        }
+        if (msg.stats) renderStats(msg.stats, state.walk || walkOnly);
+        status.textContent = (msg.reachable === 0 && !walkOnly)
+          ? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.'
+          : statusText(walkOnly);
+      } else if (msg.phase === 'contours') {
+        zoneLayer.update({ contours: msg.contours });
       }
-    }
-    lastCompute = { net, res, res2, minutes, walk: state.walk, walkOnly, mode: state.mode, direction: state.direction, grid: null, gridTime: null };
-    map.closePopup();
-
-    let gridTime = null, grid = null;
-    if (cityAssets) {
-      // strefy na siatce lądu: woda blokuje, mosty przepuszczają.
-      // walk=true — fala pieszo (czas dojazdu + dojście); walk=false — koła 200 m
-      // wokół przystanków przycięte wodą (bez czasu dojścia)
-      grid = buildWalkGrid(state.city, cityCfg(), cityAssets.water, cityAssets.bridges, cityAssets.city);
-      const seedsFor = (mins, origin) => {
-        const seeds = [];
-        for (let i = 0; mins && i < net.nStops; i++) {
-          const t = mins[i];
-          if (!(t <= 90)) continue;
-          const idx = pixelIndex(grid, net.lat[i], net.lon[i]);
-          if (idx >= 0) seeds.push([idx, Math.round(t * 60)]);
-        }
-        if (origin) {
-          const oIdx = pixelIndex(grid, origin.lat, origin.lng);
-          if (oIdx >= 0) seeds.push([oIdx, 0]);
-        }
-        return seeds;
-      };
-      // fala piesza: po sieci ulic, gdy graf jest już wczytany; inaczej po rastrze
-      // (mins === null w trybie „tylko pieszo" — źródłem jest sam punkt)
-      const waveFor = (mins, origin) =>
-        walkWaveOnNet(grid, net, mins, origin) ?? computeTimeGrid(grid, seedsFor(mins, origin));
-
-      if (walkOnly || state.walk) {
-        const minsA = walkOnly ? null : (state.compare ? res.minutes : minutes);
-        if (state.compare) {
-          const minsB = walkOnly ? null : res2.minutes;
-          const t1 = waveFor(minsA, state.point).slice();
-          const t2 = waveFor(minsB, state.point2);
-          gridTime = maxTimeGrid(grid, t1, t2);
-        } else {
-          gridTime = waveFor(minsA, state.point);
-        }
-      } else {
-        // bez spaceru: origin nie jest źródłem (dojście tylko od przystanku)
-        if (state.compare) {
-          const t1 = computeNoWalkGrid(grid, seedsFor(res.minutes, null), NO_WALK_RADIUS_M).slice();
-          const t2 = computeNoWalkGrid(grid, seedsFor(res2.minutes, null), NO_WALK_RADIUS_M);
-          gridTime = maxTimeGrid(grid, t1, t2);
-        } else {
-          gridTime = computeNoWalkGrid(grid, seedsFor(minutes, null), NO_WALK_RADIUS_M);
-        }
-      }
-      zoneLayer.setGrid({
-        canvas: renderTimeGrid(grid, gridTime),
-        latN: grid.latN, lonW: grid.lonW, latS: grid.latS, lonE: grid.lonE,
-      });
-      // koła tylko dla przystanków poza bboxem siatki (np. Lębork, Tczew w feedzie
-      // SKM). Promień ograniczony capem — pełny promień pasma (do 5,2 km) rysowany
-      // bez bariery wody zlewał się w plamę większą niż zasięg siatki
-      const outside = new Float64Array(minutes.length).fill(Infinity);
-      let anyOutside = false;
-      for (let i = 0; i < net.nStops; i++) {
-        if (minutes[i] <= 90 && pixelIndex(grid, net.lat[i], net.lon[i]) < 0) {
-          outside[i] = minutes[i];
-          anyOutside = true;
-        }
-      }
-      zoneLayer.setZones(anyOutside
-        ? buildZones(net, outside, { walk: state.walk, origin: null, maxRadiusM: OUTSIDE_MAX_RADIUS_M })
-        : null);
-    } else {
-      // brak geometrii miasta: koła crow-fly. W trybie „tylko pieszo" zostają
-      // same koła wokół punktu (bez przystanków), więc origin jest niezbędny
-      zoneLayer.setGrid(null);
-      zoneLayer.setZones(buildZones(net, minutes, {
-        walk: state.walk || walkOnly,
-        origin: state.compare && !walkOnly ? null : { lat: state.point.lat, lon: state.point.lng },
-      }));
-    }
-    // dymek trasy korzysta z tej samej siatki co strefy (spójny dobór przystanku)
-    lastCompute.grid = grid;
-    lastCompute.gridTime = gridTime;
-
-    if (!state.compare && state.stats) {
-      const statRows = computeStats(net, minutes, {
-        walk: state.walk || walkOnly,
-        origin: { lat: state.point.lat, lon: state.point.lng },
-      });
-      if (gridTime && grid) {
-        const pct = areaPercents(grid, gridTime);
-        if (pct) statRows.forEach((row, i) => { row.areaPct = pct[i]; });
-        if (walkOnly) {
-          // bez pojazdów nie ma przystanków, więc przybliżenie kołowe z
-          // computeStats dałoby stałe limit×tempo niezależnie od wody; zasięg
-          // bierzemy z siatki, spójnie z narysowanymi strefami
-          const km = maxBandDistances(grid, gridTime, pixelIndex(grid, state.point.lat, state.point.lng));
-          if (km) statRows.forEach((row, i) => { row.maxKm = km[i]; });
-        }
-      }
-      renderStats(statRows, state.walk || walkOnly);
-    }
-
-    const reachable = minutes.reduce((s, v) => s + (v <= 90 ? 1 : 0), 0);
-    status.textContent = (reachable === 0 && !walkOnly)
-      ? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.'
-      : statusText(walkOnly);
+    });
   } catch (err) {
     console.error(err);
     if (seq === computeSeq) status.textContent = 'Błąd wczytywania danych rozkładowych.';
@@ -917,17 +697,14 @@ function applyMeta(meta) {
   }
 }
 
-let cityAssets = null; // {water, city, bridges} bieżącego miasta (do siatki pieszej)
-
 /**
- * Wczytuje zasoby miasta i uruchamia przeliczenie. Kolejność: meta + geometria
- * (małe pliki) → pierwsze rysowanie na siatce lądu → graf ulic (największy
- * plik, dociąga się w tle) → drugie, docelowe rysowanie. Dwa przeliczenia,
- * nie trzy: wcześniejsze natychmiastowe rysowanie kół crow-fly było od razu
- * nadpisywane i tylko migało.
+ * Wczytuje miasto: meta + maska wody dla mapy (małe pliki, wątek główny),
+ * geometria siatki i graf ulic w silniku. Pierwsze rysowanie po geometrii,
+ * drugie — gdy silnik zgłosi graf ulic (`onWalkNet`).
  */
 async function loadCityAssets() {
   const key = state.city;
+  cityReady = false;
   $('areaHead').textContent = cityCfg().areaLabel;
   renderCredits();
   renderVehControls();
@@ -935,19 +712,20 @@ async function loadCityAssets() {
   $('feedEnd').textContent = '…';
   $('status').textContent = 'Wczytuję dane miasta…';
 
-  // wszystkie loadery zwracają null przy braku pliku/błędzie — nic tu nie rzuca
-  const [meta, water, city, bridges] = await Promise.all([loadMeta(key), loadWater(key), loadCity(key), loadBridges(key)]);
+  // loadery zwracają null przy braku pliku/błędzie — nic tu nie rzuca
+  const [meta, water] = await Promise.all([loadMeta(key), loadWater(key)]);
   if (state.city !== key) return; // w międzyczasie zmieniono miasto
   applyMeta(meta);
   zoneLayer.setWater(water ?? { polys: [], lines: [] });
-  cityAssets = { water, city, bridges };
-  recompute();
-
-  // sieć piesza jest największym zasobem miasta — dociąga się osobno, a po
-  // jej przyjściu strefy przeliczają się jeszcze raz, już po realnych ulicach
-  const raw = await loadWalkNet(key);
-  if (state.city !== key || !raw) return;
-  walkNet = decodeWalkNet(raw);
+  try {
+    const ok = await engine.setCity(key, cityCfg());
+    if (!ok || state.city !== key) return;
+  } catch (err) {
+    console.error(err);
+    if (state.city === key) $('status').textContent = 'Błąd wczytywania danych miasta.';
+    return;
+  }
+  cityReady = true;
   recompute();
 }
 
@@ -964,15 +742,12 @@ function switchCity(key) {
   for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
   map.closePopup();
   map.setView(cityCfg().center, cityCfg().zoom);
-  // zasoby poprzedniego miasta: geometria nie pasuje, a sieci i siatka to
-  // dziesiątki MB — zwalniamy, żeby karta na telefonie nie rosła bez końca
-  cityAssets = null;
-  walkNet = null;
-  lastCompute = null;
-  zoneLayer.setGrid(null);
-  zoneLayer.setZones(null);
+  // zasoby poprzedniego miasta zwalnia silnik (setCity); tu tylko cache
+  // meta/wody wątku głównego i warstwa stref
+  cityReady = false;
+  computeSeq++; // spóźnione fazy poprzedniego miasta do kosza
+  zoneLayer.update({ grid: null, contours: null, zones: null });
   dropCityCache(prev);
-  dropGrid(prev);
   loadCityAssets();
 }
 

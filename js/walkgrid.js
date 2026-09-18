@@ -10,6 +10,7 @@
 
 import { WALK_MPS, M_PER_DEG_LAT } from './data.js';
 import { BANDS } from './isochrone.js';
+import { contours as d3Contours } from '../vendor/d3-contour/d3-contour.esm.js';
 
 const MAX_CELLS = 4_000_000; // limit rozmiaru siatki — rozdzielczość dobierana automatycznie
 const CAP_SEC = 90 * 60;     // horyzont rysowania (jak pasmo "ponad 60")
@@ -28,8 +29,10 @@ export function dropGrid(cityKey) {
  * @param {{polys:Array,lines:Array}|null} water  poligony akwenów + linie rzek/kanałów
  * @param {Array|null} bridges  linie mostów [[ [lat,lon], ...], ...]
  * @param {Array|null} city     granice miasta (do statystyk % powierzchni)
+ * @param {(w:number, h:number)=>object} [createCanvas]  fabryka canvasu —
+ *   w Web Workerze `OffscreenCanvas`, w oknie element <canvas> (domyślnie)
  */
-export function buildWalkGrid(cityKey, cfg, water, bridges, city) {
+export function buildWalkGrid(cityKey, cfg, water, bridges, city, createCanvas = domCanvas) {
   if (gridCache.has(cityKey)) return gridCache.get(cityKey);
 
   // gridBbox = bbox poszerzony o przystanki tuż za granicą sieci (Pruszcz Gdański,
@@ -48,8 +51,7 @@ export function buildWalkGrid(cityKey, cfg, water, bridges, city) {
   const toY = lat => (latN - lat) * M_PER_DEG_LAT / res;
 
   // rasteryzacja przez canvas: ląd = alfa 0, woda = wypełnienie, mosty = wycięte z wody
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
+  const cv = createCanvas(W, H);
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   const trace = rings => {
     ctx.beginPath();
@@ -122,13 +124,20 @@ export function buildWalkGrid(cityKey, cfg, water, bridges, city) {
     // bufory wielokrotnego użytku
     time: new Uint16Array(W * H),
     imageData: new ImageData(W, H),
-    canvas: (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; })(),
+    canvas: createCanvas(W, H),
   };
   gridCache.set(cityKey, grid);
   return grid;
 }
 
 export const UNREACH = 65535;
+
+/** Domyślna fabryka canvasu (okno przeglądarki). */
+function domCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
 
 /**
  * Propagacja czasu po lądzie od źródeł [pxIndex, sekundy].
@@ -354,6 +363,101 @@ export function maxBandDistances(grid, time, originIdx) {
   // kumulatywnie: pasmo ≤20 zawiera też ≤10, więc zasięg nie może maleć
   let cum = 0;
   return best.map(v => { cum = Math.max(cum, v); return cum / 1000; });
+}
+
+/**
+ * Wartość „nieosiągalne" dla obrysów: poniżej najniższego progu, ale nie
+ * −∞, żeby interpolacja d3 stawiała granicę blisko krawędzi komórki, a nie
+ * dokładnie w jej środku.
+ */
+const CONTOUR_UNREACH = -(CAP_SEC + 3600);
+/** Tolerancja upraszczania obrysu [komórki siatki] — usuwa punkty niemal współliniowe. */
+const CONTOUR_SIMPLIFY = 0.15;
+
+/**
+ * Wektorowe obrysy pasm czasu z siatki (marching squares, d3-contour).
+ *
+ * Raster rozciągany `drawImage` przy zoomie 15+ dawał 10–20-pikselowe
+ * „klocki" o rozmytych krawędziach. Obrys jest wygładzany interpolacją między
+ * komórkami i rysowany jako ścieżka wektorowa — ostry w każdym zoomie.
+ * Pasmo k = obszar, gdzie czas ≤ limit_k (kumulatywnie; rysować od
+ * najchłodniejszego do najcieplejszego, jak koła i raster).
+ *
+ * Współrzędne d3: komórka (i, j) zajmuje [i, i+1] × [j, j+1], więc przeliczenie
+ * na lat/lon to to samo, co odwrotność `toX`/`toY` siatki.
+ *
+ * @param {object} grid       siatka z `buildWalkGrid` (W, H, res, latN, lonW, mPerDegLon)
+ * @param {Uint16Array} time  czasy (sekundy, UNREACH = poza zasięgiem)
+ * @returns {Array<{limit:number, color:string, rings:Float64Array[], bbox:Float64Array[]}>}
+ *   w kolejności BANDS; `rings[i]` = [lat0, lon0, lat1, lon1, …] (pierścienie
+ *   zewnętrzne i dziury razem — wypełniać regułą evenodd), `bbox[i]` =
+ *   [latS, lonW, latN, lonE] pierścienia (do pomijania poza widokiem).
+ */
+export function buildContours(grid, time) {
+  const { W, H, res, latN, lonW, mPerDegLon } = grid;
+  const v = new Float64Array(W * H);
+  for (let i = 0; i < W * H; i++) v[i] = time[i] >= UNREACH ? CONTOUR_UNREACH : -time[i];
+  const byValue = new Map(BANDS.map(b => [-b.limit * 60, b]));
+  const polys = d3Contours().size([W, H]).smooth(true).thresholds([...byValue.keys()])(v);
+  const out = BANDS.map(b => ({ limit: b.limit, color: b.color, rings: [], bbox: [] }));
+  const kx = res / mPerDegLon, ky = res / M_PER_DEG_LAT;
+  for (const mp of polys) {
+    const band = byValue.get(mp.value);
+    const slot = out[BANDS.indexOf(band)];
+    for (const poly of mp.coordinates) {
+      for (const ring of poly) {
+        if (isTinyRing(ring)) continue; // pojedyncza komórka: szum rastra, nie strefa
+        const pts = simplifyRing(ring, CONTOUR_SIMPLIFY);
+        if (pts.length < 3) continue;
+        const flat = new Float64Array(pts.length * 2);
+        let s = 90, n = -90, w = 180, e = -180;
+        for (let i = 0; i < pts.length; i++) {
+          const lat = latN - pts[i][1] * ky, lon = lonW + pts[i][0] * kx;
+          flat[2 * i] = lat; flat[2 * i + 1] = lon;
+          if (lat < s) s = lat; if (lat > n) n = lat; if (lon < w) w = lon; if (lon > e) e = lon;
+        }
+        slot.rings.push(flat);
+        slot.bbox.push(Float64Array.from([s, w, n, e]));
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Pierścień mieszczący się w ~jednej komórce (romb wokół pojedynczego piksela
+ * innego pasma) — artefakt rozlania od sieci, bez wartości informacyjnej;
+ * dotyczy tak samo wysepek, jak i dziur.
+ */
+function isTinyRing(ring) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of ring) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return (x1 - x0) < 1.5 && (y1 - y0) < 1.5;
+}
+
+/**
+ * Jednoprzebiegowe upraszczanie zamkniętego pierścienia: punkt wypada, gdy
+ * leży bliżej niż `tol` od odcinka między ostatnim zachowanym a następnym.
+ * Obrysy d3 mają wierzchołek na każdej krawędzi komórki, więc wzdłuż prostych
+ * odcinków to usuwa większość punktów bez zmiany kształtu.
+ */
+function simplifyRing(ring, tol) {
+  const n = ring.length - 1; // d3 domyka pierścień (ostatni = pierwszy)
+  if (n < 4) return ring.slice(0, n);
+  const out = [ring[0]];
+  let last = ring[0];
+  for (let i = 1; i < n; i++) {
+    const p = ring[i], q = ring[i + 1];
+    const dx = q[0] - last[0], dy = q[1] - last[1];
+    const len = Math.hypot(dx, dy) || 1e-9;
+    const d = Math.abs(dx * (last[1] - p[1]) - dy * (last[0] - p[0])) / len;
+    if (d < tol) continue;
+    out.push(p);
+    last = p;
+  }
+  return out;
 }
 
 /** Statystyka: % powierzchni lądowej miasta w zasięgu każdego pasma. */

@@ -5,7 +5,6 @@
  * dzięki temu unie kół w ramach strefy są jednolite, bez plam.
  */
 
-/* global L */
 
 import { M_PER_DEG_LAT } from './data.js';
 
@@ -75,6 +74,26 @@ export const ZoneLayer = L.Layer.extend({
     this._redraw();
   },
 
+  /**
+   * Wektorowe obrysy pasm (wynik `buildContours`) albo null. Gdy są, raster
+   * z `setGrid` nie jest rysowany — obrysy mają ostre krawędzie w każdym zoomie.
+   */
+  setContours(bands) {
+    this._contours = bands;
+    this._redraw();
+  },
+
+  /**
+   * Zbiorcza aktualizacja (raster, koła, obrysy) z jednym przerysowaniem —
+   * pola pominięte zostają bez zmian.
+   */
+  update({ grid, zones, contours } = {}) {
+    if (grid !== undefined) this._grid = grid;
+    if (zones !== undefined) this._zones = zones;
+    if (contours !== undefined) this._contours = contours;
+    this._redraw();
+  },
+
   /** Geometria wody {polys, lines} — wycinana ze stref (linie rzek stroke ~100 m). */
   setWater(water) {
     this._water = water;
@@ -99,7 +118,7 @@ export const ZoneLayer = L.Layer.extend({
 
     const ctx = this._canvas.getContext('2d');
     ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-    if (!this._zones && !this._grid) return;
+    if (!this._zones && !this._grid && !this._contours) return;
 
     const bctx = this._buffer.getContext('2d');
     bctx.clearRect(0, 0, this._buffer.width, this._buffer.height);
@@ -113,8 +132,10 @@ export const ZoneLayer = L.Layer.extend({
 
     const bounds = map.getBounds().pad(0.3);
 
-    // raster siatki pieszej — rozciągnięty między narożnikami bboxa
-    if (this._grid) {
+    if (this._contours) this._drawContours(bctx, map, bounds);
+    // raster siatki pieszej — rozciągnięty między narożnikami bboxa (tylko
+    // zanim przyjdą obrysy wektorowe)
+    else if (this._grid) {
       const g = this._grid;
       const tl = map.latLngToContainerPoint([g.latN, g.lonW]);
       const br = map.latLngToContainerPoint([g.latS, g.lonE]);
@@ -170,5 +191,48 @@ export const ZoneLayer = L.Layer.extend({
     ctx.globalAlpha = ZONE_ALPHA;
     ctx.drawImage(this._buffer, 0, 0);
     ctx.globalAlpha = 1;
+  },
+
+  /**
+   * Obrysy pasm jako ścieżki: od najchłodniejszego do najcieplejszego
+   * (ciepłe nadpisują chłodne), reguła evenodd (dziury i wyspy w dziurach).
+   *
+   * Rzut lat/lon → piksel liczony wprost (Mercator: x liniowe w lon, y liniowe
+   * w ln tan(π/4 + φ/2)) z dwóch punktów odniesienia z Leafleta — kilkaset
+   * tysięcy wierzchołków przez `latLngToContainerPoint` byłoby za wolne.
+   * Pierścienie poza widokiem (bbox) są pomijane, a kolejne wierzchołki bliżej
+   * niż ~0,7 px od poprzedniego — zlewane.
+   */
+  _drawContours(bctx, map, bounds) {
+    const bands = this._contours;
+    const p0 = map.latLngToContainerPoint([bounds.getNorth(), bounds.getWest()]);
+    const p1 = map.latLngToContainerPoint([bounds.getSouth(), bounds.getEast()]);
+    const mercY = lat => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2));
+    const mN = mercY(bounds.getNorth()), mS = mercY(bounds.getSouth());
+    const sx = (p1.x - p0.x) / (bounds.getEast() - bounds.getWest());
+    const sy = (p1.y - p0.y) / (mS - mN);
+    const lonW = bounds.getWest();
+    const vS = bounds.getSouth(), vN = bounds.getNorth(), vW = bounds.getWest(), vE = bounds.getEast();
+    for (let b = bands.length - 1; b >= 0; b--) {
+      const band = bands[b];
+      if (!band.rings.length) continue;
+      bctx.fillStyle = band.color;
+      bctx.beginPath();
+      for (let r = 0; r < band.rings.length; r++) {
+        const bb = band.bbox[r];
+        if (bb[2] < vS || bb[0] > vN || bb[3] < vW || bb[1] > vE) continue; // poza widokiem
+        const ring = band.rings[r];
+        let lx = NaN, ly = NaN, count = 0;
+        for (let i = 0; i < ring.length; i += 2) {
+          const x = p0.x + (ring[i + 1] - lonW) * sx;
+          const y = p0.y + (mercY(ring[i]) - mN) * sy;
+          if (count && Math.abs(x - lx) < 0.7 && Math.abs(y - ly) < 0.7) continue;
+          if (count === 0) bctx.moveTo(x, y); else bctx.lineTo(x, y);
+          lx = x; ly = y; count++;
+        }
+        if (count) bctx.closePath();
+      }
+      bctx.fill('evenodd');
+    }
   },
 });

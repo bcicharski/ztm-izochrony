@@ -8,7 +8,9 @@ Statyczna strona pokazująca, jak daleko można dotrzeć komunikacją miejską
 **Kraków** (z autobusami aglomeracyjnymi i koleją SKA), **aglomeracja śląska
 (GZM)**, Wrocław, Poznań, Łódź, Szczecin, Lublin, Bydgoszcz, Białystok,
 Rzeszów, Olsztyn, Toruń, Kielce, Opole, Zielona Góra i Gorzów Wielkopolski.
-Całość liczy się w przeglądarce — bez backendu; wszystko, co miejskie
+Całość liczy się w przeglądarce — bez backendu, w Web Workerze (mapa reaguje
+w trakcie liczenia; przeglądarki bez OffscreenCanvas liczą w wątku głównym,
+to samo wymusza parametr URL `engine=main`); wszystko, co miejskie
 (feedy GTFS, granice, maski wody, punkty domyślne, grupy pojazdów, atrybucje),
 definiuje `data/cities.json`, a dane leżą w `data/<miasto>/`.
 
@@ -81,6 +83,18 @@ z `data/<miasto>/meta.json`). Po tym terminie panel wyświetla ostrzeżenie,
 a typy dnia, których build nie wygenerował (`meta.dates`), są wyłączone
 w selektorze.
 
+## Testy i lint
+
+```
+npm install
+npm test        # testy silnika (node:test, katalog tests/)
+npm run lint    # ESLint
+```
+
+Testy porównują RAPTOR z niezależną wyrocznią na losowych sieciach, sprawdzają
+dekoder, sieć odwróconą, falę po rastrze lądu i graf ulic. Workflow
+`.github/workflows/ci.yml` uruchamia lint i testy przy każdym pushu.
+
 ## Odświeżanie danych rozkładowych
 
 Wszystkie źródła to otwarte dane (adresy w `data/cities.json`, widoczne też
@@ -111,13 +125,15 @@ warto zbudować przed rozkładami.
 ```
 index.html             layout + panel opcji
 css/style.css          style (paleta UI: 5 kolorów)
-js/app.js              stan aplikacji i spięcie kontrolek
+js/app.js              stan aplikacji, kontrolki, klient silnika (worker / wątek główny)
+js/engine.js           silnik: RAPTOR → fala po siatce → raster → obrysy; dymek trasy
+js/worker.js           Web Worker opakowujący engine.js (obliczenia poza wątkiem UI)
 js/data.js             ładowanie i dekodowanie data/*.json (+ cache per miasto)
 js/router.js           RAPTOR (tryb godzinowy) + Dijkstra (tryb ogólny)
 js/walknet.js          routing pieszy po grafie ulic z OSM
 js/walkgrid.js         siatka lądu: fala piesza, woda jako bariera, raster stref
 js/isochrone.js        pasma czasu + koła fallbacku poza siatką
-js/map.js              Leaflet + warstwa canvas rysująca strefy
+js/map.js              Leaflet + warstwa canvas: obrysy wektorowe stref (raster do czasu ich policzenia)
 js/stats.js            statystyka maks. zasięgu (% powierzchni liczy walkgrid.js)
 data/cities.json       konfiguracja miast (feedy, granice, pojazdy, punkty)
 tools/fetch-feeds.mjs  pobieranie i rozpakowanie feedów miasta
@@ -130,7 +146,9 @@ tools/collect-delays.mjs kolektor opóźnień (GTFS-RT / ZTM Gdańsk) -> gałą�
 tools/build-delays.mjs profile opóźnień -> data/<miasto>/delays.json
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*
 tools/serve.mjs        serwer deweloperski
+tests/                 testy (node:test) + wyrocznia i generator sieci w helpers.mjs
 vendor/leaflet/        Leaflet 1.9.4 (zvendorowany)
+vendor/d3-contour/     d3-contour 4 (ESM zbudowany esbuildem; obrysy stref)
 ```
 
 Nowe miasto = wpis w `data/cities.json` + `fetch-feeds`/`build-data`/

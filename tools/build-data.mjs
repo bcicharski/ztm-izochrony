@@ -79,7 +79,7 @@ function splitCsv(line) {
 
 function readCsvSync(file) {
   if (!fs.existsSync(file)) return [];
-  const text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
+  const text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/).filter(l => l.length);
   const header = splitCsv(lines[0]);
   return lines.slice(1).map(l => {
@@ -288,7 +288,7 @@ for (let f = 0; f < feedDirs.length; f++) {
   let iTrip, iDep, iArr, iStop, iSeq, iPickup, iDrop;
   for await (const line of rl) {
     if (!header) {
-      header = splitCsv(line.replace(/^﻿/, '')).map(h => h.trim());
+      header = splitCsv(line.replace(/^\uFEFF/, '')).map(h => h.trim());
       iTrip = header.indexOf('trip_id');
       iDep = header.indexOf('departure_time');
       iArr = header.indexOf('arrival_time');

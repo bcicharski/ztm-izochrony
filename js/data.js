@@ -28,13 +28,21 @@ export const M_PER_DEG_LAT = 111320;
 const cache = new Map();
 
 /**
+ * Katalog danych względem TEGO modułu, nie strony — moduł działa też w Web
+ * Workerze (js/worker.js), gdzie względne adresy fetch liczą się od skryptu
+ * workera, a nie od index.html.
+ */
+const DATA_BASE = new URL('../data/', import.meta.url);
+const dataUrl = rel => new URL(rel, DATA_BASE).href;
+
+/**
  * Zwalnia z pamięci wszystkie zasoby miasta (sieci rozkładowe z kopią odwróconą,
  * graf ulic, maski). Bez tego obejrzenie kilku miast po kolei zostawiało
  * w pamięci dziesiątki MB na miasto, aż karta na telefonie padała.
  */
 export function dropCityCache(cityKey) {
   for (const key of [...cache.keys()]) {
-    if (key.startsWith(`${cityKey}/`) || key.startsWith(`data/${cityKey}/`) || key === `delays/${cityKey}`) {
+    if (key.startsWith(`${cityKey}/`) || key.startsWith(dataUrl(`${cityKey}/`)) || key === `delays/${cityKey}`) {
       cache.delete(key);
     }
   }
@@ -43,7 +51,7 @@ export function dropCityCache(cityKey) {
 /** Konfiguracja miast (data/cities.json). */
 export async function loadCities() {
   if (!cache.has('cities')) {
-    cache.set('cities', fetch('data/cities.json').then(r => {
+    cache.set('cities', fetch(dataUrl('cities.json')).then(r => {
       if (!r.ok) throw new Error(`Brak konfiguracji miast (${r.status})`);
       return r.json();
     }));
@@ -54,7 +62,7 @@ export async function loadCities() {
 export async function loadDay(cityKey, dayKey) {
   const key = `${cityKey}/${dayKey}`;
   if (cache.has(key)) return cache.get(key);
-  const promise = fetch(`data/${cityKey}/${dayKey}.json`)
+  const promise = fetch(dataUrl(`${cityKey}/${dayKey}.json`))
     .then(r => {
       if (!r.ok) throw new Error(`Nie udało się pobrać danych (${r.status})`);
       return r.json();
@@ -268,7 +276,7 @@ function reverseNetwork(net) {
  * w poligonach. Linie rysowane jako stroke ~100 m; poligony fill nonzero.
  */
 export async function loadWater(cityKey) {
-  const url = `data/${cityKey}/water.json`;
+  const url = dataUrl(`${cityKey}/water.json`);
   if (!cache.has(url)) {
     cache.set(url, fetch(url).then(async r => {
       if (!r.ok) return null;
@@ -285,7 +293,7 @@ export async function loadWater(cityKey) {
 
 /** Granice administracyjne miasta (do statystyk powierzchni). */
 export async function loadCity(cityKey) {
-  return loadRings(`data/${cityKey}/city.json`);
+  return loadRings(dataUrl(`${cityKey}/city.json`));
 }
 
 /**
@@ -297,7 +305,7 @@ export async function loadCity(cityKey) {
  * żeby nie tworzyć cyklu importów data.js ↔ walknet.js.
  */
 export async function loadWalkNet(cityKey) {
-  const url = `data/${cityKey}/walknet.json`;
+  const url = dataUrl(`${cityKey}/walknet.json`);
   if (!cache.has(url)) {
     cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null));
   }
@@ -306,7 +314,7 @@ export async function loadWalkNet(cityKey) {
 
 /** Mosty/kładki/mola (przejezdne korytarze przez wodę w siatce pieszej). */
 export async function loadBridges(cityKey) {
-  const url = `data/${cityKey}/bridges.json`;
+  const url = dataUrl(`${cityKey}/bridges.json`);
   if (!cache.has(url)) {
     cache.set(url, fetch(url).then(async r => {
       if (!r.ok) return null;
@@ -333,7 +341,7 @@ async function loadRings(url) {
  * `feedEndDate` (do kiedy rozkład jest ważny, yyyymmdd). `null` przy braku.
  */
 export async function loadMeta(cityKey) {
-  const url = `data/${cityKey}/meta.json`;
+  const url = dataUrl(`${cityKey}/meta.json`);
   if (!cache.has(url)) {
     cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null));
   }
@@ -344,7 +352,7 @@ export async function loadMeta(cityKey) {
 export async function loadDelays(cityKey) {
   const key = `delays/${cityKey}`;
   if (!cache.has(key)) {
-    cache.set(key, fetch(`data/${cityKey}/delays.json`)
+    cache.set(key, fetch(dataUrl(`${cityKey}/delays.json`))
       .then(r => (r.ok ? r.json() : {}))
       .catch(() => ({})));
   }

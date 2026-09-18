@@ -5,10 +5,8 @@ gtfs-src/
 # agregaty opóźnień żyją na gałęzi "delays" (workflow collect-delays)
 data/delays/
 
-# zależności lokalnych testów kolektora
+# zależności (eslint do lintu; gtfs-realtime-bindings instaluje workflow kolektora)
 node_modules/
-package.json
-package-lock.json
 
 # system
 Thumbs.db
