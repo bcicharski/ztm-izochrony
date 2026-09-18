@@ -2,10 +2,12 @@
 
 Statyczna strona pokazująca, jak daleko można dotrzeć komunikacją miejską
 (z przesiadkami, opcjonalnie z dojściem pieszym) w ciągu
-10 / 20 / 30 / 45 / 60 / ponad 60 minut. Obsługiwane miasta: **Trójmiasto**
-(ZTM Gdańsk + ZKM Gdynia + SKM/PKM), **Warszawa** (tramwaje, autobusy, metro,
-kolej miejska), **Wrocław**, **Kraków** (z autobusami aglomeracyjnymi i koleją SKA),
-**Poznań** i **Łódź**.
+10 / 20 / 30 / 45 / 60 / ponad 60 minut. Obsługiwane są 18 miast i aglomeracji:
+**Trójmiasto** (ZTM Gdańsk + ZKM Gdynia + SKM/PKM + MZK Wejherowo + PolRegio),
+**Warszawa** (tramwaje, autobusy, metro, SKM, WKD, Koleje Mazowieckie),
+**Kraków** (z autobusami aglomeracyjnymi i koleją SKA), **aglomeracja śląska
+(GZM)**, Wrocław, Poznań, Łódź, Szczecin, Lublin, Bydgoszcz, Białystok,
+Rzeszów, Olsztyn, Toruń, Kielce, Opole, Zielona Góra i Gorzów Wielkopolski.
 Całość liczy się w przeglądarce — bez backendu; wszystko, co miejskie
 (feedy GTFS, granice, maski wody, punkty domyślne, grupy pojazdów, atrybucje),
 definiuje `data/cities.json`, a dane leżą w `data/<miasto>/`.
@@ -63,15 +65,21 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
   na gałęzi `delays` — po kilku tygodniach dane wepniemy w silnik.
 
 Punkt można też wskazać wyszukiwarką adresów (Nominatim/OSM, wyniki zawężone
-do okolic Trójmiasta) albo przyciskiem geolokalizacji. Bieżący widok (punkt
-i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj link"
-pozwala go udostępnić.
+do `bbox` wybranego miasta) albo przyciskiem geolokalizacji. Bieżący widok
+(punkt i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj
+link" pozwala go udostępnić.
 
 Panel pokazuje też tabelę statystyk dla wybranego punktu: maksymalną
 odległość w linii prostej osiągalną w każdym paśmie czasu oraz — w trybie
-ze spacerem — odsetek powierzchni lądowej miasta objętej strefą (liczony
-rastrowo, 25 m/px, względem granic administracyjnych z odjęciem wód;
-dla Trójmiasta: Gdańsk+Sopot+Gdynia łącznie).
+ze spacerem — odsetek powierzchni lądowej miasta objętej strefą (liczony na
+siatce pieszej, 25–40 m/px, względem granic administracyjnych z odjęciem
+wód; dla aglomeracji łącznie wszystkich gmin z pola `boundaries`, np.
+Trójmiasto = Gdańsk, Sopot, Gdynia, Rumia, Reda, Wejherowo).
+
+Stopka pokazuje datę rozkładu i termin jego ważności (`feedEndDate`
+z `data/<miasto>/meta.json`). Po tym terminie panel wyświetla ostrzeżenie,
+a typy dnia, których build nie wygenerował (`meta.dates`), są wyłączone
+w selektorze.
 
 ## Odświeżanie danych rozkładowych
 
@@ -94,7 +102,9 @@ i niedzielę ze wspólnego zakresu dat, buduje wzorce tras z deduplikacją
 profili czasowych i zapisuje `data/<miasto>/{workday,saturday,sunday,meta}.json`
 (0,6–1,9 MB na dzień). Zespoły przystankowe wyznacza po nazwie z klastrowaniem
 odległościowym (≤300 m), żeby identyczne nazwy w różnych miejscach nie zlewały
-się w jeden węzeł przesiadkowy.
+się w jeden węzeł przesiadkowy. Czasy przesiadek pieszych bierze z sieci ulic
+(`data/<miasto>/walknet.json`, jeśli jest — inaczej z linii prostej), więc graf
+warto zbudować przed rozkładami.
 
 ## Struktura
 
@@ -102,18 +112,22 @@ się w jeden węzeł przesiadkowy.
 index.html             layout + panel opcji
 css/style.css          style (paleta UI: 5 kolorów)
 js/app.js              stan aplikacji i spięcie kontrolek
-js/data.js             ładowanie i dekodowanie data/*.json
+js/data.js             ładowanie i dekodowanie data/*.json (+ cache per miasto)
 js/router.js           RAPTOR (tryb godzinowy) + Dijkstra (tryb ogólny)
 js/walknet.js          routing pieszy po grafie ulic z OSM
-js/isochrone.js        czasy dojazdu -> geometria stref (koła spacerowe)
+js/walkgrid.js         siatka lądu: fala piesza, woda jako bariera, raster stref
+js/isochrone.js        pasma czasu + koła fallbacku poza siatką
 js/map.js              Leaflet + warstwa canvas rysująca strefy
-js/stats.js            statystyki: maks. zasięg i % powierzchni miasta
+js/stats.js            statystyka maks. zasięgu (% powierzchni liczy walkgrid.js)
 data/cities.json       konfiguracja miast (feedy, granice, pojazdy, punkty)
 tools/fetch-feeds.mjs  pobieranie i rozpakowanie feedów miasta
 tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/<miasto>/*.json
 tools/build-walknet.mjs graf dróg pieszych z OSM -> data/<miasto>/walknet.json
 tools/build-water.mjs  maska wody z OSM/Overpass -> data/<miasto>/water.json
+tools/build-bridges.mjs mosty/kładki/mola z OSM -> data/<miasto>/bridges.json
 tools/build-city.mjs   granice administracyjne -> data/<miasto>/city.json
+tools/collect-delays.mjs kolektor opóźnień (GTFS-RT / ZTM Gdańsk) -> gałąź delays
+tools/build-delays.mjs profile opóźnień -> data/<miasto>/delays.json
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*
 tools/serve.mjs        serwer deweloperski
 vendor/leaflet/        Leaflet 1.9.4 (zvendorowany)
@@ -142,10 +156,17 @@ linia brzegowa, czyli praktycznie nigdy).
   o przystanki do ~5 km za jego granicą, np. Pruszcz Gdański, Wieliczka);
   dalekie stacje kolejowe (Lębork, Tczew, Działdowo) leżą poza nim i mają
   uproszczony zasięg kołowy ograniczony do 1 km, bez bariery wody.
-- Czasy dojścia **wewnątrz silnika rozkładowego** (dobór przystanków
-  startowych i przesiadki piesze ≤500 m) są nadal liczone w linii prostej
-  z ryczałtem na krętość ulic 1,3 — graf wpływa na kształt stref i na czasy
-  pokazywane na mapie, ale nie na to, które przesiadki RAPTOR uzna za możliwe.
+- Czasy dojścia **wewnątrz silnika rozkładowego** liczy ten sam graf:
+  przesiadki piesze wyznacza prekompilacja (`build-data.mjs` — para odpada,
+  gdy realna droga przekracza 650 m, więc dwa brzegi kanału przestają być
+  przesiadką), a dojście do przystanków startowych — Dijkstra po grafie
+  z punktu użytkownika. Punkt i przystanki przyłączają się do sieci **rzutem
+  na krawędzie** (wszystkie nie dalej niż najbliższa + 25 m, żeby jezdnia
+  i równoległy chodnik były równorzędnymi kandydatami), nie do najbliższego
+  skrzyżowania — graf jest skontrahowany i krawędź bywa długa (co setna ponad
+  600 m). Linia prosta z ryczałtem 1,3 zostaje tylko tam, gdzie graf milczy:
+  przystanki dalej niż 400 m od jakiejkolwiek drogi i dalekie stacje spoza
+  `gridBbox`. Dojście dłuższe niż 90 min nie jest brane pod uwagę.
 - Sieć piesza nie rozróżnia przewyższeń, schodów ani jakości nawierzchni:
   wszystkie drogi przechodzi się z tą samą prędkością 4,5 km/h.
 - Tryb „ogólnie" jest optymistyczny: skleja najszybsze odcinki różnych

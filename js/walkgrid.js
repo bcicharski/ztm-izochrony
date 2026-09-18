@@ -16,6 +16,11 @@ const CAP_SEC = 90 * 60;     // horyzont rysowania (jak pasmo "ponad 60")
 
 const gridCache = new Map(); // cityKey -> grid
 
+/** Zwalnia siatkę miasta (ok. 30 MB buforów) — przy przełączeniu miasta. */
+export function dropGrid(cityKey) {
+  gridCache.delete(cityKey);
+}
+
 /**
  * Buduje statyczną siatkę lądu dla miasta (raz, cache).
  * @param {string} cityKey

@@ -9,9 +9,18 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230d0887'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23b83289'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23febd2a'/%3E%3C/svg%3E">
 
-  <!-- Google Analytics (gtag.js) — skrypt ładowany DOPIERO po zgodzie użytkownika;
-       przed zgodą do Google nie wychodzi żadne żądanie -->
+  <!-- Google AdSense — weryfikacja własności witryny przez meta tag (bez żądań
+       sieciowych); sam skrypt reklam ładuje loadAds() dopiero po zgodzie -->
+  <meta name="google-adsense-account" content="ca-pub-7876278687977632">
+
+  <!-- Google Analytics (gtag.js) i AdSense — skrypty ładowane DOPIERO po zgodzie
+       użytkownika; przed zgodą do Google nie wychodzi żadne żądanie -->
   <script>
+    // localStorage bywa niedostępny (tryb prywatny Safari, zablokowane dane
+    // witryny) i wtedy rzuca — bez try/catch padałby cały pasek zgody
+    window.consentGet = () => { try { return localStorage.getItem('ga-consent'); } catch { return null; } };
+    window.consentSet = v => { try { localStorage.setItem('ga-consent', v); } catch { /* brak pamięci = pytaj ponownie */ } };
+
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
@@ -24,13 +33,8 @@
       s.src = 'https://www.googletagmanager.com/gtag/js?id=G-9L3F11T91B';
       document.head.appendChild(s);
     };
-    if (localStorage.getItem('ga-consent') === 'granted') loadGA();
+    if (consentGet() === 'granted') loadGA();
   </script>
-
-  <!-- Google AdSense — weryfikacja własności witryny (reklamy pojawią się dopiero
-       po dodaniu jednostek reklamowych i integracji CMP zgód) -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7876278687977632"
-          crossorigin="anonymous"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -59,16 +63,17 @@
                aria-label="Szukaj adresu punktu" autocomplete="off">
         <button id="locateBtn" title="Użyj mojej lokalizacji" aria-label="Użyj mojej lokalizacji">⌖</button>
       </div>
-      <ul id="searchResults" hidden></ul>
+      <ul class="search-results" id="searchResults" hidden></ul>
 
       <div class="search-row" id="searchRow2" hidden>
         <span class="dot dot-b" aria-hidden="true"></span>
         <input id="searchInput2" type="search" placeholder="Adres drugiego punktu (Enter)…"
                aria-label="Szukaj adresu drugiego punktu" autocomplete="off">
       </div>
-      <ul id="searchResults2" hidden></ul>
+      <ul class="search-results" id="searchResults2" hidden></ul>
 
       <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
+      <p class="warn" id="dataWarn" role="alert" hidden></p>
 
       <fieldset class="control">
         <legend>Kierunek</legend>
@@ -138,13 +143,14 @@
             <tr>
               <th scope="col">strefa</th>
               <th scope="col" class="num">zasięg</th>
-              <th scope="col" class="num" id="areaHead">% Trójmiasta</th>
+              <th scope="col" class="num" id="areaHead">% miasta</th>
             </tr>
           </thead>
           <tbody id="statsBody"></tbody>
         </table>
         <p class="note">Zasięg = maks. odległość w linii prostej. % = udział powierzchni lądowej
-          miasta (Trójmiasto: Gdańsk+Sopot+Gdynia). Pasmo „ponad 60 min" liczone do 90 min.</p>
+          miasta w granicach administracyjnych (aglomeracje: wszystkie gminy z listy
+          w konfiguracji). Pasmo „ponad 60 min" liczone do 90 min.</p>
       </div>
 
       <p class="status" id="status" role="status"></p>
@@ -166,6 +172,7 @@
       <footer class="credits">
         Dane: <span id="creditsLinks">…</span>
         · rozkład z dnia <span id="feedDate">…</span>
+        · ważny do <span id="feedEnd">…</span>
         · kontakt: <a href="mailto:Bartosz@excelninja.pro">Bartosz@excelninja.pro</a>
       </footer>
     </div>
@@ -264,13 +271,16 @@
         otwiera tabelę: <strong>zasięg</strong> — największa odległość w linii
         prostej od punktu, osiągalna w danym czasie;
         <strong>% miasta</strong> — odsetek powierzchni lądowej miasta
-        w granicach administracyjnych (dla Trójmiasta: Gdańsk+Sopot+Gdynia)
+        w granicach administracyjnych (dla aglomeracji: łącznie wszystkich
+        gmin, np. Trójmiasto = Gdańsk, Sopot, Gdynia, Rumia, Reda, Wejherowo)
         objętej strefą — tylko przy włączonym spacerze,
         bo wtedy strefy tworzą ciągły obszar.</p>
 
       <h3>Dane</h3>
       <p>Rozkłady jazdy pochodzą z otwartych danych przewoźników i miast —
-        źródła dla wybranego miasta wymienia stopka panelu.
+        źródła dla wybranego miasta wymienia stopka panelu, razem z datą
+        rozkładu i terminem jego ważności. Po tym terminie panel pokazuje
+        ostrzeżenie, a typy dnia bez danych są wyłączone.
         Podkład i geometria wody: OpenStreetMap. Wyniki są orientacyjne —
         rzeczywiste czasy zależą m.in. od ruchu ulicznego i opóźnień.
         Odwiedziny zlicza anonimowo <a href="https://www.goatcounter.com"
@@ -290,22 +300,31 @@
     </div>
   </div>
   <script>
-    // ładuje reklamę AdSense — dopiero po zgodzie (skrypt adsbygoogle.js w <head>
-    // służy do weryfikacji, ale reklamy inicjujemy push() dopiero tutaj)
+    // ładuje skrypt i jednostkę AdSense — wyłącznie po zgodzie; do tego momentu
+    // przeglądarka nie łączy się z googlesyndication.com
     window.loadAds = () => {
       const box = document.getElementById('adBox');
       if (!box || box.dataset.loaded) return;
       box.hidden = false;
       box.dataset.loaded = '1';
+      if (!document.getElementById('adsScript')) {
+        const s = document.createElement('script');
+        s.async = true;
+        s.id = 'adsScript';
+        s.crossOrigin = 'anonymous';
+        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7876278687977632';
+        document.head.appendChild(s);
+      }
       try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* niezatwierdzone */ }
     };
     (() => {
-      if (localStorage.getItem('ga-consent') === 'granted') loadAds();
-      if (localStorage.getItem('ga-consent')) return; // decyzja już zapadła
+      const decision = consentGet();
+      if (decision === 'granted') loadAds();
+      if (decision) return; // decyzja już zapadła
       const bar = document.getElementById('consentBar');
       bar.hidden = false;
       const choose = value => {
-        localStorage.setItem('ga-consent', value);
+        consentSet(value);
         if (value === 'granted') { loadGA(); loadAds(); }
         bar.hidden = true;
       };

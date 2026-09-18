@@ -27,6 +27,19 @@ export const M_PER_DEG_LAT = 111320;
 
 const cache = new Map();
 
+/**
+ * Zwalnia z pamięci wszystkie zasoby miasta (sieci rozkładowe z kopią odwróconą,
+ * graf ulic, maski). Bez tego obejrzenie kilku miast po kolei zostawiało
+ * w pamięci dziesiątki MB na miasto, aż karta na telefonie padała.
+ */
+export function dropCityCache(cityKey) {
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(`${cityKey}/`) || key.startsWith(`data/${cityKey}/`) || key === `delays/${cityKey}`) {
+      cache.delete(key);
+    }
+  }
+}
+
 /** Konfiguracja miast (data/cities.json). */
 export async function loadCities() {
   if (!cache.has('cities')) {
@@ -129,7 +142,13 @@ export function decodeNetwork(raw) {
     sameGroupAdj,
     rideAdjCache: null, // wypełniane leniwie przez router (tryb ogólny)
   };
-  net.reversed = reverseNetwork(net);
+  // sieć odwrócona (kierunek „do miejsca") budowana dopiero przy pierwszym
+  // użyciu — podwaja pamięć i czas dekodowania, a większość sesji jej nie tyka
+  let reversed = null;
+  Object.defineProperty(net, 'reversed', {
+    get() { return (reversed ??= reverseNetwork(net)); },
+    enumerable: false,
+  });
   return net;
 }
 
@@ -259,7 +278,7 @@ export async function loadWater(cityKey) {
         polys: (raw.polys ?? []).map(dec),
         lines: (raw.lines ?? []).map(dec),
       };
-    }));
+    }).catch(() => null));
   }
   return cache.get(url);
 }
@@ -274,15 +293,13 @@ export async function loadCity(cityKey) {
  * (wtedy zasięg pieszy liczy sam raster lądu, jak przed wprowadzeniem grafu).
  * Plik jest największym zasobem miasta (~1 MB po kompresji), więc ładowany
  * jest osobno i asynchronicznie — aplikacja działa, zanim dojedzie.
+ * Zwraca surowy JSON; dekoduje go wywołujący (`decodeWalkNet` z walknet.js),
+ * żeby nie tworzyć cyklu importów data.js ↔ walknet.js.
  */
 export async function loadWalkNet(cityKey) {
   const url = `data/${cityKey}/walknet.json`;
   if (!cache.has(url)) {
-    cache.set(url, fetch(url).then(async r => {
-      if (!r.ok) return null;
-      const { decodeWalkNet } = await import('./walknet.js');
-      return decodeWalkNet(await r.json());
-    }).catch(() => null));
+    cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null));
   }
   return cache.get(url);
 }
@@ -306,14 +323,21 @@ async function loadRings(url) {
       if (!r.ok) return null;
       const raw = await r.json();
       return raw.polys.map(ring => ring.map(([la, lo]) => [la / 1e5, lo / 1e5]));
-    }));
+    }).catch(() => null));
   }
   return cache.get(url);
 }
 
+/**
+ * Metadane builda: `dates` (które typy dnia istnieją i z jakiej daty),
+ * `feedEndDate` (do kiedy rozkład jest ważny, yyyymmdd). `null` przy braku.
+ */
 export async function loadMeta(cityKey) {
-  const r = await fetch(`data/${cityKey}/meta.json`);
-  return r.ok ? r.json() : null;
+  const url = `data/${cityKey}/meta.json`;
+  if (!cache.has(url)) {
+    cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null));
+  }
+  return cache.get(url);
 }
 
 /** Profile opóźnień linii: { "linia|typDnia|godzina": sekundy }. Może być pusty. */

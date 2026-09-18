@@ -4,15 +4,23 @@
 
 /* global L */
 
-import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, loadWalkNet, DAY_LABELS, distM, WALK_MPS } from './data.js';
-import { snapNode, computeNodeTimes, paintNetwork, SPREAD_M, NET_WALK_MPS } from './walknet.js';
+import { loadDay, loadMeta, loadWater, loadCity, loadCities, loadDelays, loadBridges, loadWalkNet, dropCityCache, DAY_KEYS, DAY_LABELS, distM, WALK_MPS } from './data.js';
+import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, paintNetwork, SPREAD_M } from './walknet.js';
 import { computeReachability } from './router.js';
 import { buildZones, BANDS, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
 import { computeStats } from './stats.js';
-import { buildWalkGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
+import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
 
-const CITIES = await loadCities();
+let CITIES;
+try {
+  CITIES = await loadCities();
+} catch (err) {
+  // bez konfiguracji miast nie ma czego rysować — powiedz to wprost zamiast
+  // zostawiać pusty panel z „…" w stopce
+  document.getElementById('status').textContent = 'Nie udało się wczytać konfiguracji miast. Odśwież stronę.';
+  throw err;
+}
 const DEFAULT_CITY = 'trojmiasto';
 
 // --- stan domyślny: „gdybym wyszedł teraz" -----------------------------------
@@ -250,9 +258,11 @@ function syncModeUi() {
 // --- wyszukiwarka adresów, lokalizacja, udostępnianie ------------------------
 
 async function searchAddress(query) {
+  // viewbox Nominatim = lonW,latN,lonE,latS — liczony z bbox miasta [latS, lonW, latN, lonE]
+  const [latS, lonW, latN, lonE] = cityCfg().bbox;
   const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5' +
     '&accept-language=pl&countrycodes=pl' +
-    `&viewbox=${cityCfg().viewbox}&bounded=1` + // okolice wybranego miasta
+    `&viewbox=${lonW},${latN},${lonE},${latS}&bounded=1` + // okolice wybranego miasta
     '&q=' + encodeURIComponent(query);
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Nominatim: ${r.status}`);
@@ -408,7 +418,11 @@ map.on('contextmenu', e => {
   showJourneyPopup(e.latlng);
 });
 
-const HHMM = s => `${String(Math.floor(s / 3600) % 24).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}`;
+/** Sekundy doby → „GG:MM"; ujemne (wyjście przed północą przy „do miejsca") zawijane do poprzedniego dnia. */
+const HHMM = s => {
+  const d = ((Math.floor(s) % 86400) + 86400) % 86400;
+  return `${String(Math.floor(d / 3600)).padStart(2, '0')}:${String(Math.floor(d / 60) % 60).padStart(2, '0')}`;
+};
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
@@ -518,16 +532,20 @@ function journeyHeader(totalMin) {
  */
 function walkOnlyPopupHtml(latlng) {
   const { grid, gridTime } = lastCompute;
-  let sec = null;
+  let sec = null, why = null;
   const idx = grid && gridTime ? pixelIndex(grid, latlng.lat, latlng.lng) : -1;
   if (idx >= 0) {
     if (gridTime[idx] < UNREACH) sec = gridTime[idx];
+    else why = 'Nie da się tam dojść pieszo (woda lub brak przejścia).';
   } else if (!state.compare) {
     sec = distM(latlng.lat, latlng.lng, state.point.lat, state.point.lng) / WALK_MPS;
+  } else {
+    // poza siatką nie ma fali dla dwóch punktów — to nie jest „woda", tylko brak analizy
+    why = 'Miejsce poza obszarem analizy pieszej.';
   }
   if (sec == null || sec / 60 > 90) {
     return `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${
-      sec == null ? 'Nie da się tam dojść pieszo (woda lub brak przejścia).' : 'Spacer zająłby ponad 90 minut.'
+      why ?? 'Spacer zająłby ponad 90 minut.'
     }</span></div>`;
   }
   const min = Math.round(sec / 60);
@@ -571,20 +589,58 @@ let walkNet = null; // graf dróg pieszych bieżącego miasta (null = zostaje ra
 const WALK_CAP_SEC = 90 * 60;
 
 /**
- * Przyłączenie przystanków do sieci pieszej. Liczone raz na parę
- * (sieć piesza × sieć rozkładowa) i pamiętane przy grafie — snapowanie
- * kilku tysięcy przystanków przy każdym przeliczeniu byłoby marnotrawstwem.
- * @returns {Int32Array} indeks węzła grafu per przystanek (−1 = poza zasięgiem)
+ * Przyłączenie przystanków do sieci pieszej (rzut na krawędzie, patrz
+ * `snapEdges`). Liczone raz na parę (sieć piesza × sieć rozkładowa)
+ * i pamiętane przy grafie — snapowanie kilku tysięcy przystanków przy każdym
+ * przeliczeniu byłoby marnotrawstwem.
+ * @returns {Array<Array<object>>} lista kandydatek per przystanek (pusta = poza siecią)
  */
-function stopNodes(wnet, net) {
+function stopSnaps(wnet, net) {
   wnet.stopCache ??= new WeakMap();
-  let snapped = wnet.stopCache.get(net);
-  if (!snapped) {
-    snapped = new Int32Array(net.nStops);
-    for (let i = 0; i < net.nStops; i++) snapped[i] = snapNode(wnet, net.lat[i], net.lon[i]);
-    wnet.stopCache.set(net, snapped);
+  let snaps = wnet.stopCache.get(net);
+  if (!snaps) {
+    snaps = new Array(net.nStops);
+    for (let i = 0; i < net.nStops; i++) snaps[i] = snapEdges(wnet, net.lat[i], net.lon[i]);
+    wnet.stopCache.set(net, snaps);
   }
-  return snapped;
+  return snaps;
+}
+
+/**
+ * Czasy dojścia od punktu do KAŻDEGO przystanku, liczone po sieci ulic.
+ *
+ * Dotąd `findAccessStops` mierzył je w linii prostej z ryczałtem krętości 1,3,
+ * więc przystanek po drugiej stronie rzeki wchodził do podróży jako start
+ * w kilka minut marszu — graf naprawiał kształt stref, ale nie to, skąd
+ * RAPTOR/Dijkstra w ogóle wyruszają.
+ *
+ * Punkt i przystanki są przyłączone rzutem na krawędzie (lista kandydatek):
+ * fala startuje z końców każdej kandydatki punktu, a czas przystanku to
+ * krótsza z dróg przez końce jego kandydatek (plus dojście z rzutu). Para na
+ * tej samej krawędzi liczona wprost wzdłuż ulicy (`sameEdgeSec`).
+ *
+ * @param {object} net  sieć rozkładowa (współrzędne przystanków)
+ * @param {{lat:number, lng:number}} point  punkt użytkownika
+ * @returns {Float64Array|null} sekundy per przystanek: `Infinity` = graf zna
+ *   przystanek, ale nie ma do niego dojścia w horyzoncie; `NaN` = przystanek
+ *   poza grafem (router zostaje przy linii prostej). `null` = grafu nie ma
+ *   albo punkt się do niego nie przyłączył — całość liczona jak dotąd.
+ */
+function accessTimesOnNet(net, point) {
+  if (!walkNet) return null;
+  const origin = snapEdges(walkNet, point.lat, point.lng);
+  if (!origin.length) return null; // punkt daleko od jakiejkolwiek drogi (pole, plaża)
+  const nodeTime = computeNodeTimes(walkNet, snapSeeds(origin, 0), WALK_CAP_SEC);
+  const snaps = stopSnaps(walkNet, net);
+  const out = new Float64Array(net.nStops);
+  for (let i = 0; i < net.nStops; i++) {
+    const s = snaps[i];
+    if (!s.length) { out[i] = NaN; continue; }
+    const via = snapTime(nodeTime, s);
+    const t = Math.min(via < 0 ? Infinity : via, sameEdgeSec(origin, s));
+    out[i] = t > WALK_CAP_SEC ? Infinity : t;
+  }
+  return out;
 }
 
 /**
@@ -592,6 +648,11 @@ function stopNodes(wnet, net) {
  * → rozlanie na `SPREAD_M` od sieci. Zwraca `grid.time` albo `null`, gdy grafu
  * nie ma (jeszcze się ładuje albo miasto go nie ma) — wtedy wywołujący spada
  * do dawnej fali po rastrze lądu.
+ *
+ * Każde źródło (punkt, przystanek) zasiewa oba końce swojej krawędzi, a przy
+ * malowaniu (`paintNetwork`) wnętrze tej krawędzi dostaje czas liczony wprost
+ * od rzutu — bez tego okolica źródła była kolorowana z czasem powiększonym
+ * o marsz do skrzyżowania i z powrotem.
  * @param {object} grid   siatka rastrowa
  * @param {object} net    sieć rozkładowa (współrzędne przystanków)
  * @param {Float64Array|null} mins  czasy dojazdu per przystanek; null = sam spacer
@@ -600,32 +661,36 @@ function stopNodes(wnet, net) {
 function walkWaveOnNet(grid, net, mins, origin) {
   if (!walkNet) return null;
   const seeds = [];
-  // dojście od punktu/przystanku do najbliższej ulicy jest częścią podróży —
-  // węzeł dostaje czas startu powiększony o ten dojazd (w linii prostej,
-  // bo poza siecią nie ma po czym prowadzić trasy)
-  const linkSec = (lat, lon, node) =>
-    Math.round(distM(lat, lon, walkNet.lat[node], walkNet.lon[node]) / NET_WALK_MPS);
+  const edgeSeeds = new Map(); // krawędź -> [[t, sekundy w rzucie], ...]
+  const addSource = (snaps, startSec) => {
+    seeds.push(...snapSeeds(snaps, startSec));
+    for (const s of snaps) {
+      const list = edgeSeeds.get(s.edge) ?? [];
+      list.push([s.t, startSec + s.perpSec]);
+      edgeSeeds.set(s.edge, list);
+    }
+  };
   const extraSeeds = []; // źródła nanoszone wprost na raster (okolica punktu)
   if (origin) {
-    const node = snapNode(walkNet, origin.lat, origin.lng);
-    if (node >= 0) seeds.push([node, linkSec(origin.lat, origin.lng, node)]);
+    const snaps = snapEdges(walkNet, origin.lat, origin.lng);
+    if (snaps.length) addSource(snaps, 0);
     // punkt zawsze koloruje swoje najbliższe otoczenie, nawet gdy leży
     // daleko od jakiejkolwiek drogi (pole, plaża) i nie przyłączył się
     const oIdx = pixelIndex(grid, origin.lat, origin.lng);
     if (oIdx >= 0) extraSeeds.push([oIdx, 0]);
   }
   if (mins) {
-    const snapped = stopNodes(walkNet, net);
+    const snaps = stopSnaps(walkNet, net);
     for (let i = 0; i < net.nStops; i++) {
       const t = mins[i];
-      if (!(t <= 90) || snapped[i] < 0) continue;
-      seeds.push([snapped[i], Math.round(t * 60) + linkSec(net.lat[i], net.lon[i], snapped[i])]);
+      if (!(t <= 90) || !snaps[i].length) continue;
+      addSource(snaps[i], Math.round(t * 60));
     }
   }
   if (!seeds.length) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
   const nodeTime = computeNodeTimes(walkNet, seeds, WALK_CAP_SEC);
   // paintNetwork zasiewa grid.time wprost, więc computeTimeGrid dostaje null
-  paintNetwork(walkNet, nodeTime, grid, pixelIndex, UNREACH, WALK_CAP_SEC);
+  paintNetwork(walkNet, nodeTime, grid, pixelIndex, UNREACH, WALK_CAP_SEC, edgeSeeds);
   for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
   return computeTimeGrid(grid, null, SPREAD_M);
 }
@@ -682,12 +747,14 @@ async function recompute() {
     } else {
       res = computeReachability(net, {
         ...optsBase, lat: state.point.lat, lon: state.point.lng,
+        accessSec: state.walk ? accessTimesOnNet(net, state.point) : null,
       });
       minutes = res.minutes;
       if (state.compare) {
         // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
         res2 = computeReachability(net, {
           ...optsBase, lat: state.point2.lat, lon: state.point2.lng,
+          accessSec: state.walk ? accessTimesOnNet(net, state.point2) : null,
         });
         minutes = new Float64Array(res.minutes.length);
         for (let i = 0; i < minutes.length; i++) {
@@ -811,37 +878,82 @@ function renderCredits() {
     .join(' · ');
 }
 
+const fmtDate = d => (d && /^\d{8}$/.test(d) ? `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}` : null);
+
+/** Dzisiejsza data lokalna jako yyyymmdd — do porównania z datami z meta.json. */
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Metadane builda → stopka, ostrzeżenie o nieaktualnym rozkładzie i lista
+ * typów dnia. Rozkład ma termin ważności (`feedEndDate`); po jego minięciu
+ * wyniki pochodzą ze starego (np. wakacyjnego) rozkładu i trzeba to powiedzieć
+ * wprost. Typ dnia, którego build nie wygenerował (np. feed za krótki, żeby
+ * trafić w weekend), jest wyłączany w selektorze zamiast kończyć się błędem
+ * albo starym plikiem z poprzedniego builda.
+ */
+function applyMeta(meta) {
+  const dates = meta?.dates ?? {};
+  $('feedDate').textContent = fmtDate(dates.workday) ?? '—';
+  const end = fmtDate(meta?.feedEndDate);
+  $('feedEnd').textContent = end ?? '—';
+
+  const stale = !!meta?.feedEndDate && meta.feedEndDate < todayKey();
+  const warn = $('dataWarn');
+  warn.hidden = !stale;
+  warn.textContent = stale
+    ? `Uwaga: rozkład tego miasta jest nieaktualny (ważny do ${end}). Wyniki mogą odbiegać od dzisiejszych kursów.`
+    : '';
+
+  // typy dnia: bez meta nie wiemy nic → wszystko dozwolone (jak dotąd)
+  const available = meta ? DAY_KEYS.filter(k => dates[k]) : DAY_KEYS.slice();
+  const sel = $('daySelect');
+  for (const opt of sel.options) opt.disabled = !available.includes(opt.value);
+  if (available.length && !available.includes(state.day)) {
+    state.day = available.includes('workday') ? 'workday' : available[0];
+    sel.value = state.day;
+  }
+}
+
 let cityAssets = null; // {water, city, bridges} bieżącego miasta (do siatki pieszej)
 
+/**
+ * Wczytuje zasoby miasta i uruchamia przeliczenie. Kolejność: meta + geometria
+ * (małe pliki) → pierwsze rysowanie na siatce lądu → graf ulic (największy
+ * plik, dociąga się w tle) → drugie, docelowe rysowanie. Dwa przeliczenia,
+ * nie trzy: wcześniejsze natychmiastowe rysowanie kół crow-fly było od razu
+ * nadpisywane i tylko migało.
+ */
 async function loadCityAssets() {
   const key = state.city;
   $('areaHead').textContent = cityCfg().areaLabel;
   renderCredits();
   renderVehControls();
   $('feedDate').textContent = '…';
-  loadMeta(key).then(meta => {
-    if (state.city !== key) return;
-    const d = meta?.dates?.workday;
-    $('feedDate').textContent = d ? `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}` : '—';
-  }).catch(() => { if (state.city === key) $('feedDate').textContent = '—'; });
-  try {
-    const [water, city, bridges] = await Promise.all([loadWater(key), loadCity(key), loadBridges(key)]);
-    if (state.city !== key) return; // w międzyczasie zmieniono miasto
-    zoneLayer.setWater(water ?? { polys: [], lines: [] });
-    cityAssets = { water, city, bridges };
-    recompute(); // przelicz strefy na siatce pieszej po załadowaniu geometrii
-    // sieć piesza jest największym zasobem miasta — dociąga się osobno, a po
-    // jej przyjściu strefy przeliczają się jeszcze raz, już po realnych ulicach
-    loadWalkNet(key).then(wn => {
-      if (state.city !== key || !wn) return;
-      walkNet = wn;
-      recompute();
-    });
-  } catch { /* brak maski wody/granicy nie blokuje działania */ }
+  $('feedEnd').textContent = '…';
+  $('status').textContent = 'Wczytuję dane miasta…';
+
+  // wszystkie loadery zwracają null przy braku pliku/błędzie — nic tu nie rzuca
+  const [meta, water, city, bridges] = await Promise.all([loadMeta(key), loadWater(key), loadCity(key), loadBridges(key)]);
+  if (state.city !== key) return; // w międzyczasie zmieniono miasto
+  applyMeta(meta);
+  zoneLayer.setWater(water ?? { polys: [], lines: [] });
+  cityAssets = { water, city, bridges };
+  recompute();
+
+  // sieć piesza jest największym zasobem miasta — dociąga się osobno, a po
+  // jej przyjściu strefy przeliczają się jeszcze raz, już po realnych ulicach
+  const raw = await loadWalkNet(key);
+  if (state.city !== key || !raw) return;
+  walkNet = decodeWalkNet(raw);
+  recompute();
 }
 
 function switchCity(key) {
   if (!CITIES[key] || key === state.city) return;
+  const prev = state.city;
   state.city = key;
   state.veh = defaultVeh();
   state.point = L.latLng(...cityCfg().pointA);
@@ -852,11 +964,16 @@ function switchCity(key) {
   for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
   map.closePopup();
   map.setView(cityCfg().center, cityCfg().zoom);
-  cityAssets = null; // geometria poprzedniego miasta nie pasuje do nowego
+  // zasoby poprzedniego miasta: geometria nie pasuje, a sieci i siatka to
+  // dziesiątki MB — zwalniamy, żeby karta na telefonie nie rosła bez końca
+  cityAssets = null;
   walkNet = null;
+  lastCompute = null;
   zoneLayer.setGrid(null);
+  zoneLayer.setZones(null);
+  dropCityCache(prev);
+  dropGrid(prev);
   loadCityAssets();
-  recompute();
 }
 
 {
@@ -894,5 +1011,4 @@ syncModeUi();
 // z ResizeObservera przy starcie i widok zostawał na zoomie domyślnym
 if (pointFromUrl) map.setView(state.point, 13, { animate: false });
 
-loadCityAssets();
-recompute();
+loadCityAssets(); // samo uruchamia przeliczenie po wczytaniu geometrii

@@ -32,6 +32,12 @@ html, body {
 
 .zone-canvas { pointer-events: none; }
 
+/* podkład OSM wygaszony do jasnej szarości — kolory stref (0,55 alfa)
+   muszą pozostać jedyną barwną informacją na mapie */
+.leaflet-tile-pane {
+  filter: grayscale(1) brightness(1.06) contrast(0.92);
+}
+
 /* ---------- panel ---------- */
 
 .panel {
@@ -189,7 +195,8 @@ html, body {
   outline-offset: 1px;
 }
 
-#searchResults {
+/* listy wyników obu wyszukiwarek (punkt A i B) */
+.search-results {
   margin: -6px 0 12px;
   padding: 4px;
   list-style: none;
@@ -198,16 +205,30 @@ html, body {
   max-height: 180px;
   overflow-y: auto;
 }
+.search-results[hidden] { display: none; }
 
-#searchResults li {
+.search-results li {
   padding: 6px 8px;
   font-size: 12.5px;
   border-radius: 6px;
   cursor: pointer;
 }
-#searchResults li:hover { background: var(--line); }
-#searchResults li.empty { color: var(--muted); cursor: default; }
-#searchResults li.empty:hover { background: none; }
+.search-results li:hover { background: var(--line); }
+.search-results li.empty { color: var(--muted); cursor: default; }
+.search-results li.empty:hover { background: none; }
+
+/* ostrzeżenie o nieaktualnym rozkładzie */
+.warn {
+  margin: -6px 0 14px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  border: 1px solid var(--accent);
+  border-left-width: 4px;
+  border-radius: 8px;
+}
+.warn[hidden] { display: none; }
 
 /* ---------- kontrolki ---------- */
 

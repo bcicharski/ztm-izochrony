@@ -26,11 +26,17 @@
  *   - keepBbox: [minLat, minLon, maxLat, maxLon] — zostaw tylko kursy z ≥1
  *     przystankiem w tym prostokącie (pełny przebieg kursu zachowany, także
  *     przystanki poza bboxem — dojazd dalekobieżny liczy się jak zwykle).
+ *
+ * Czasy przesiadek pieszych (pole transfers) liczone są po grafie dróg z OSM,
+ * jeśli miasto ma już data/<miasto>/walknet.json — patrz sekcja 6. Bez tego
+ * pliku zostaje dawne przybliżenie w linii prostej.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, NET_WALK_MPS } from '../js/walknet.js';
+import { COMPLEX_MAX_M, WALK_MPS, M_PER_DEG_LAT, DAY_KEYS, distM } from '../js/data.js';
 
 const cityKey = process.argv[2];
 const feedDirs = process.argv.slice(3);
@@ -95,13 +101,10 @@ function dateToWeekday(yyyymmdd) {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=nd, 6=sob
 }
 
-const EARTH_M_PER_DEG_LAT = 111320;
-
-function distMeters(aLat, aLon, bLat, bLon) {
-  const dy = (bLat - aLat) * EARTH_M_PER_DEG_LAT;
-  const dx = (bLon - aLon) * EARTH_M_PER_DEG_LAT * Math.cos(aLat * Math.PI / 180);
-  return Math.sqrt(dx * dx + dy * dy);
-}
+// stałe geometryczne i tempo marszu wspólne z frontendem (js/data.js) —
+// jedno źródło prawdy, żeby prekompilacja i silnik nie rozjechały się cicho
+const EARTH_M_PER_DEG_LAT = M_PER_DEG_LAT;
+const distMeters = distM;
 
 // --- 1. kalendarze: daty wspólne dla wszystkich feedów -------------------
 // Pełna semantyka GTFS: calendar.txt (zakres + flagi dni tygodnia),
@@ -174,6 +177,10 @@ console.log('Wybrane daty:', dayTypes.map(d => `${d.key}=${d.date}`).join(', '))
 
 const routeInfo = new Map(); // "f:route_id" -> {name, type, agency}
 const tripMeta = new Map();  // "f:trip_id" -> {routeKey, dayMask}
+// route_id (surowe, bez prefiksu feedu) -> nazwa linii; zapisywane do meta.json,
+// bo feedy GTFS-RT identyfikują kursy po route_id (np. Kraków tramwaje
+// "route_5" = linia "40"), a silnik i profile opóźnień operują na nazwie
+const routeNames = {};
 {
   const serviceDayMask = new Map(); // "f:service_id" -> bitmask dni
   dayTypes.forEach((d, i) => {
@@ -186,6 +193,10 @@ const tripMeta = new Map();  // "f:trip_id" -> {routeKey, dayMask}
       // GZM zostawia route_short_name puste, a numer linii trzyma w long_name
       const name = r.route_short_name || r.route_long_name || r.route_id;
       routeInfo.set(`${f}:${r.route_id}`, { name, type: +r.route_type, agency: r.agency_id ?? '' });
+      if (routeNames[r.route_id] && routeNames[r.route_id] !== name) {
+        console.warn(`Uwaga: route_id "${r.route_id}" w kilku feedach z różną nazwą (${routeNames[r.route_id]} / ${name}).`);
+      }
+      routeNames[r.route_id] ??= name;
     }
     const keepAgency = feedCfg[f].keepAgency; // filtr przewoźnika (feed zbiorczy)
     for (const t of readCsvSync(path.join(dir, 'trips.txt'))) {
@@ -329,14 +340,14 @@ for (let f = 0; f < feedDirs.length; f++) {
 
 // --- 5. wzorce tras per dzień --------------------------------------------
 
-const routeNames = [];
+const routeList = [];
 const routeNameIdx = new Map();
 function routeNameIndex(routeKey) {
   const info = routeInfo.get(routeKey) ?? { name: '?', type: 0 };
   const key = `${info.name}|${info.type}`;
   if (!routeNameIdx.has(key)) {
-    routeNameIdx.set(key, routeNames.length);
-    routeNames.push({ n: info.name, t: info.type });
+    routeNameIdx.set(key, routeList.length);
+    routeList.push({ n: info.name, t: info.type });
   }
   return routeNameIdx.get(key);
 }
@@ -413,13 +424,97 @@ function buildDay(dayIdx) {
 
 // --- 6. przesiadki piesze -------------------------------------------------
 
-const WALK_SPEED_MPS = 4.5 / 3.6 / 1.3; // 4,5 km/h w linii prostej ÷ krętość 1,3 ≈ 0,96 m/s
+const WALK_SPEED_MPS = WALK_MPS; // 4,5 km/h w linii prostej ÷ krętość 1,3 ≈ 0,96 m/s (js/data.js)
 const TRANSFER_MAX_M = 500;
+/**
+ * Budżet przesiadki pieszej [s] po sieci ulic: 650 m marszu przy NET_WALK_MPS.
+ * 650 = TRANSFER_MAX_M × 1,3, czyli tyle, ile dawny ryczałt krętości zakładał
+ * dla pary oddalonej o 500 m w linii prostej — budżet CZASU zostaje ten sam,
+ * zmienia się tylko sposób jego mierzenia (realna droga zamiast prostej).
+ */
+const TRANSFER_MAX_NET_S = Math.round((TRANSFER_MAX_M * 1.3) / NET_WALK_MPS);
 
+/** Sieć piesza miasta (data/<miasto>/walknet.json) albo null, gdy jej nie ma. */
+function loadWalkNetFile() {
+  const file = path.join(outDir, 'walknet.json');
+  if (!fs.existsSync(file)) return null;
+  return decodeWalkNet(JSON.parse(fs.readFileSync(file, 'utf8')));
+}
+
+/**
+ * Linie wody miasta (brzegi akwenów + osie rzek/kanałów) z bboxem każdego
+ * pierścienia — do sprawdzenia, czy parę przystanków dzieli woda.
+ */
+function loadWaterRings() {
+  const file = path.join(outDir, 'water.json');
+  if (!fs.existsSync(file)) return [];
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const out = [];
+  for (const ring of [...(raw.polys ?? []), ...(raw.lines ?? [])]) {
+    if (ring.length < 2) continue;
+    let latS = 90, latN = -90, lonW = 180, lonE = -180;
+    const pts = ring.map(([la, lo]) => {
+      const lat = la / 1e5, lon = lo / 1e5;
+      if (lat < latS) latS = lat;
+      if (lat > latN) latN = lat;
+      if (lon < lonW) lonW = lon;
+      if (lon > lonE) lonE = lon;
+      return [lat, lon];
+    });
+    out.push({ pts, latS, latN, lonW, lonE });
+  }
+  return out;
+}
+
+/** Czy odcinki AB i CD się przecinają (test orientacji; stopnie wystarczą). */
+function segmentsCross(aLat, aLon, bLat, bLon, cLat, cLon, dLat, dLon) {
+  const side = (pLat, pLon, qLat, qLon, rLat, rLon) =>
+    Math.sign((qLon - pLon) * (rLat - pLat) - (qLat - pLat) * (rLon - pLon));
+  return side(aLat, aLon, bLat, bLon, cLat, cLon) !== side(aLat, aLon, bLat, bLon, dLat, dLon)
+    && side(cLat, cLon, dLat, dLon, aLat, aLon) !== side(cLat, cLon, dLat, dLon, bLat, bLon);
+}
+
+/** Czy linia prosta między dwoma punktami przecina jakąkolwiek linię wody. */
+function crossesWater(rings, aLat, aLon, bLat, bLon) {
+  const latMin = Math.min(aLat, bLat), latMax = Math.max(aLat, bLat);
+  const lonMin = Math.min(aLon, bLon), lonMax = Math.max(aLon, bLon);
+  for (const r of rings) {
+    if (latMin > r.latN || latMax < r.latS || lonMin > r.lonE || lonMax < r.lonW) continue;
+    for (let k = 0; k + 1 < r.pts.length; k++) {
+      const [pLat, pLon] = r.pts[k], [qLat, qLon] = r.pts[k + 1];
+      if (segmentsCross(aLat, aLon, bLat, bLon, pLat, pLon, qLat, qLon)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pary przystanków w zasięgu przesiadki pieszej: [i, j, sekundy].
+ *
+ * Kandydaci wybierani jak dotąd po linii prostej (≤TRANSFER_MAX_M), ale CZAS
+ * liczony po grafie dróg z OSM — inaczej dwa brzegi kanału oddalone o 300 m
+ * są przesiadką, choć realnie dzieli je kilometrowy objazd mostem. Para bez
+ * trasy w budżecie TRANSFER_MAX_NET_S jest odrzucana; to właśnie odcina
+ * przesiadki „przez wodę".
+ *
+ * Linia prosta zostaje tam, gdzie graf nie ma nic do powiedzenia:
+ *   - brak pliku walknet.json,
+ *   - przystanek dalej niż SNAP_MAX_M od jakiejkolwiek drogi,
+ *   - para bliższa niż COMPLEX_MAX_M (jeden węzeł w terenie), której NIE dzieli
+ *     woda. Zmierzone na Trójmieście: przy twardym odrzucaniu wypadały pary
+ *     w obrębie jednego węzła — dwa słupki „Węzeł Groddecka" 20 m od siebie
+ *     (graf: 2000 m), stacja SKM Kamienny Potok i przystanek przy
+ *     Niepodległości 100 m od siebie (graf: 1195 m), przystanki przy drodze
+ *     krajowej, która jako `trunk` nie wchodzi do sieci pieszej (Gowino).
+ *     Na takim dystansie dziura w OSM jest częstsza niż realny objazd, a strata
+ *     boli podwójnie: te same pary budują `sameGroupAdj` (przesiadki w trybie
+ *     bez spaceru). Wyjątek nie dotyczy par przedzielonych wodą — tam objazd
+ *     jest realny i o to w całym mechanizmie chodzi.
+ */
 function buildTransfers() {
   const idx = stops.map((_, i) => i).sort((a, b) => stops[a].lat - stops[b].lat);
   const maxDLat = TRANSFER_MAX_M / EARTH_M_PER_DEG_LAT;
-  const transfers = [];
+  const cand = new Map(); // i -> [[j, sekundyWLiniiProstej, metry], ...]
   for (let a = 0; a < idx.length; a++) {
     const i = idx[a];
     const si = stops[i];
@@ -429,10 +524,49 @@ function buildTransfers() {
       if (sj.lat - si.lat > maxDLat) break;
       const dist = distMeters(si.lat, si.lon, sj.lat, sj.lon);
       if (dist <= TRANSFER_MAX_M) {
-        transfers.push([i, j, Math.round(dist / WALK_SPEED_MPS)]); // sekundy
+        if (!cand.has(i)) cand.set(i, []);
+        cand.get(i).push([j, Math.round(dist / WALK_SPEED_MPS), dist]); // sekundy
       }
     }
   }
+
+  const wnet = loadWalkNetFile();
+  const transfers = [];
+  if (!wnet) {
+    for (const [i, list] of cand) for (const [j, sec] of list) transfers.push([i, j, sec]);
+    console.log('Brak walknet.json — czasy przesiadek liczone w linii prostej.');
+    return transfers;
+  }
+  const water = loadWaterRings();
+
+  // przyłączenie przystanków do grafu (raz): rzut na krawędzie (lista
+  // kandydatek) — ta sama reguła co w js/app.js (snapEdges/snapSeeds/snapTime)
+  const snap = stops.map(s => snapEdges(wnet, s.lat, s.lon));
+
+  let nNet = 0, nCrow = 0, nNear = 0, nDropped = 0;
+  for (const [i, list] of cand) {
+    if (!snap[i].length) {
+      for (const [j, sec] of list) { transfers.push([i, j, sec]); nCrow++; }
+      continue;
+    }
+    const t = computeNodeTimes(wnet, snapSeeds(snap[i], 0), TRANSFER_MAX_NET_S);
+    for (const [j, sec, dist] of list) {
+      if (!snap[j].length) { transfers.push([i, j, sec]); nCrow++; continue; }
+      const via = snapTime(t, snap[j]); // <0 = poza budżetem marszu
+      const netSec = Math.min(via < 0 ? Infinity : via, sameEdgeSec(snap[i], snap[j]));
+      if (netSec <= TRANSFER_MAX_NET_S) {
+        transfers.push([i, j, netSec]);
+        nNet++;
+      } else if (dist <= COMPLEX_MAX_M
+          && !crossesWater(water, stops[i].lat, stops[i].lon, stops[j].lat, stops[j].lon)) {
+        transfers.push([i, j, sec]); // jeden węzeł w terenie, wody między nimi nie ma
+        nNear++;
+      } else {
+        nDropped++;
+      }
+    }
+  }
+  console.log(`Przesiadki po sieci ulic: ${nNet}, w linii prostej: ${nCrow} (przystanek poza siecią) + ${nNear} (≤${COMPLEX_MAX_M} m bez wody między nimi), odrzucone (brak dojścia ≤${TRANSFER_MAX_NET_S} s): ${nDropped}`);
   return transfers;
 }
 
@@ -457,7 +591,7 @@ for (let d = 0; d < dayTypes.length; d++) {
     version: 3, // v3: czasy w sekundach + opcjonalne postoje (pole d); v2 = minuty, bez d
     day: dayTypes[d].key,
     date: dayTypes[d].date,
-    routes: routeNames,
+    routes: routeList,
     stops: stopsOut,
     transfers,
     patterns,
@@ -467,11 +601,24 @@ for (let d = 0; d < dayTypes.length; d++) {
   console.log(`${dayTypes[d].key}: wzorce=${patterns.length}, kursy=${nTrips}, plik=${mb} MB`);
 }
 
+// typ dnia, którego nie dało się zbudować (feed za krótki na weekend), nie może
+// zostać w katalogu z poprzedniego builda — frontend czyta meta.dates, ale stary
+// plik i tak wprowadzałby w błąd (inny okres rozkładowy niż dzień roboczy)
+for (const key of DAY_KEYS) {
+  if (dayTypes.some(d => d.key === key)) continue;
+  const stale = path.join(outDir, `${key}.json`);
+  if (fs.existsSync(stale)) {
+    fs.rmSync(stale);
+    console.warn(`Usunięto nieaktualny ${key}.json — feed nie obejmuje tego typu dnia.`);
+  }
+}
+
 fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({
   city: cityKey,
   generated: new Date().toISOString(),
   feedEndDate: commonMax,
   dates: Object.fromEntries(dayTypes.map(d => [d.key, d.date])),
   sources: cities[cityKey].credits.map(c => `${c.label} — ${c.url}`),
+  routeNames, // route_id -> nazwa linii (dla kolektora opóźnień GTFS-RT)
 }, null, 2));
 console.log('Gotowe.');

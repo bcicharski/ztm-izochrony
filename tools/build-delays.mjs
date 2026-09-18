@@ -37,6 +37,22 @@ function percentileFromHist(hist, n, p) {
   return BUCKET_REPS[BUCKET_REPS.length - 1];
 }
 
+/**
+ * Nazwy linii znane silnikowi (routes[].n z workday.json) — klucz profilu,
+ * który w nie nie trafia (np. surowe route_id z okresu przed mapowaniem nazw
+ * w kolektorze), jest martwy i tylko puchnie w pliku. `null` = brak danych
+ * dnia roboczego, filtr wyłączony.
+ */
+function knownRouteNames(cityKey) {
+  const file = path.join(root, 'data', cityKey, 'workday.json');
+  if (!fs.existsSync(file)) return null;
+  try {
+    return new Set(JSON.parse(fs.readFileSync(file, 'utf8')).routes.map(r => r.n));
+  } catch {
+    return null;
+  }
+}
+
 for (const cityKey of Object.keys(cities)) {
   const file = path.join(srcDir, `${cityKey}.json`);
   const outFile = path.join(root, 'data', cityKey, 'delays.json');
@@ -45,18 +61,21 @@ for (const cityKey of Object.keys(cities)) {
     continue;
   }
   const agg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const known = knownRouteNames(cityKey);
   const profile = {};
-  let kept = 0, total = 0;
+  let kept = 0, total = 0, unknown = 0;
   for (const [key, row] of Object.entries(agg)) {
     total++;
     const n = row[0];
     if (n < MIN_OBS) continue;
+    if (known && !known.has(key.split('|')[0])) { unknown++; continue; }
     const p80 = percentileFromHist(row.slice(2), n, PERCENTILE);
     if (p80 <= 0) continue; // brak istotnego opóźnienia — heurystyka zbędna
     profile[key] = p80;
     kept++;
   }
   fs.writeFileSync(outFile, JSON.stringify(profile));
-  console.log(`${cityKey}: ${kept}/${total} kluczy z profilem (n≥${MIN_OBS}), ` +
-    `plik ${(fs.statSync(outFile).size / 1024).toFixed(1)} kB`);
+  console.log(`${cityKey}: ${kept}/${total} kluczy z profilem (n≥${MIN_OBS})` +
+    (unknown ? `, ${unknown} pominiętych (linia nieznana silnikowi)` : '') +
+    `, plik ${(fs.statSync(outFile).size / 1024).toFixed(1)} kB`);
 }

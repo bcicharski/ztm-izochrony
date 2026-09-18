@@ -7,9 +7,9 @@
 
 /* global L */
 
-export const ZONE_ALPHA = 0.55;
+import { M_PER_DEG_LAT } from './data.js';
 
-const M_PER_DEG_LAT = 111320;
+export const ZONE_ALPHA = 0.55;
 
 export function createMap(container, center, zoom) {
   const map = L.map(container, {
@@ -18,11 +18,16 @@ export function createMap(container, center, zoom) {
     zoomControl: false,
   });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  // Standardowe kafelki OSM (bez klucza API). Jasny podkład CARTO light_all,
+  // używany wcześniej, od 2026 wymaga klucza i bez niego oddaje znak wodny
+  // „API KEY REQUIRED". Kolorystykę OSM wygasza filtr CSS na .leaflet-tile-pane
+  // (css/style.css), żeby strefy pozostały czytelne jak na jasnym podkładzie.
+  // Polityka użycia kafelków OSM: ruch tej strony jest niewielki, atrybucja
+  // widoczna; przy dużym ruchu przejść na własny klucz (CARTO/MapTiler/Stadia).
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' +
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' +
       ' | Rozkłady: otwarte dane przewoźników (szczegóły w panelu)',
-    subdomains: 'abcd',
     maxZoom: 19,
   }).addTo(map);
   return map;

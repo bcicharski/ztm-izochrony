@@ -12,8 +12,10 @@ const MAX_ROUNDS = 5;          // maks. 4 przesiadki
 const HORIZON_S = 180 * 60;    // ogranicznik wyszukiwania (3 h)
 
 // Tryb ostrożny: heurystyczny margines na opóźnienia (do czasu zebrania
-// rzeczywistych profili opóźnień). Bufor przesiadkowy rośnie z 1 do 4 minut,
-// a czasy jazdy są wydłużane zależnie od podatności środka transportu na korki.
+// rzeczywistych profili opóźnień). Bufor przesiadkowy rośnie z 1 do 4 minut
+// (przesiadka w miejscu: bufor przy wsiadaniu; przejście piesze: minimum
+// czasu marszu — nigdy oba naraz), a czasy jazdy są wydłużane zależnie od
+// podatności środka transportu na korki.
 const CAUTIOUS_TRANSFER_S = 240;
 const CAUTIOUS_RIDE_FACTOR = {
   3: 1.15, 700: 1.15, 800: 1.15, 11: 1.15, // autobusy i trolejbusy
@@ -39,12 +41,14 @@ const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
  * @param {object} opts {lat, lon, direction:'from'|'to', walk:bool, mode:'general'|'time',
  *                       timeMin, types?:Set<number> (dozwolone route_type; brak = wszystkie),
  *                       cautious?:bool (margines na opóźnienia),
- *                       delays?:object (profile opóźnień linii), dayType?:0|1|2}
+ *                       delays?:object (profile opóźnień linii), dayType?:0|1|2,
+ *                       accessSec?:Float64Array (czasy dojścia po sieci ulic —
+ *                       patrz findAccessStops; brak = liczenie w linii prostej)}
  * @returns {{minutes: Float64Array, journeyTo: (stop:number)=>Array|null}}
  */
 export function computeReachability(net, opts) {
   const g = opts.direction === 'to' ? net.reversed : net;
-  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk);
+  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec);
   if (sources.length === 0) {
     return { minutes: new Float64Array(g.nStops).fill(Infinity), journeyTo: () => null };
   }
@@ -91,12 +95,25 @@ export function computeReachability(net, opts) {
 /**
  * Przystanki startowe jako spłaszczone pary [stopIdx, accessSec, ...].
  * Spacer wł.: wszystkie przystanki w zasięgu pieszym; wył.: najbliższy zespół (dojście = 0).
+ *
+ * @param {Float64Array|null} accessSec  czasy dojścia policzone po grafie ulic
+ *   (js/app.js), indeksowane przystankiem:
+ *     - liczba skończona → dojście po realnej sieci, brane wprost,
+ *     - `Infinity` → graf zna ten przystanek, ale nie ma do niego dojścia
+ *       (drugi brzeg rzeki bez mostu w zasięgu) → przystanek pomijany,
+ *     - `NaN` / brak tablicy → poza grafem (dalekie stacje spoza gridBbox,
+ *       przystanek dalej niż SNAP_MAX_M od drogi) → dawne przybliżenie
+ *       w linii prostej z ryczałtem krętości.
+ *   Bez tego przystanek za wodą był startem podróży w kilka minut marszu.
  */
-export function findAccessStops(g, lat, lon, walk) {
+export function findAccessStops(g, lat, lon, walk, accessSec = null) {
   const out = [];
   if (walk) {
     const maxDist = HORIZON_S * WALK_MPS; // i tak przycięte horyzontem
     for (let i = 0; i < g.nStops; i++) {
+      const net = accessSec ? accessSec[i] : NaN;
+      if (Number.isFinite(net)) { out.push(i, Math.round(net)); continue; }
+      if (net === Infinity) continue;
       const d = distM(lat, lon, g.lat[i], g.lon[i]);
       if (d <= maxDist) out.push(i, Math.round(d / WALK_MPS));
     }
@@ -134,6 +151,7 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
   const INF = Infinity;
   const best = new Float64Array(n).fill(INF);      // najlepszy znany czas przyjazdu
   const arrPrev = new Float64Array(n).fill(INF);   // przyjazdy z poprzedniej rundy
+  const kindPrev = new Uint8Array(n);              // jak dotarto (P_*) — stan z poprzedniej rundy, spójny z arrPrev
   const par = newParents(n);
   const cap = t0 + HORIZON_S;
 
@@ -152,9 +170,17 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
       mark(s);
     }
   }
+  kindPrev.set(par.kind);
 
   const footAdj = walk ? g.transferAdj : g.sameGroupAdj;
   const qPattern = new Int32Array(g.patterns.length).fill(-1); // najwcześniejsza pozycja wejścia
+  // Bufor przesiadkowy przy wsiadaniu dotyczy WYŁĄCZNIE przystanku, na który
+  // dojechało się pojazdem (przesiadka w miejscu). Po dojściu pieszym
+  // (P_ACCESS z punktu użytkownika, P_FOOT z sąsiedniego przystanku) czas
+  // marszu ma już wliczone minimum (MIN_TRANSFER_S / CAUTIOUS_TRANSFER_S
+  // w transferAdj i kroku 3), więc dokładanie bufora liczyło margines
+  // dwa razy: 2 min zamiast 1, a w trybie ostrożnym 8 min zamiast 4.
+  const buffer = cautious ? CAUTIOUS_TRANSFER_S : MIN_TRANSFER_S;
 
   for (let round = 1; round <= MAX_ROUNDS; round++) {
     // 1. wzorce obsługujące oznaczone przystanki
@@ -172,7 +198,6 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
     marked = [];
 
     // 2. skan wzorców
-    const buffer = round > 1 ? (cautious ? CAUTIOUS_TRANSFER_S : MIN_TRANSFER_S) : 0;
     for (const pi of qList) {
       const p = g.patterns[pi];
       const startPos = qPattern[pi];
@@ -205,7 +230,7 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
         }
         // spróbuj złapać wcześniejszy kurs
         if (!(fl & 1) && arrPrev[stop] < INF) {
-          const ready = arrPrev[stop] + buffer;
+          const ready = arrPrev[stop] + (kindPrev[stop] === P_RIDE ? buffer : 0);
           const currentDep = trip >= 0 ? tripStartT + tripCum[pos] : Infinity;
           if (ready < currentDep) {
             const t = earliestTrip(p, pos, ready);
@@ -248,6 +273,7 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
 
     // 4. przygotuj następną rundę
     arrPrev.set(best);
+    kindPrev.set(par.kind);
   }
 
   const seconds = new Float64Array(n);
@@ -279,7 +305,8 @@ function rideAdjacency(g, types, cautious) {
   g.rideAdjCache ??= new Map();
   if (g.rideAdjCache.has(key)) return g.rideAdjCache.get(key);
 
-  const minEdge = new Map(); // klucz u*100000+v -> [w, routeIdx]
+  const N = g.nStops;
+  const minEdge = new Map(); // klucz u*N+v -> [w, routeIdx]
   for (const p of g.patterns) {
     if (types && !types.has(g.routes[p.route].t)) continue;
     const fac = cautious ? rideFactor(g.routes[p.route].t) : 1;
@@ -292,14 +319,14 @@ function rideAdjacency(g, types, cautious) {
         w = Math.min(w, p.profArr[k][pos + 1] - p.profCum[k][pos]);
       }
       w = Math.round(Math.max(0, w) * fac);
-      const k = u * 100000 + v;
+      const k = u * N + v;
       const cur = minEdge.get(k);
       if (cur === undefined || w < cur[0]) minEdge.set(k, [w, p.route]);
     }
   }
-  const adj = Array.from({ length: g.nStops }, () => []);
+  const adj = Array.from({ length: N }, () => []);
   for (const [k, [w, route]] of minEdge) {
-    const u = Math.floor(k / 100000), v = k % 100000;
+    const u = Math.floor(k / N), v = k % N;
     adj[u].push(v, w, route);
   }
   g.rideAdjCache.set(key, adj);

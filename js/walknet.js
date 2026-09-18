@@ -21,7 +21,7 @@ export const NET_WALK_MPS = 4.5 / 3.6;
 /** Jak daleko od sieci kolorujemy teren [m] — mniej więcej pół kwartału. */
 export const SPREAD_M = 75;
 
-/** Maksymalna odległość przyłączenia punktu/przystanku do sieci [m]. */
+/** Maksymalna odległość przyłączenia punktu/przystanku do sieci (rzut na krawędź) [m]. */
 export const SNAP_MAX_M = 400;
 
 /** Bok kubełka indeksu przestrzennego [m]. */
@@ -73,6 +73,7 @@ export function decodeWalkNet(raw) {
   const net = { n, lat, lon, off, adjTo, adjSec, edgeFrom: from, edgeTo: to, edgeLen: eLen };
   net.main = mainComponent(net);
   buildIndex(net);
+  buildEdgeIndex(net);
   return net;
 }
 
@@ -83,7 +84,7 @@ export function decodeWalkNet(raw) {
  * bboxa, ścieżki bez połączenia z resztą, błędy danych. Przyłączenie punktu do
  * takiego odprysku daje izochronę z kilkunastu pikseli — zdarzyło się to
  * domyślnym punktom GZM (odprysk 7 węzłów, 19 m od punktu) i Bydgoszczy
- * (3 węzły, 22 m). `snapNode` pomija węzły spoza tej składowej; węzły odprysków
+ * (3 węzły, 22 m). `snapEdge` pomija krawędzie spoza tej składowej; węzły odprysków
  * zostają w danych, ale nikt się do nich nie przyłączy.
  * @returns {Uint8Array} 1 = węzeł w największej składowej
  */
@@ -138,37 +139,152 @@ function buildIndex(net) {
 }
 
 /**
- * Najbliższy węzeł sieci albo −1, gdy dalej niż `maxM`.
- * Przeszukuje pierścienie kubełków, rosnąco, aż znaleziony węzeł jest bliżej
- * niż nieprzeszukany obszar. Pomija węzły spoza największej spójnej składowej
- * (patrz `mainComponent`) — przyłączenie do odprysku dawałoby pustą izochronę.
+ * Indeks przestrzenny krawędzi: każda krawędź trafia do wszystkich kubełków
+ * pokrytych bboxem swojej cięciwy (krawędzie grafu skontrahowanego to proste
+ * odcinki między skrzyżowaniami — geometria pośrednia nie jest zapisywana;
+ * zmierzone: długość realna/cięciwa mediana 1,008, p95 1,25).
  */
-export function snapNode(net, lat, lon, maxM = SNAP_MAX_M) {
+function buildEdgeIndex(net) {
   const ix = net.index;
-  const cx = Math.min(ix.W - 1, Math.max(0, Math.floor((lon - ix.lonW) * ix.mPerDegLon / CELL_M)));
-  const cy = Math.min(ix.H - 1, Math.max(0, Math.floor((lat - ix.latS) * M_PER_DEG_LAT / CELL_M)));
+  const m = net.edgeLen.length;
+  const cellX = lon => Math.min(ix.W - 1, Math.max(0, Math.floor((lon - ix.lonW) * ix.mPerDegLon / CELL_M)));
+  const cellY = lat => Math.min(ix.H - 1, Math.max(0, Math.floor((lat - ix.latS) * M_PER_DEG_LAT / CELL_M)));
+  const counts = new Int32Array(ix.W * ix.H + 1);
+  const forEachCell = (e, fn) => {
+    const a = net.edgeFrom[e], b = net.edgeTo[e];
+    const x0 = Math.min(cellX(net.lon[a]), cellX(net.lon[b])), x1 = Math.max(cellX(net.lon[a]), cellX(net.lon[b]));
+    const y0 = Math.min(cellY(net.lat[a]), cellY(net.lat[b])), y1 = Math.max(cellY(net.lat[a]), cellY(net.lat[b]));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) fn(y * ix.W + x);
+  };
+  for (let e = 0; e < m; e++) forEachCell(e, c => { counts[c]++; });
+  const start = new Int32Array(ix.W * ix.H + 1);
+  for (let i = 0; i < ix.W * ix.H; i++) start[i + 1] = start[i] + counts[i];
+  const cursor = start.slice(0, ix.W * ix.H);
+  const items = new Int32Array(start[ix.W * ix.H]);
+  for (let e = 0; e < m; e++) forEachCell(e, c => { items[cursor[c]++] = e; });
+  net.edgeIndex = { start, items };
+}
+
+/** Tolerancja doboru kandydatek: krawędzie nie dalej niż najbliższa + tyle metrów. */
+export const SNAP_TOL_M = 25;
+/** Maksymalna liczba kandydatek przyłączenia (najbliższe wg odległości od rzutu). */
+const SNAP_MAX_CAND = 8;
+
+/**
+ * Przyłączenie punktu do sieci: rzut na KRAWĘDZIE (cięciwy), nie na najbliższy
+ * węzeł. Graf jest skontrahowany — węzły to tylko skrzyżowania, a krawędź bywa
+ * długa (p90 ≈ 170 m, p99 ≈ 600 m). Snap do węzła doliczał wtedy zmyślony
+ * marsz do rogu ulicy (do kilku minut) albo w ogóle nie znajdował węzła
+ * w `maxM`, choć ulica biegła tuż obok.
+ *
+ * Zwraca LISTĘ kandydatek: wszystkie krawędzie nie dalej niż najbliższa + `tolM`
+ * (posortowane, maks. `SNAP_MAX_CAND`). Jedna „zwyciężczyni" myliła się tam,
+ * gdzie równolegle biegną jezdnia i chodnik: punkt na chodniku 4 m od 800-m
+ * cięciwy jezdni dostawał jezdnię (0 m) i 400 m marszu do jej końca, choć
+ * chodnik miał skrzyżowanie tuż obok. Z listą decyduje Dijkstra — bierze
+ * najszybszą drogę przez którąkolwiek kandydatkę.
+ *
+ * Pomija krawędzie spoza największej spójnej składowej (`mainComponent`).
+ *
+ * @returns {Array<{edge:number, a:number, b:number, t:number, perpM:number,
+ *   perpSec:number, secA:number, secB:number, lenSec:number}>} pusta = poza siecią
+ *   `t` — pozycja rzutu na krawędzi (0 = węzeł a, 1 = węzeł b);
+ *   `perpSec` — dojście z punktu do rzutu (linia prosta);
+ *   `secA`/`secB` — marsz wzdłuż krawędzi od rzutu do a / do b;
+ *   `lenSec` — czas przejścia całej krawędzi.
+ */
+export function snapEdges(net, lat, lon, maxM = SNAP_MAX_M, tolM = SNAP_TOL_M) {
+  const ix = net.index, ex = net.edgeIndex;
+  const kx = ix.mPerDegLon, ky = M_PER_DEG_LAT;
+  const cx = Math.min(ix.W - 1, Math.max(0, Math.floor((lon - ix.lonW) * kx / CELL_M)));
+  const cy = Math.min(ix.H - 1, Math.max(0, Math.floor((lat - ix.latS) * ky / CELL_M)));
   const maxRing = Math.ceil(maxM / CELL_M) + 1;
-  let best = -1, bestD = Infinity;
+  const found = new Map(); // edge -> [d, t] (krawędź siedzi w kilku kubełkach — dedup)
+  let bestD = Infinity;
   for (let r = 0; r <= maxRing; r++) {
-    if (best >= 0 && bestD <= (r - 1) * CELL_M) break; // dalsze pierścienie nie poprawią
+    // krawędź jest w każdym kubełku swojego bboxa, więc wszystko, co leży
+    // w pierścieniach ≤ r−1, zostało już obejrzane — dalsze nie poprawią
+    if (bestD + tolM <= (r - 1) * CELL_M) break;
     for (let y = cy - r; y <= cy + r; y++) {
       if (y < 0 || y >= ix.H) continue;
       for (let x = cx - r; x <= cx + r; x++) {
         if (x < 0 || x >= ix.W) continue;
         if (r > 0 && Math.abs(y - cy) !== r && Math.abs(x - cx) !== r) continue; // tylko obrzeże
         const c = y * ix.W + x;
-        for (let k = ix.start[c]; k < ix.start[c + 1]; k++) {
-          const i = ix.items[k];
-          if (!net.main[i]) continue; // odprysk — prowadziłby donikąd
-          const dy = (net.lat[i] - lat) * M_PER_DEG_LAT;
-          const dx = (net.lon[i] - lon) * ix.mPerDegLon;
-          const d = Math.hypot(dx, dy);
-          if (d < bestD) { bestD = d; best = i; }
+        for (let k = ex.start[c]; k < ex.start[c + 1]; k++) {
+          const e = ex.items[k];
+          if (found.has(e)) continue;
+          const a = net.edgeFrom[e], b = net.edgeTo[e];
+          if (!net.main[a]) continue; // odprysk — prowadziłby donikąd
+          // rzut punktu na odcinek ab w metrach (rzut równokątny)
+          const ax = (net.lon[a] - lon) * kx, ay = (net.lat[a] - lat) * ky;
+          const bx = (net.lon[b] - lon) * kx, by = (net.lat[b] - lat) * ky;
+          const dx = bx - ax, dy = by - ay;
+          const len2 = dx * dx + dy * dy;
+          const t = len2 > 0 ? Math.min(1, Math.max(0, -(ax * dx + ay * dy) / len2)) : 0;
+          const d = Math.hypot(ax + t * dx, ay + t * dy);
+          if (d > maxM || d > bestD + tolM) continue;
+          found.set(e, [d, t]);
+          if (d < bestD) bestD = d;
         }
       }
     }
   }
-  return bestD <= maxM ? best : -1;
+  const out = [];
+  for (const [e, [d, t]] of found) {
+    if (d > bestD + tolM) continue;
+    const lenSec = net.edgeLen[e] / NET_WALK_MPS;
+    out.push({
+      edge: e, a: net.edgeFrom[e], b: net.edgeTo[e], t,
+      perpM: d, perpSec: d / NET_WALK_MPS,
+      secA: t * lenSec, secB: (1 - t) * lenSec, lenSec,
+    });
+  }
+  out.sort((p, q) => p.perpM - q.perpM);
+  return out.length > SNAP_MAX_CAND ? out.slice(0, SNAP_MAX_CAND) : out;
+}
+
+/** Źródła fali dla `computeNodeTimes` z punktu przyłączonego do sieci (oba końce każdej kandydatki). */
+export function snapSeeds(snaps, startSec) {
+  const seeds = [];
+  for (const s of snaps) {
+    const base = startSec + s.perpSec;
+    seeds.push([s.a, Math.round(base + s.secA)], [s.b, Math.round(base + s.secB)]);
+  }
+  return seeds;
+}
+
+/**
+ * Czas dotarcia fali (`nodeTime`) do punktu przyłączonego do sieci — najkrótsza
+ * z dróg przez końce którejkolwiek kandydatki + dojście z rzutu; −1 = brak.
+ * Nie obejmuje przypadku „oba punkty na tej samej krawędzi" (patrz `sameEdgeSec`).
+ */
+export function snapTime(nodeTime, snaps) {
+  let best = Infinity;
+  for (const s of snaps) {
+    let t = Infinity;
+    if (nodeTime[s.a] >= 0) t = nodeTime[s.a] + s.secA;
+    if (nodeTime[s.b] >= 0) t = Math.min(t, nodeTime[s.b] + s.secB);
+    if (t + s.perpSec < best) best = t + s.perpSec;
+  }
+  return best === Infinity ? -1 : Math.round(best);
+}
+
+/**
+ * Dwa punkty na TEJ SAMEJ krawędzi: marsz wprost wzdłuż niej, bez zahaczania
+ * o skrzyżowanie (droga przez węzeł nigdy nie jest krótsza). Sprawdzane dla
+ * każdej pary kandydatek. `Infinity`, gdy nie dzielą żadnej krawędzi.
+ */
+export function sameEdgeSec(snapsA, snapsB) {
+  let best = Infinity;
+  for (const s1 of snapsA) {
+    for (const s2 of snapsB) {
+      if (s1.edge !== s2.edge) continue;
+      const sec = s1.perpSec + s2.perpSec + Math.abs(s1.t - s2.t) * s1.lenSec;
+      if (sec < best) best = sec;
+    }
+  }
+  return best === Infinity ? Infinity : Math.round(best);
 }
 
 /**
@@ -220,14 +336,21 @@ export function computeNodeTimes(net, seeds, capSec) {
  * gotowego bufora zbija to do kilkudziesięciu milisekund, bo wiele próbek
  * trafia w ten sam piksel i zwyczajnie się nadpisuje.
  *
+ * Źródła leżące WEWNĄTRZ krawędzi (`edgeSeeds`: punkt użytkownika, przystanki —
+ * przyłączone rzutem na krawędź, patrz `snapEdge`) dostają czas liczony wprost
+ * od rzutu, nie przez końce krawędzi — inaczej otoczenie źródła malowało się
+ * z czasem powiększonym o marsz do skrzyżowania i z powrotem.
+ *
  * @param {object} net
  * @param {Int32Array} nodeTime  wynik `computeNodeTimes`
  * @param {object} grid          siatka z `buildWalkGrid`
  * @param {(grid:object, lat:number, lon:number)=>number} pixelIndex
  * @param {number} unreach       wartość „nieosiągalne" bufora (walkgrid.UNREACH)
  * @param {number} capSec        horyzont — dłuższych czasów nie ma sensu nanosić
+ * @param {Map<number, Array<[number, number]>>|null} edgeSeeds
+ *        krawędź -> [[t (0..1), sekundy w punkcie rzutu], ...]
  */
-export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec) {
+export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec, edgeSeeds = null) {
   const time = grid.time;
   time.fill(unreach);
   // krok próbkowania poniżej boku piksela, żeby kolejne próbki trafiały
@@ -237,8 +360,10 @@ export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec) {
   for (let e = 0; e < nEdges; e++) {
     const a = net.edgeFrom[e], b = net.edgeTo[e];
     const ta = nodeTime[a], tb = nodeTime[b];
-    if (ta < 0 && tb < 0) continue;
+    const inner = edgeSeeds?.get(e) ?? null;
+    if (ta < 0 && tb < 0 && !inner) continue;
     const len = net.edgeLen[e];
+    const lenSec = len / NET_WALK_MPS;
     const latA = net.lat[a], lonA = net.lon[a];
     const dLat = net.lat[b] - latA, dLon = net.lon[b] - lonA;
     const steps = Math.max(1, Math.round(len / stepM));
@@ -248,10 +373,16 @@ export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec) {
       if (idx < 0) continue;
       // czas krótszy z dwóch kierunków dojścia wzdłuż krawędzi
       let t = Infinity;
-      if (ta >= 0) t = ta + (len * f) / NET_WALK_MPS;
+      if (ta >= 0) t = ta + lenSec * f;
       if (tb >= 0) {
-        const viaB = tb + (len * (1 - f)) / NET_WALK_MPS;
+        const viaB = tb + lenSec * (1 - f);
         if (viaB < t) t = viaB;
+      }
+      if (inner) {
+        for (const [ts, sec] of inner) {
+          const direct = sec + Math.abs(f - ts) * lenSec;
+          if (direct < t) t = direct;
+        }
       }
       if (t > capSec) continue;
       const v = t | 0;

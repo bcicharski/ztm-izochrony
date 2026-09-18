@@ -11,7 +11,6 @@
     "zoom": 12,
     "pointA": [53.1324, 23.1639],
     "pointB": [53.1176, 23.1436],
-    "viewbox": "22.90,53.28,23.35,52.95",
     "veh": [
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
@@ -31,7 +30,6 @@
     "zoom": 12,
     "pointA": [50.0419, 22.0033],
     "pointB": [50.03, 21.999],
-    "viewbox": "21.75,50.15,22.25,49.90",
     "veh": [
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
@@ -52,7 +50,6 @@
     "zoom": 12,
     "pointA": [53.7776, 20.4899],
     "pointB": [53.7784, 20.4801],
-    "viewbox": "20.30,53.86,20.60,53.68",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -74,7 +71,6 @@
     "zoom": 12,
     "pointA": [53.0106, 18.6033],
     "pointB": [53.0138, 18.5984],
-    "viewbox": "18.45,53.09,18.75,52.90",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -96,7 +92,6 @@
     "zoom": 12,
     "pointA": [50.8735, 20.6285],
     "pointB": [50.8661, 20.6286],
-    "viewbox": "20.50,50.94,20.78,50.78",
     "veh": [
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
@@ -117,7 +112,6 @@
     "zoom": 12,
     "pointA": [50.6675, 17.9213],
     "pointB": [50.6606, 17.9269],
-    "viewbox": "17.85,50.74,18.02,50.60",
     "veh": [
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
@@ -138,7 +132,6 @@
     "zoom": 12,
     "pointA": [51.9356, 15.5064],
     "pointB": [51.9412, 15.4966],
-    "viewbox": "15.42,52.00,15.68,51.83",
     "veh": [
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
@@ -159,7 +152,6 @@
     "zoom": 12,
     "pointA": [52.7368, 15.2288],
     "pointB": [52.7305, 15.2408],
-    "viewbox": "15.05,52.81,15.38,52.68",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -186,7 +178,6 @@
     "zoom": 11,
     "pointA": [54.3554, 18.6445],
     "pointB": [54.382, 18.6055],
-    "viewbox": "18.05,54.68,19.10,54.20",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [900, 0] },
       { "key": "bus", "label": "🚌 Autobus", "types": [700, 3] },
@@ -217,7 +208,6 @@
     "zoom": 11,
     "pointA": [52.2286, 21.0031],
     "pointB": [52.2445, 21.0889],
-    "viewbox": "20.75,52.40,21.30,52.05",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
@@ -243,7 +233,6 @@
     "zoom": 12,
     "pointA": [51.0989, 17.0366],
     "pointB": [51.1122, 17.0596],
-    "viewbox": "16.80,51.22,17.20,50.95",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -268,7 +257,6 @@
     "zoom": 12,
     "pointA": [50.0682, 19.9475],
     "pointB": [50.0719, 20.0375],
-    "viewbox": "19.75,50.15,20.25,49.95",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [900, 0] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
@@ -301,7 +289,6 @@
     "zoom": 10,
     "pointA": [50.2585, 19.018],
     "pointB": [50.2965, 18.954],
-    "viewbox": "18.35,50.65,19.55,50.05",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
@@ -325,7 +312,6 @@
     "zoom": 12,
     "pointA": [52.4013, 16.9126],
     "pointB": [52.3936, 16.949],
-    "viewbox": "16.70,52.55,17.15,52.25",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -348,7 +334,6 @@
     "zoom": 12,
     "pointA": [53.4185, 14.55],
     "pointB": [53.4326, 14.5507],
-    "viewbox": "14.40,53.60,14.90,53.30",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -371,7 +356,6 @@
     "zoom": 12,
     "pointA": [51.232, 22.5695],
     "pointB": [51.2497, 22.558],
-    "viewbox": "22.45,51.32,22.70,51.14",
     "veh": [
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] },
       { "key": "trol", "label": "🚎 Trolejbus", "types": [11, 800] }
@@ -393,7 +377,6 @@
     "zoom": 12,
     "pointA": [53.1352, 17.9884],
     "pointB": [53.1228, 18.0083],
-    "viewbox": "17.85,53.20,18.20,53.05",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
@@ -415,7 +398,6 @@
     "zoom": 12,
     "pointA": [51.7677, 19.4686],
     "pointB": [51.7789, 19.457],
-    "viewbox": "19.28,51.87,19.68,51.68",
     "veh": [
       { "key": "tram", "label": "🚊 Tramwaj", "types": [0, 900] },
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }

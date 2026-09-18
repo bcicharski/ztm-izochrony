@@ -43,8 +43,23 @@ function bucketIndex(delaySec) {
   return BUCKETS.length;
 }
 
+/**
+ * Mapa route_id -> nazwa linii z data/<miasto>/meta.json (zapisuje build-data.mjs).
+ * Feedy GTFS-RT podają route_id (Kraków tramwaje: "route_5"), a silnik szuka
+ * profilu po nazwie linii ("40") — bez tej mapy profile nigdy nie trafiały
+ * w linię. Brak mapy (stary meta.json) = zostaje surowe route_id.
+ */
+function routeNameMap(cityKey) {
+  try {
+    const meta = JSON.parse(fs.readFileSync(path.join(root, 'data', cityKey, 'meta.json'), 'utf8'));
+    return meta.routeNames ?? {};
+  } catch {
+    return {};
+  }
+}
+
 /** Obserwacje z feedu GTFS-RT TripUpdates: mapa kurs -> {route, delaySec}. */
-async function fromGtfsRt(urls) {
+async function fromGtfsRt(urls, names) {
   const { transit_realtime } = (await import('gtfs-realtime-bindings')).default;
   const obs = new Map();
   for (const url of urls) {
@@ -66,7 +81,8 @@ async function fromGtfsRt(urls) {
           }
         }
         if (delay === undefined) continue;
-        obs.set(`${url}|${tu.trip.tripId ?? e.id}`, { route: String(tu.trip.routeId), delaySec: delay });
+        const routeId = String(tu.trip.routeId);
+        obs.set(`${url}|${tu.trip.tripId ?? e.id}`, { route: names[routeId] ?? routeId, delaySec: delay });
       }
     } catch (err) {
       console.warn(`RT ${url}: ${err.message}`);
@@ -103,7 +119,7 @@ let totalObs = 0;
 for (const [cityKey, cfg] of Object.entries(cities)) {
   if (!cfg.rt) continue;
   const obs = cfg.rt.type === 'gtfsrt'
-    ? await fromGtfsRt(cfg.rt.urls)
+    ? await fromGtfsRt(cfg.rt.urls, routeNameMap(cityKey))
     : cfg.rt.type === 'gdansk-departures'
       ? await fromGdanskDepartures(cfg.rt.url)
       : new Map();
