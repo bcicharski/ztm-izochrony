@@ -8,6 +8,9 @@ export const DAY_LABELS = { workday: 'dzień roboczy', saturday: 'sobota', sunda
 
 /** Prędkość spaceru w linii prostej [m/s] — 4,5 km/h ÷ współczynnik krętości 1,3. */
 export const WALK_MPS = 4.5 / 3.6 / 1.3;
+/** Prędkość roweru w linii prostej [m/s] — 15 km/h ÷ ten sam ryczałt krętości.
+ *  Używana tylko tam, gdzie graf ulic milczy (przystanki spoza sieci). */
+export const BIKE_MPS = 15 / 3.6 / 1.3;
 /** Minimalny czas przesiadki [s]. */
 export const MIN_TRANSFER_S = 60;
 /**

@@ -106,6 +106,32 @@ Zrobione lokalnie, niewypchnięte do repo — do przejrzenia:
   nie gasi). Obserwacja: `data/delays/` jest śledzone na `main` (workflow
   kopiuje agregaty z gałęzi `delays`), wpis w `.gitignore` był martwy — poprawiony.
 
+- **Ulepszenie 7 — rower jako dojście (2026-09-19, backlog #5)** — w sekcji
+  „Dojście do przystanku" doszedł wybór środka: pieszo, rowerem zostawianym na
+  przystanku (bike & ride) albo rowerem jadącym w pojeździe; parametr URL `acc=`.
+  Rower jedzie 15 km/h po tej samej sieci ulic, a dojazd do przystanku liczony
+  jest do 30 min (≈ 7,5 km — powyżej tego nikt nie jedzie po to, żeby się
+  przesiąść, a bez capu rower sięgałby 22 km i zasiewał RAPTOR przystankami
+  z drugiego końca aglomeracji). Zmiany: `js/walknet.js` trzyma w CSR **metry**
+  zamiast sekund, a tempo (`NET_WALK_MPS` / `NET_BIKE_MPS`) przyjmują
+  `computeNodeTimes`, `snapSeeds`/`snapTime`/`sameEdgeSec` i `paintNetwork`
+  (snapy są odtąd bezwymiarowe, więc ten sam cache obsługuje oba tempa);
+  `paintNetwork` dostał `reset:false`, bo wariant „rower zostaje" wymaga **dwóch
+  fal** — szybszej od punktu i wolniejszej od przystanków — nakładanych na siebie
+  (min per piksel). `js/engine.js` ma tabelę `ACCESS_MODES` i `speedsFor`, która
+  przy kierunku „do miejsca" **zamienia role**: rower ma ten, kto podróż zaczyna,
+  czyli wtedy strona mapy, nie punkt użytkownika. `js/router.js` i `js/stats.js`
+  dostały tempo dla przystanków spoza grafu. Pomiar (Trójmiasto, `pointA`, dzień
+  roboczy 12:00): dojścia po tych samych trasach dokładnie 3,33× krótsze
+  (mediana stosunku 3,33 przy p10 3,31 i p90 3,35), przystanki startowe
+  801 → 939, osiągalne ≤30 min **906 → 1144**; udział powierzchni miasta
+  w paśmie „ponad 60" pieszo 63% → rower 66% → rower w pojeździe 76%, a w paśmie
+  „do 10 min" 0,4% → 2,0% → 2,9%. Kierunek „do miejsca" zachowuje się
+  lustrzanie (59% → 72%). Dymek trasy pokazuje 🚲 na tym końcu, gdzie rower
+  faktycznie jedzie. Ograniczenie (udokumentowane w README i pomocy): graf nie
+  ma tagów krawędzi, więc rower „pokonuje" schody i deptaki, a nie zna dróg
+  rowerowych z `foot=no`; przesiadki w trakcie podróży zostają piesze.
+
 Otwarte pozostają wyłącznie udokumentowane ograniczenia modelu (#36) oraz
 tematy poza kodem: certyfikowany CMP dla Google (#4), przełączenie na własny
 klucz kafelków przy dużym ruchu (#0).
@@ -407,10 +433,13 @@ klucz kafelków przy dużym ruchu (#0).
    dla dużych miast i natychmiastowym podglądem (najpierw sieć rozkładowa,
    potem doszlifowana fala).
 
-7. **Rower jako dojście** (backlog #5): prędkość 15 km/h po tej samej sieci
-   z wykluczeniem `highway=steps`/`footway` bez `bicycle=yes`; warianty
-   „rower zostaje na przystanku" i „rower w pojeździe" (GTFS `bikes_allowed`).
-   Analogicznie hulajnoga oraz „park & ride".
+7. ~~**Rower jako dojście** (backlog #5)~~ **ZROBIONE 2026-09-19** (patrz „Stan
+   realizacji"): 15 km/h po tej samej sieci, warianty „zostaje na przystanku"
+   i „jedzie z tobą", cap dojazdu 30 min. **Zostaje:** wykluczenie
+   `highway=steps` i dróg bez prawa jazdy rowerem wymaga flag krawędzi
+   w `walknet.json` (przebudowa Overpassem 18 miast); `bikes_allowed` z GTFS
+   nieużywane (polskie feedy go nie wypełniają); hulajnoga i „park & ride"
+   nietknięte.
 
 8. **Profil pieszego**: ustawiana prędkość (dzieci, seniorzy, wózek), kara za
    schody i przewyższenia (`highway=steps`, `incline`, dane SRTM), tryb

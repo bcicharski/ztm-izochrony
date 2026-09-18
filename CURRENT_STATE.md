@@ -227,7 +227,7 @@ Kolejność wg priorytetu; doprecyzowania z rozmowy w nawiasach. Zadania 10–12
 
 3. ~~**Przesiadki autobus/tramwaj → metro w Warszawie — weryfikacja.**~~ **ROZWIĄZANE** (2026-07-18, §1/§5): podejrzenie o nazwy potwierdzone (34/38 stacji w osobnym zespole), psuło tryb bez spaceru; `frequencies.txt` metra bez zarzutu. Fix: `COMPLEX_MAX_M` w `js/data.js`.
 4. ~~**Tryb „tylko pieszo".**~~ **ROZWIĄZANE** (2026-07-18, §1/§5): wejście przez odznaczenie wszystkich środków transportu (bez nowego przełącznika — `veh=` puste). Do rozważenia, gdyby odkrywalność okazała się za słaba: osobny checkbox „🚶 Pieszo" w sekcji środków transportu.
-5. **Rower jako dojście (rower + komunikacja).** Rower zamiast spaceru w dojściu do/od przystanków (wyższa prędkość na tej samej siatce z barierą wody; do rozstrzygnięcia: przewóz roweru w pojeździe czy rower zostaje na przystanku).
+5. ~~**Rower jako dojście (rower + komunikacja).**~~ **ROZWIĄZANE** (2026-09-19, szczegóły w `zadania.md`): wybór środka dojścia w panelu (`acc=` w URL) — pieszo, rower zostający na przystanku (bike & ride) albo rower jadący w pojeździe. 15 km/h po tej samej sieci ulic co pieszy, dojazd do przystanku capowany na 30 min. Wariant „zostaje" liczy dwie fale o różnym tempie (szybszą od punktu, wolniejszą od przystanków); przy kierunku „do miejsca" role się zamieniają. Zostaje: graf nie ma tagów krawędzi, więc nie odróżnia schodów ani deptaków.
 6. ~~**Kolej podmiejska w Krakowie (dojazd z Wieliczki).**~~ **ROZWIĄZANE** (2026-07-20, §1/§5): wpis `keepAgency:["KML"]` + `keepBbox` w `krakow.feeds`, nowy klucz `rail` w `veh`, rebuild.
 ### Priorytet NISKI
 

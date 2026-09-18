@@ -39,10 +39,15 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
 
 - **Kierunek** — *Z miejsca*: dokąd dotrę z punktu; *Do miejsca*: skąd zdążę
   dotrzeć do punktu.
-- **Dojście piesze** — wliczone dojście do przystanków i od przystanku
+- **Dojście do przystanku** — wliczone dojście do przystanków i od przystanku
   docelowego, liczone **po realnej sieci ulic, chodników i ścieżek z OSM**
   (4,5 km/h); po wyłączeniu liczy się wyłącznie od najbliższego zespołu
   przystankowego, a przesiadki tylko w ramach tego samego zespołu.
+  Zamiast spaceru można wybrać **rower** (15 km/h po tej samej sieci, dojazd
+  do przystanku liczony do 30 min; parametr URL `acc=`): wariant *zostaje na
+  przystanku* (bike & ride — od przystanku docelowego idzie się pieszo) albo
+  *jedzie z tobą* (rower w pojeździe, oba końce podróży rowerem). Przy kierunku
+  „do miejsca" rower dostaje ten, kto podróż zaczyna, czyli strona mapy.
 - **Ogólnie** — suma czasów przejazdu i przejść, bez czekania na pojazdy
   (algorytm Dijkstry na minimalnych czasach odcinków).
 - **O godzinie** — rzeczywisty rozkład z oczekiwaniem na przesiadki
@@ -197,5 +202,11 @@ linia brzegowa, czyli praktycznie nigdy).
   `gridBbox`. Dojście dłuższe niż 90 min nie jest brane pod uwagę.
 - Sieć piesza nie rozróżnia przewyższeń, schodów ani jakości nawierzchni:
   wszystkie drogi przechodzi się z tą samą prędkością 4,5 km/h.
+- Rower jeździ po **tej samej sieci co pieszy** — `walknet.json` nie ma tagów
+  krawędzi, więc model nie odróżnia schodów i deptaków (czas bywa zaniżony)
+  ani nie zna dróg rowerowych z `foot=no`, których w grafie nie ma (czas bywa
+  zawyżony). Przesiadki w trakcie podróży są zawsze piesze, także w wariancie
+  z rowerem w pojeździe: pary przesiadkowe liczy prekompilacja, jedną miarą
+  dla wszystkich trybów.
 - Tryb „ogólnie" jest optymistyczny: skleja najszybsze odcinki różnych
   kursów i nie wlicza oczekiwania.

@@ -31,6 +31,7 @@ const state = {
   compare: false,
   direction: 'from',
   walk: true,
+  access: 'foot', // 'foot' | 'bike' (zostaje na przystanku) | 'bike-onboard'
   mode: 'time',
   timeMin: now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5,
   day: todayDay,
@@ -81,6 +82,7 @@ let pointFromUrl = false;
   if (q.get('cmp') === '1') state.compare = true;
   if (q.get('dir') === 'to') state.direction = 'to';
   if (q.get('walk') === '0') state.walk = false;
+  if (['bike', 'bike-onboard'].includes(q.get('acc'))) state.access = q.get('acc');
   if (q.get('mode') === 'general') state.mode = 'general';
   const t = q.get('t')?.match(/^(\d{1,2}):(\d{2})$/);
   if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
@@ -104,6 +106,7 @@ function updateUrl() {
   }
   q.set('dir', state.direction);
   q.set('walk', state.walk ? '1' : '0');
+  if (state.access !== 'foot') q.set('acc', state.access);
   q.set('mode', state.mode);
   if (state.mode === 'time') {
     const h = Math.floor(state.timeMin / 60), m = state.timeMin % 60;
@@ -186,7 +189,12 @@ for (const el of document.querySelectorAll('input[name="mode"]')) {
     recompute();
   });
 }
-$('walkToggle').addEventListener('change', e => { state.walk = e.target.checked; recompute(); });
+$('walkToggle').addEventListener('change', e => {
+  state.walk = e.target.checked;
+  syncWalkToggle();
+  recompute();
+});
+$('accessSelect').addEventListener('change', e => { state.access = e.target.value; recompute(); });
 
 /** Buduje checkboxy środków transportu dla bieżącego miasta. */
 function renderVehControls() {
@@ -217,12 +225,16 @@ function renderVehControls() {
  * W trybie „tylko pieszo" spacer jest jedynym środkiem lokomocji, więc
  * przełącznik „Uwzględnij spacer" nic nie zmienia — wygaszamy go, żeby nie
  * sugerował działania (stan w `state.walk` zostaje nietknięty, wraca sam
- * po zaznaczeniu dowolnego pojazdu).
+ * po zaznaczeniu dowolnego pojazdu). Wybór środka dojścia (pieszo/rower)
+ * ma sens tylko wtedy, gdy dojście w ogóle jest liczone.
  */
 function syncWalkToggle() {
   const walkOnly = isWalkOnly();
   $('walkToggle').disabled = walkOnly;
   $('walkToggle').closest('fieldset').classList.toggle('dimmed', walkOnly);
+  const sel = $('accessSelect');
+  sel.value = state.access;
+  sel.disabled = walkOnly || !state.walk;
 }
 
 $('safeToggle').addEventListener('change', e => { state.safe = e.target.checked; recompute(); });
@@ -557,17 +569,33 @@ const HHMM = s => {
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
+/**
+ * Ikony dwóch skrajnych etapów podróży. Rower ma ten, kto podróż zaczyna:
+ * przy kierunku „z miejsca" jest to punkt użytkownika, przy „do miejsca" —
+ * miejsce kliknięte na mapie. Drugi koniec dostaje rower tylko wtedy, gdy
+ * jedzie w pojeździe; w wariancie „zostaje na przystanku" idzie się pieszo.
+ * Przesiadki w trakcie podróży są zawsze piesze (patrz README).
+ */
+function accessIcons() {
+  const start = state.access !== 'foot' ? '🚲' : '🚶';
+  const end = state.access === 'bike-onboard' ? '🚲' : '🚶';
+  return state.direction === 'from'
+    ? { atPoint: start, atTarget: end }
+    : { atPoint: end, atTarget: start };
+}
+
 /** Lista etapów trasy jako HTML (etapy z nazwami przystanków — patrz Engine.describeLegs). */
 function legsHtml(legs, walkMin, targetName) {
   const direction = state.direction;
+  const icons = accessIcons();
   const items = [];
   for (const leg of legs) {
     if (leg.kind === 'access') {
       const min = Math.round(leg.durSec / 60);
       if (min >= 1) {
         items.push(direction === 'from'
-          ? `🚶 ${min} min do przystanku ${esc(leg.stopName)}`
-          : `🚶 ${min} min od przystanku ${esc(leg.stopName)} do celu`);
+          ? `${icons.atPoint} ${min} min do przystanku ${esc(leg.stopName)}`
+          : `${icons.atPoint} ${min} min od przystanku ${esc(leg.stopName)} do celu`);
       }
     } else if (leg.kind === 'walk') {
       const min = Math.max(1, Math.round(leg.durSec / 60));
@@ -586,8 +614,8 @@ function legsHtml(legs, walkMin, targetName) {
   const wm = Math.round(walkMin);
   if (wm >= 1) {
     const walkItem = direction === 'from'
-      ? `🚶 ${wm} min do celu`
-      : `🚶 ${wm} min do przystanku ${esc(targetName)}`;
+      ? `${icons.atTarget} ${wm} min do celu`
+      : `${icons.atTarget} ${wm} min do przystanku ${esc(targetName)}`;
     if (direction === 'from') items.push(walkItem);
     else items.unshift(walkItem);
   }
@@ -668,6 +696,7 @@ async function recompute() {
     dayKey: state.mode === 'time' ? state.day : 'workday', // tryb ogólny zawsze na dniu roboczym
     direction: state.direction,
     walk: state.walk,
+    access: state.access,
     mode: state.mode,
     timeMin: state.timeMin,
     types: types ? [...types] : null,

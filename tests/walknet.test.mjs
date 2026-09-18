@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, paintNetwork, NET_WALK_MPS, SNAP_MAX_M } from '../js/walknet.js';
+import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, paintNetwork, NET_WALK_MPS, NET_BIKE_MPS, SNAP_MAX_M } from '../js/walknet.js';
 import { makeWalkRaw } from './helpers.mjs';
 import { M_PER_DEG_LAT } from '../js/data.js';
 
@@ -16,7 +16,7 @@ test('decodeWalkNet: CSR, czasy krawędzi, największa składowa', () => {
   assert.equal(w.n, 6);
   assert.deepEqual([...w.main], [1, 1, 1, 1, 0, 0]);
   assert.equal(w.off[1] - w.off[0], 2); // węzeł 0 ma dwóch sąsiadów
-  assert.equal(w.adjSec[w.off[0]], Math.round(500 / NET_WALK_MPS));
+  assert.equal(w.adjLen[w.off[0]], 500); // CSR trzyma metry — tempo wybiera computeNodeTimes
 });
 
 test('snapEdges: rzut na wnętrze krawędzi, kandydatki, odprysk pomijany, limit odległości', () => {
@@ -26,7 +26,7 @@ test('snapEdges: rzut na wnętrze krawędzi, kandydatki, odprysk pomijany, limit
   assert.equal(s[0].a, 0); assert.equal(s[0].b, 1);
   assert.ok(Math.abs(s[0].t - 0.5) < 0.01);
   assert.ok(s[0].perpM > 1.5 && s[0].perpM < 2.5);
-  assert.ok(Math.abs(s[0].secA - 250 / NET_WALK_MPS) < 0.5);
+  assert.ok(Math.abs(s[0].mA - 250) < 1);
   // róg kwadratu: obie krawędzie przy węźle 0 w tolerancji 25 m
   const corner = snapEdges(w, 50 - 5 / M_PER_DEG_LAT, 20);
   assert.equal(corner.length, 2);
@@ -62,13 +62,41 @@ test('paintNetwork: wnętrze krawędzi malowane od rzutu, nie przez końce', () 
   const pixelIndex = (g, lat, lon) => { const x = Math.round(g.toX(lon)), y = Math.round(g.toY(lat)); return (x < 0 || y < 0 || x >= g.W || y >= g.H) ? -1 : y * g.W + x; };
   const origin = snapEdges(w, 50, 20 + dLon / 2); // środek krawędzi 0–1
   const nodeTime = computeNodeTimes(w, snapSeeds(origin, 0), 3600);
-  const edgeSeeds = new Map([[origin[0].edge, [[origin[0].t, origin[0].perpSec]]]]);
-  paintNetwork(w, nodeTime, grid, pixelIndex, 65535, 3600, edgeSeeds);
+  const edgeSeeds = new Map([[origin[0].edge, [[origin[0].t, origin[0].perpM / NET_WALK_MPS]]]]);
+  paintNetwork(w, nodeTime, grid, pixelIndex, 65535, 3600, { edgeSeeds });
   const atOrigin = grid.time[pixelIndex(grid, 50, 20 + dLon / 2)];
   assert.ok(atOrigin <= 20, `punkt startu ≈ 0 s, jest ${atOrigin}`);
   const atNode0 = grid.time[pixelIndex(grid, 50, 20)];
   assert.ok(Math.abs(atNode0 - 250 / NET_WALK_MPS) < 30);
   // bez edgeSeeds środek krawędzi dostałby czas przez końce (≈ 2 × 200 s)
-  paintNetwork(w, nodeTime, grid, pixelIndex, 65535, 3600, null);
+  paintNetwork(w, nodeTime, grid, pixelIndex, 65535, 3600);
   assert.ok(grid.time[pixelIndex(grid, 50, 20 + dLon / 2)] > 300);
+});
+
+test('rower: to samo w grafie, tempo 15 km/h i nakładanie dwóch fal', () => {
+  const w = net();
+  const a = snapEdges(w, 50, 20); // węzeł 0
+  const seedsFoot = snapSeeds(a, 0, NET_WALK_MPS);
+  const seedsBike = snapSeeds(a, 0, NET_BIKE_MPS);
+  const foot = computeNodeTimes(w, seedsFoot, 3600, NET_WALK_MPS);
+  const bike = computeNodeTimes(w, seedsBike, 3600, NET_BIKE_MPS);
+  // ta sama droga (500 m do węzła 1), czas w stosunku prędkości
+  assert.equal(foot[1], Math.round(500 / NET_WALK_MPS));
+  assert.equal(bike[1], Math.round(500 / NET_BIKE_MPS));
+  assert.ok(Math.abs(foot[1] / bike[1] - NET_BIKE_MPS / NET_WALK_MPS) < 0.05);
+  assert.equal(sameEdgeSec(a, snapEdges(w, 50, 20 + dLon * 0.5), NET_BIKE_MPS), Math.round(250 / NET_BIKE_MPS));
+
+  // paintNetwork z reset:false dokłada drugą falę zamiast czyścić bufor
+  const res = 25, W = 40, H = 40;
+  const lonW = 20 - 5 * dLon / 20, latN = 50 + dLat + 5 * dLat / 20;
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos(50 * Math.PI / 180);
+  const grid = { W, H, res, land: new Uint8Array(W * H).fill(1), time: new Uint16Array(W * H),
+    toX: lon => (lon - lonW) * mPerDegLon / res, toY: lat => (latN - lat) * M_PER_DEG_LAT / res };
+  const pixelIndex = (g, lat, lon) => { const x = Math.round(g.toX(lon)), y = Math.round(g.toY(lat)); return (x < 0 || y < 0 || x >= g.W || y >= g.H) ? -1 : y * g.W + x; };
+  const px = pixelIndex(grid, 50, 20 + dLon / 2);
+  paintNetwork(w, foot, grid, pixelIndex, 65535, 3600, { mps: NET_WALK_MPS });
+  const footT = grid.time[px];
+  paintNetwork(w, bike, grid, pixelIndex, 65535, 3600, { mps: NET_BIKE_MPS, reset: false });
+  assert.ok(grid.time[px] < footT, 'szybsza fala nadpisuje wolniejszą');
+  assert.ok(Math.abs(grid.time[px] - 250 / NET_BIKE_MPS) < 30);
 });

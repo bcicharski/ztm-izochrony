@@ -18,6 +18,10 @@ import { M_PER_DEG_LAT } from './data.js';
  *  długość trasy bierze się teraz z geometrii ulic, a nie z linii prostej. */
 export const NET_WALK_MPS = 4.5 / 3.6;
 
+/** Prędkość roweru po sieci [m/s] — 15 km/h. Ta sama sieć co pieszo: graf nie
+ *  ma tagów krawędzi, więc nie odróżnia schodów ani deptaków (patrz README). */
+export const NET_BIKE_MPS = 15 / 3.6;
+
 /** Jak daleko od sieci kolorujemy teren [m] — mniej więcej pół kwartału. */
 export const SPREAD_M = 75;
 
@@ -63,14 +67,15 @@ export function decodeWalkNet(raw) {
   for (let i = 0; i < n; i++) off[i + 1] = off[i] + deg[i];
   const cursor = off.slice(0, n);
   const adjTo = new Int32Array(m * 2);
-  const adjSec = new Int32Array(m * 2);
+  // długości w METRACH, nie w sekundach — tempo (pieszo/rower) wybiera dopiero
+  // `computeNodeTimes`, a ta sama sieć obsługuje oba w jednym przeliczeniu
+  const adjLen = new Int32Array(m * 2);
   for (let i = 0; i < m; i++) {
-    const sec = Math.max(1, Math.round(eLen[i] / NET_WALK_MPS));
-    adjTo[cursor[from[i]]] = to[i]; adjSec[cursor[from[i]]++] = sec;
-    adjTo[cursor[to[i]]] = from[i]; adjSec[cursor[to[i]]++] = sec;
+    adjTo[cursor[from[i]]] = to[i]; adjLen[cursor[from[i]]++] = eLen[i];
+    adjTo[cursor[to[i]]] = from[i]; adjLen[cursor[to[i]]++] = eLen[i];
   }
 
-  const net = { n, lat, lon, off, adjTo, adjSec, edgeFrom: from, edgeTo: to, edgeLen: eLen };
+  const net = { n, lat, lon, off, adjTo, adjLen, edgeFrom: from, edgeTo: to, edgeLen: eLen };
   net.main = mainComponent(net);
   buildIndex(net);
   buildEdgeIndex(net);
@@ -186,12 +191,15 @@ const SNAP_MAX_CAND = 8;
  *
  * Pomija krawędzie spoza największej spójnej składowej (`mainComponent`).
  *
+ * Wynik jest w METRACH i nie zależy od tempa — te same kandydatki obsługują
+ * dojście pieszo i rowerem (sekundy liczą konsumenci przez `mps`).
+ *
  * @returns {Array<{edge:number, a:number, b:number, t:number, perpM:number,
- *   perpSec:number, secA:number, secB:number, lenSec:number}>} pusta = poza siecią
+ *   mA:number, mB:number, lenM:number}>} pusta = poza siecią
  *   `t` — pozycja rzutu na krawędzi (0 = węzeł a, 1 = węzeł b);
- *   `perpSec` — dojście z punktu do rzutu (linia prosta);
- *   `secA`/`secB` — marsz wzdłuż krawędzi od rzutu do a / do b;
- *   `lenSec` — czas przejścia całej krawędzi.
+ *   `perpM` — dojście z punktu do rzutu (linia prosta);
+ *   `mA`/`mB` — droga wzdłuż krawędzi od rzutu do a / do b;
+ *   `lenM` — długość całej krawędzi.
  */
 export function snapEdges(net, lat, lon, maxM = SNAP_MAX_M, tolM = SNAP_TOL_M) {
   const ix = net.index, ex = net.edgeIndex;
@@ -233,11 +241,10 @@ export function snapEdges(net, lat, lon, maxM = SNAP_MAX_M, tolM = SNAP_TOL_M) {
   const out = [];
   for (const [e, [d, t]] of found) {
     if (d > bestD + tolM) continue;
-    const lenSec = net.edgeLen[e] / NET_WALK_MPS;
+    const lenM = net.edgeLen[e];
     out.push({
       edge: e, a: net.edgeFrom[e], b: net.edgeTo[e], t,
-      perpM: d, perpSec: d / NET_WALK_MPS,
-      secA: t * lenSec, secB: (1 - t) * lenSec, lenSec,
+      perpM: d, mA: t * lenM, mB: (1 - t) * lenM, lenM,
     });
   }
   out.sort((p, q) => p.perpM - q.perpM);
@@ -245,11 +252,11 @@ export function snapEdges(net, lat, lon, maxM = SNAP_MAX_M, tolM = SNAP_TOL_M) {
 }
 
 /** Źródła fali dla `computeNodeTimes` z punktu przyłączonego do sieci (oba końce każdej kandydatki). */
-export function snapSeeds(snaps, startSec) {
+export function snapSeeds(snaps, startSec, mps = NET_WALK_MPS) {
   const seeds = [];
   for (const s of snaps) {
-    const base = startSec + s.perpSec;
-    seeds.push([s.a, Math.round(base + s.secA)], [s.b, Math.round(base + s.secB)]);
+    const base = startSec + s.perpM / mps;
+    seeds.push([s.a, Math.round(base + s.mA / mps)], [s.b, Math.round(base + s.mB / mps)]);
   }
   return seeds;
 }
@@ -259,13 +266,13 @@ export function snapSeeds(snaps, startSec) {
  * z dróg przez końce którejkolwiek kandydatki + dojście z rzutu; −1 = brak.
  * Nie obejmuje przypadku „oba punkty na tej samej krawędzi" (patrz `sameEdgeSec`).
  */
-export function snapTime(nodeTime, snaps) {
+export function snapTime(nodeTime, snaps, mps = NET_WALK_MPS) {
   let best = Infinity;
   for (const s of snaps) {
     let t = Infinity;
-    if (nodeTime[s.a] >= 0) t = nodeTime[s.a] + s.secA;
-    if (nodeTime[s.b] >= 0) t = Math.min(t, nodeTime[s.b] + s.secB);
-    if (t + s.perpSec < best) best = t + s.perpSec;
+    if (nodeTime[s.a] >= 0) t = nodeTime[s.a] + s.mA / mps;
+    if (nodeTime[s.b] >= 0) t = Math.min(t, nodeTime[s.b] + s.mB / mps);
+    if (t + s.perpM / mps < best) best = t + s.perpM / mps;
   }
   return best === Infinity ? -1 : Math.round(best);
 }
@@ -275,12 +282,12 @@ export function snapTime(nodeTime, snaps) {
  * o skrzyżowanie (droga przez węzeł nigdy nie jest krótsza). Sprawdzane dla
  * każdej pary kandydatek. `Infinity`, gdy nie dzielą żadnej krawędzi.
  */
-export function sameEdgeSec(snapsA, snapsB) {
+export function sameEdgeSec(snapsA, snapsB, mps = NET_WALK_MPS) {
   let best = Infinity;
   for (const s1 of snapsA) {
     for (const s2 of snapsB) {
       if (s1.edge !== s2.edge) continue;
-      const sec = s1.perpSec + s2.perpSec + Math.abs(s1.t - s2.t) * s1.lenSec;
+      const sec = (s1.perpM + s2.perpM + Math.abs(s1.t - s2.t) * s1.lenM) / mps;
       if (sec < best) best = sec;
     }
   }
@@ -292,9 +299,10 @@ export function sameEdgeSec(snapsA, snapsB) {
  * @param {object} net    sieć z `decodeWalkNet`
  * @param {Array<[number, number]>} seeds  [indeksWęzła, sekundyStartu]
  * @param {number} capSec  horyzont [s]
+ * @param {number} mps     tempo [m/s] — `NET_WALK_MPS` albo `NET_BIKE_MPS`
  * @returns {Int32Array} czas w każdym węźle (−1 = nieosiągalny)
  */
-export function computeNodeTimes(net, seeds, capSec) {
+export function computeNodeTimes(net, seeds, capSec, mps = NET_WALK_MPS) {
   const time = new Int32Array(net.n).fill(-1);
   const buckets = new Array(capSec + 1);
   let pending = 0;
@@ -316,7 +324,7 @@ export function computeNodeTimes(net, seeds, capSec) {
       pending--;
       if (time[node] !== t) continue; // nieaktualny wpis
       for (let k = net.off[node]; k < net.off[node + 1]; k++) {
-        push(net.adjTo[k], t + net.adjSec[k]);
+        push(net.adjTo[k], t + Math.max(1, Math.round(net.adjLen[k] / mps)));
       }
     }
     buckets[t] = undefined;
@@ -347,12 +355,18 @@ export function computeNodeTimes(net, seeds, capSec) {
  * @param {(grid:object, lat:number, lon:number)=>number} pixelIndex
  * @param {number} unreach       wartość „nieosiągalne" bufora (walkgrid.UNREACH)
  * @param {number} capSec        horyzont — dłuższych czasów nie ma sensu nanosić
- * @param {Map<number, Array<[number, number]>>|null} edgeSeeds
+ * @param {object} [opts]
+ * @param {Map<number, Array<[number, number]>>|null} [opts.edgeSeeds]
  *        krawędź -> [[t (0..1), sekundy w punkcie rzutu], ...]
+ * @param {number} [opts.mps]    tempo [m/s] tej fali
+ * @param {boolean} [opts.reset] czy wyczyścić bufor przed malowaniem; `false`
+ *        dokłada falę do już namalowanej (min per piksel) — tak łączy się
+ *        dojazd rowerem od punktu z dojściem pieszo od przystanków
  */
-export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec, edgeSeeds = null) {
+export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec, opts = {}) {
+  const { edgeSeeds = null, mps = NET_WALK_MPS, reset = true } = opts;
   const time = grid.time;
-  time.fill(unreach);
+  if (reset) time.fill(unreach);
   // krok próbkowania poniżej boku piksela, żeby kolejne próbki trafiały
   // w sąsiadujące komórki także po skosie
   const stepM = Math.max(8, grid.res * 0.7);
@@ -363,7 +377,7 @@ export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec, e
     const inner = edgeSeeds?.get(e) ?? null;
     if (ta < 0 && tb < 0 && !inner) continue;
     const len = net.edgeLen[e];
-    const lenSec = len / NET_WALK_MPS;
+    const lenSec = len / mps;
     const latA = net.lat[a], lonA = net.lon[a];
     const dLat = net.lat[b] - latA, dLon = net.lon[b] - lonA;
     const steps = Math.max(1, Math.round(len / stepM));

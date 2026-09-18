@@ -119,12 +119,17 @@
       </fieldset>
 
       <fieldset class="control">
-        <legend>Dojście piesze</legend>
+        <legend>Dojście do przystanku</legend>
         <label class="switch">
           <input type="checkbox" id="walkToggle" checked>
           <span class="track" aria-hidden="true"></span>
           <span>Uwzględnij spacer</span>
         </label>
+        <select id="accessSelect" aria-label="Czym dojeżdżasz do przystanku">
+          <option value="foot" selected>🚶 pieszo</option>
+          <option value="bike">🚲 rowerem, zostaje na przystanku</option>
+          <option value="bike-onboard">🚲 rowerem, jedzie z tobą</option>
+        </select>
       </fieldset>
 
       <fieldset class="control">
@@ -235,7 +240,7 @@
         na pojazdy; obraz „ile się jedzie", niezależny od rozkładu (wynik
         optymistyczny).</p>
 
-      <h3>Dojście piesze</h3>
+      <h3>Dojście do przystanku</h3>
       <p>Gdy <strong>włączone</strong>, czas obejmuje dojście do przystanku,
         przejścia przy przesiadkach i spacer od przystanku docelowego
         (tempo ok. 4,5 km/h). Spacer prowadzony jest <strong>po realnych
@@ -248,6 +253,13 @@
         <strong>wyłączone</strong>, podróż zaczyna się od najbliższego zespołu
         przystankowego, przesiadki możliwe są tylko w ramach tego samego zespołu,
         a na mapie kolorowane są wyłącznie osiągnięte przystanki.</p>
+      <p><strong>Rowerem</strong> (15 km/h, po tej samej sieci ulic) dojazd do
+        przystanku liczony jest do 30 minut. Wariant „zostaje na przystanku" to
+        klasyczne <em>bike &amp; ride</em>: rower czeka w stojaku, więc od
+        przystanku docelowego idzie się pieszo. Wariant „jedzie z tobą" zakłada
+        przewóz roweru w pojeździe — wtedy rowerem pokonuje się oba końce
+        podróży. Uwaga: sieć dróg nie odróżnia schodów ani deptaków, więc
+        w miejscach, gdzie rower trzeba prowadzić, czas bywa zaniżony.</p>
 
       <h3>Środki transportu</h3>
       <p>Można ograniczyć analizę do wybranych pojazdów (tramwaj, autobus,

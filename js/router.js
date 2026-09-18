@@ -48,13 +48,15 @@ const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
  *                       timeMin, types?:Set<number> (dozwolone route_type; brak = wszystkie),
  *                       cautious?:bool (margines na opóźnienia),
  *                       delays?:object (profile opóźnień linii), dayType?:0|1|2,
+ *                       accessMps?:number (tempo dojścia w linii prostej —
+ *                       WALK_MPS albo BIKE_MPS; dotyczy przystanków spoza grafu),
  *                       accessSec?:Float64Array (czasy dojścia po sieci ulic —
  *                       patrz findAccessStops; brak = liczenie w linii prostej)}
  * @returns {{minutes: Float64Array, journeyTo: (stop:number)=>Array|null}}
  */
 export function computeReachability(net, opts) {
   const g = opts.direction === 'to' ? net.reversed : net;
-  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec);
+  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec, opts.accessMps ?? WALK_MPS);
   if (sources.length === 0) {
     return { minutes: new Float64Array(g.nStops).fill(Infinity), journeyTo: () => null };
   }
@@ -111,17 +113,18 @@ export function computeReachability(net, opts) {
  *       przystanek dalej niż SNAP_MAX_M od drogi) → dawne przybliżenie
  *       w linii prostej z ryczałtem krętości.
  *   Bez tego przystanek za wodą był startem podróży w kilka minut marszu.
+ * @param {number} accessMps  tempo dla przystanków spoza grafu (pieszo/rower).
  */
-export function findAccessStops(g, lat, lon, walk, accessSec = null) {
+export function findAccessStops(g, lat, lon, walk, accessSec = null, accessMps = WALK_MPS) {
   const out = [];
   if (walk) {
-    const maxDist = HORIZON_S * WALK_MPS; // i tak przycięte horyzontem
+    const maxDist = HORIZON_S * accessMps; // i tak przycięte horyzontem
     for (let i = 0; i < g.nStops; i++) {
       const net = accessSec ? accessSec[i] : NaN;
       if (Number.isFinite(net)) { out.push(i, Math.round(net)); continue; }
       if (net === Infinity) continue;
       const d = distM(lat, lon, g.lat[i], g.lon[i]);
-      if (d <= maxDist) out.push(i, Math.round(d / WALK_MPS));
+      if (d <= maxDist) out.push(i, Math.round(d / accessMps));
     }
   } else {
     let nearest = -1, nearestD = Infinity;
