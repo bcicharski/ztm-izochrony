@@ -1,11 +1,11 @@
 {
   "city": "opole",
-  "generated": "2026-09-18T23:19:49.457Z",
+  "generated": "2026-09-21T09:12:42.955Z",
   "feedEndDate": "20260930",
   "dates": {
     "workday": "20260922",
-    "saturday": "20260919",
-    "sunday": "20260920"
+    "saturday": "20260926",
+    "sunday": "20260927"
   },
   "sources": [
     "MZK Opole (via zbiorkom.live) — https://zbiorkom.live"
@@ -33,11 +33,9 @@
     "80": "80",
     "N1": "N1",
     "N2": "N2",
-    "S2": "S2",
     "SZ1": "SZ1",
     "SZ10": "SZ10",
     "SZ4": "SZ4",
-    "S1": "S1",
     "SZ2": "SZ2",
     "SZ20": "SZ20"
   }
