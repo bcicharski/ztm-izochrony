@@ -1,11 +1,11 @@
 {
   "city": "warszawa",
-  "generated": "2026-09-21T09:14:56.603Z",
-  "feedEndDate": "20261021",
+  "generated": "2026-09-28T10:05:31.775Z",
+  "feedEndDate": "20261024",
   "dates": {
-    "workday": "20260922",
-    "saturday": "20260926",
-    "sunday": "20260927"
+    "workday": "20260929",
+    "saturday": "20261003",
+    "sunday": "20261004"
   },
   "sources": [
     "Warszawski Transport Publiczny (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/",
@@ -160,7 +160,6 @@
     "256": "256",
     "262": "262",
     "263": "263",
-    "266": "266",
     "303": "303",
     "305": "305",
     "308": "308",
@@ -465,6 +464,7 @@
     "L39": "L39",
     "L40": "L40",
     "L41": "L41",
+    "L43": "L43",
     "L44": "L44",
     "L45": "L45",
     "L46": "L46",
