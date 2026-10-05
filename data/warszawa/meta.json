@@ -1,11 +1,11 @@
 {
   "city": "warszawa",
-  "generated": "2026-09-28T10:05:31.775Z",
-  "feedEndDate": "20261024",
+  "generated": "2026-10-05T10:45:33.625Z",
+  "feedEndDate": "20261104",
   "dates": {
-    "workday": "20260929",
-    "saturday": "20261003",
-    "sunday": "20261004"
+    "workday": "20261006",
+    "saturday": "20261010",
+    "sunday": "20261011"
   },
   "sources": [
     "Warszawski Transport Publiczny (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/",
@@ -39,6 +39,8 @@
     "28": "28",
     "31": "31",
     "33": "33",
+    "71": "71",
+    "76": "76",
     "102": "102",
     "103": "103",
     "104": "104",
@@ -160,6 +162,7 @@
     "256": "256",
     "262": "262",
     "263": "263",
+    "300": "300",
     "303": "303",
     "305": "305",
     "308": "308",
@@ -304,11 +307,13 @@
     "KML_SKA2_BUS": "ZKA SKA2",
     "KML_SKA3": "SKA3",
     "KM_R1": "R1",
+    "KM_R1_BUS": "Z1",
     "KM_R2": "R2",
     "KM_R21": "R21",
     "KM_R2_BUS": "Z2",
     "KM_R3": "R3",
     "KM_R31": "R31",
+    "KM_R3_BUS": "Z3",
     "KM_R6": "R6",
     "KM_R60": "R60",
     "KM_R60_BUS": "Z60",
@@ -319,6 +324,7 @@
     "KM_R7_BUS": "Z7",
     "KM_R8": "R8",
     "KM_R80": "R80",
+    "KM_R80_BUS": "Z80",
     "KM_R81": "R81",
     "KM_R82": "R82",
     "KM_R8_BUS": "Z8",
@@ -356,7 +362,6 @@
     "KS_S4": "S4",
     "KS_S4_BUS": "ZKA S4",
     "KS_S5": "S5",
-    "KS_S51": "S51",
     "KS_S5_BUS": "ZKA S5",
     "KS_S6": "S6",
     "KS_S61_BUS": "ZKA S61",
@@ -375,6 +380,7 @@
     "KS_S8": "S8",
     "KS_S82": "S82",
     "KS_S9": "S9",
+    "KS_S9_BUS": "ZKA S9",
     "KW": "KW",
     "KW_BUS": "ZKA KW",
     "KW_P": "KW P",
@@ -384,6 +390,7 @@
     "KW_PKM3_BUS": "ZKA PKM3",
     "KW_PKM4": "PKM4",
     "KW_PKM5": "PKM5",
+    "KW_PKM5_BUS": "ZKA PKM5",
     "LEO": "LEO",
     "LKA": "Ł",
     "LKA_BUS": "ZKA Ł",
@@ -423,7 +430,6 @@
     "SKM_S3": "S3",
     "SKM_S4": "S4",
     "SKM_S40": "S40",
-    "SKM_S40_BUS": "ZKA S40",
     "A": "WKD",
     "Z": "WKD ZKA",
     "E-1": "E-1",
@@ -521,7 +527,6 @@
     "S2": "S2",
     "S3": "S3",
     "S4": "S4",
-    "S40": "S40",
-    "Z40": "Z40"
+    "S40": "S40"
   }
 }
