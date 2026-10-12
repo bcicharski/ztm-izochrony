@@ -1,11 +1,11 @@
 {
   "city": "lodz",
-  "generated": "2026-10-05T10:46:17.989Z",
+  "generated": "2026-10-12T11:14:23.947Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20261006",
-    "saturday": "20261010",
-    "sunday": "20261011"
+    "workday": "20261013",
+    "saturday": "20261017",
+    "sunday": "20261018"
   },
   "sources": [
     "ZDiT Łódź (via zbiorkom.live) — https://otwarte.miasto.lodz.pl/transport_komunikacja/"
@@ -142,9 +142,7 @@
     "R9": "R9",
     "W": "W",
     "Z1": "Z1",
-    "Z11": "Z11",
     "Z13": "Z13",
-    "Z2": "Z2",
     "Z3": "Z3",
     "Z6": "Z6"
   }
