@@ -1,11 +1,11 @@
 {
   "city": "gorzow",
-  "generated": "2026-10-12T11:12:46.331Z",
+  "generated": "2026-10-19T09:11:37.986Z",
   "feedEndDate": "20261230",
   "dates": {
-    "workday": "20261013",
-    "saturday": "20261017",
-    "sunday": "20261018"
+    "workday": "20261020",
+    "saturday": "20261024",
+    "sunday": "20261025"
   },
   "sources": [
     "MZK Gorzów (via zbiorkom.live) — https://zbiorkom.live"

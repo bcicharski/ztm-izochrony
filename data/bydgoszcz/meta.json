@@ -1,11 +1,11 @@
 {
   "city": "bydgoszcz",
-  "generated": "2026-10-12T11:14:19.820Z",
-  "feedEndDate": "20270406",
+  "generated": "2026-10-19T09:18:04.011Z",
+  "feedEndDate": "20270412",
   "dates": {
-    "workday": "20261013",
-    "saturday": "20261017",
-    "sunday": "20261018"
+    "workday": "20261020",
+    "saturday": "20261024",
+    "sunday": "20261025"
   },
   "sources": [
     "ZDMiKP Bydgoszcz (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
