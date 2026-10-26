@@ -1,11 +1,11 @@
 {
   "city": "krakow",
-  "generated": "2026-10-19T09:17:39.264Z",
+  "generated": "2026-10-26T09:16:18.598Z",
   "feedEndDate": "20261212",
   "dates": {
-    "workday": "20261020",
-    "saturday": "20261024",
-    "sunday": "20261025"
+    "workday": "20261027",
+    "saturday": "20261031",
+    "sunday": "20261101"
   },
   "sources": [
     "ZTP Kraków — https://gtfs.ztp.krakow.pl/",
@@ -219,7 +219,6 @@
     "IC_TLK_BUS": "ZKA TLK",
     "KD_D1": "D1",
     "KD_D10": "D10",
-    "KD_D10_BUS": "ZKA D10",
     "KD_D11": "D11",
     "KD_D12": "D12",
     "KD_D13": "D13",
@@ -228,6 +227,7 @@
     "KD_D20": "D20",
     "KD_D3": "D3",
     "KD_D30": "D30",
+    "KD_D30_BUS": "ZKA D30",
     "KD_D31_BUS": "D31",
     "KD_D4": "D4",
     "KD_D40": "D40",
@@ -291,7 +291,6 @@
     "KM_R80_BUS": "Z80",
     "KM_R81": "R81",
     "KM_R82": "R82",
-    "KM_R8_BUS": "Z8",
     "KM_R9": "R9",
     "KM_R90": "R90",
     "KM_R91": "R91",
@@ -376,9 +375,9 @@
     "PR_K52P": "K52P",
     "PR_K63": "K63",
     "PR_K7": "K7",
-    "PR_K71_BUS": "ZKA K71",
     "PR_K7P": "K7P",
     "PR_PKM1": "PKM1",
+    "PR_PKM1_BUS": "ZKA PKM1",
     "PR_PKM4": "PKM4",
     "PR_REG": "REG",
     "PR_REG_BUS": "ZKA REG",
@@ -413,6 +412,7 @@
     "route_754": "70",
     "route_755": "74",
     "route_808": "13",
+    "route_817": "84",
     "route_924": "12",
     "route_930": "15",
     "route_942": "5",

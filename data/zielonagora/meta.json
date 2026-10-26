@@ -1,11 +1,11 @@
 {
   "city": "zielonagora",
-  "generated": "2026-10-19T09:11:37.179Z",
+  "generated": "2026-10-26T09:15:00.749Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20261020",
-    "saturday": "20261024",
-    "sunday": "20261025"
+    "workday": "20261027",
+    "saturday": "20261031",
+    "sunday": "20261101"
   },
   "sources": [
     "MZK Zielona Góra — https://www.mzk.zgora.pl/dla-deweloperow"

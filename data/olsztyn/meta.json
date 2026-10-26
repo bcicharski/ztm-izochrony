@@ -1,11 +1,11 @@
 {
   "city": "olsztyn",
-  "generated": "2026-10-19T09:11:30.593Z",
-  "feedEndDate": "20261031",
+  "generated": "2026-10-26T09:14:51.618Z",
+  "feedEndDate": "20261130",
   "dates": {
-    "workday": "20261020",
-    "saturday": "20261024",
-    "sunday": "20261025"
+    "workday": "20261027",
+    "saturday": "20261031",
+    "sunday": "20261101"
   },
   "sources": [
     "ZDZiT Olsztyn (via zbiorkom.live) — https://otwartedane.olsztyn.eu/index.php/gtfs-zdzit"
@@ -48,6 +48,10 @@
     "303": "303",
     "304": "304",
     "305": "305",
+    "c11": "C11",
+    "c17": "C17",
+    "c31": "C31",
+    "c36": "C36",
     "n01": "N01",
     "n02": "N02"
   }
