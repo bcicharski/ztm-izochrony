@@ -1,11 +1,11 @@
 {
   "city": "opole",
-  "generated": "2026-10-26T09:14:57.242Z",
+  "generated": "2026-11-02T11:32:57.258Z",
   "feedEndDate": "20261116",
   "dates": {
-    "workday": "20261027",
-    "saturday": "20261031",
-    "sunday": "20261101"
+    "workday": "20261103",
+    "saturday": "20261107",
+    "sunday": "20261108"
   },
   "sources": [
     "MZK Opole (via zbiorkom.live) — https://zbiorkom.live"
@@ -31,19 +31,11 @@
     "28": "28",
     "30": "30",
     "80": "80",
-    "C3": "C3",
     "N1": "N1",
     "N2": "N2",
-    "C12": "C12",
     "SZ1": "SZ1",
     "SZ10": "SZ10",
-    "C10": "C10",
     "SZ4": "SZ4",
-    "C8": "C8",
-    "O": "O",
-    "C30": "C30",
-    "C16": "C16",
-    "C17": "C17",
     "SZ2": "SZ2",
     "SZ20": "SZ20"
   }

@@ -1,11 +1,11 @@
 {
   "city": "lodz",
-  "generated": "2026-10-26T09:16:46.572Z",
+  "generated": "2026-11-02T11:34:40.832Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20261027",
-    "saturday": "20261031",
-    "sunday": "20261101"
+    "workday": "20261103",
+    "saturday": "20261107",
+    "sunday": "20261108"
   },
   "sources": [
     "ZDiT Łódź (via zbiorkom.live) — https://otwarte.miasto.lodz.pl/transport_komunikacja/"
@@ -90,6 +90,7 @@
     "75A": "75A",
     "75B": "75B",
     "81A": "81A",
+    "81B": "81B",
     "82A": "82A",
     "82B": "82B",
     "84A": "84A",
@@ -109,6 +110,12 @@
     "92B": "92B",
     "97A": "97A",
     "97B": "97B",
+    "C2": "C2",
+    "C3": "C3",
+    "C4": "C4",
+    "C5": "C5",
+    "C6": "C6",
+    "C7": "C7",
     "C8": "C8",
     "F1": "F1",
     "G1": "G1",
