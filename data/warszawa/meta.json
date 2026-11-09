@@ -1,11 +1,11 @@
 {
   "city": "warszawa",
-  "generated": "2026-11-02T11:33:51.404Z",
-  "feedEndDate": "20261202",
+  "generated": "2026-11-09T12:00:25.347Z",
+  "feedEndDate": "20261209",
   "dates": {
-    "workday": "20261103",
-    "saturday": "20261107",
-    "sunday": "20261108"
+    "workday": "20261110",
+    "saturday": "20261114",
+    "sunday": "20261115"
   },
   "sources": [
     "Warszawski Transport Publiczny (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/",
@@ -367,7 +367,6 @@
     "KS_S71": "S71",
     "KS_S71_BUS": "ZKA S71",
     "KS_S72": "S72",
-    "KS_S72_BUS": "ZKA S72",
     "KS_S74": "S74",
     "KS_S75": "S75",
     "KS_S76": "S76",
@@ -387,7 +386,6 @@
     "KW_PKM3_BUS": "ZKA PKM3",
     "KW_PKM4": "PKM4",
     "KW_PKM5": "PKM5",
-    "KW_PKM5_BUS": "ZKA PKM5",
     "LEO": "LEO",
     "LKA": "Ł",
     "LKA_BUS": "ZKA Ł",
@@ -526,6 +524,7 @@
     "S2": "S2",
     "S3": "S3",
     "S4": "S4",
-    "S40": "S40"
+    "S40": "S40",
+    "WN": "WN"
   }
 }

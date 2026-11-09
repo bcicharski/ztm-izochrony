@@ -1,11 +1,11 @@
 {
   "city": "lublin",
-  "generated": "2026-11-02T11:34:34.543Z",
-  "feedEndDate": "20270117",
+  "generated": "2026-11-09T12:01:09.784Z",
+  "feedEndDate": "20270129",
   "dates": {
-    "workday": "20261103",
-    "saturday": "20261107",
-    "sunday": "20261108"
+    "workday": "20261110",
+    "saturday": "20261114",
+    "sunday": "20261115"
   },
   "sources": [
     "ZTM Lublin (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
@@ -82,7 +82,6 @@
     "922": "922",
     "950": "950",
     "Bia": "Biała",
-    "Gaj": "Gaj",
     "N1": "N1",
     "N2": "N2",
     "N3": "N3",
