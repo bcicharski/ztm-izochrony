@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { delayCoverageText, safeNoteText } from '../js/uilogic.js';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const html = read('index.html');
@@ -84,12 +85,29 @@ test('pomoc: akapit o trybie ostrożnym nie mówi „na żywo" ani „w czasie r
   assert.match(para, /statystyk/);
 });
 
-test('app.js: pokrycie opóźnień — ułamek N z M, bez procentów, unknown milczy', () => {
-  const fn = app.slice(app.indexOf('function renderDelayCoverage'), app.indexOf('function renderSafeNote'));
-  assert.match(fn, /z \$\{c\.routesTotal\} linii/);
-  assert.doesNotMatch(fn, /%/);
-  assert.match(fn, /hidden = !text/);
-  const note = app.slice(app.indexOf('function renderSafeNote'));
-  assert.match(note, /c\.state !== 'unknown'/);
-  assert.match(note, /state\.direction === 'to'/);
+test('delayCoverageText: ułamek N z M, bez procentów, unknown milczy', () => {
+  const t = delayCoverageText({ state: 'profiles', routes: 12, routesTotal: 40, updated: '20261105' });
+  assert.equal(t, '12 z 40 linii (pomiary do 05.11.2026)');
+  assert.doesNotMatch(t, /%/);
+  assert.equal(delayCoverageText({ state: 'profiles', routes: 7, routesTotal: null, updated: null }), '7 linii');
+  assert.equal(delayCoverageText({ state: 'collecting' }), 'zbieramy pomiary');
+  assert.equal(delayCoverageText({ state: 'none' }), 'brak — margines szacunkowy');
+  assert.equal(delayCoverageText({ state: 'unknown' }), '');
+});
+
+test('safeNoteText: tylko przy włączonym trybie, unknown milczy o pokryciu, „do" dopisuje szacunek', () => {
+  const prof = { state: 'profiles', routes: 9 };
+  assert.equal(safeNoteText({ safe: false, coverage: prof, direction: 'to' }), '');
+  assert.equal(safeNoteText({ safe: true, coverage: prof, direction: 'from' }),
+    'Margines z pomiarów dla 9 linii; dla pozostałych szacunek.');
+  assert.match(safeNoteText({ safe: true, coverage: { state: 'none' }, direction: 'from' }), /Margines szacunkowy/);
+  assert.equal(safeNoteText({ safe: true, coverage: { state: 'unknown' }, direction: 'from' }), '');
+  const to = safeNoteText({ safe: true, coverage: { state: 'unknown' }, direction: 'to' });
+  assert.match(to, /„do miejsca" zawsze używany jest szacunek/);
+  assert.doesNotMatch(to, /Margines/);
+});
+
+test('app.js: renderDelayCoverage i renderSafeNote tylko wstawiają wynik do DOM', () => {
+  assert.match(app, /delayCoverageText[(]coverage[(][)][)]/);
+  assert.match(app, /safeNoteText[(][{]/);
 });

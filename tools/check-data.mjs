@@ -43,8 +43,18 @@ export const GATE = {
   transfers: { warnPct: 0.15, warnMin: 50 },
   bytes:     { warnPct: 0.15, warnMin: 20000, blockPct: 0.40, blockMin: 0 },   // per typ dnia
   growthWarnPct: 1.5,           // wzrost o ≥150% -> tylko ostrzeżenie
-  outsideShareWarn: 0.02,       // udział przystanków poza siatką pieszą
-  outsideShareRiseWarn: 0.005,  // albo wzrost o ≥0,5 pp
+  // Przystanki poza siatką pieszą (grid.outsideShare). Skalibrowane 2026-11-16 na
+  // danych z data/ (meta.json nie miało jeszcze pola grid, więc udział wyliczono
+  // z workday.json + gridBbox tą samą gridCoverage co build): 7 z 18 miast stale
+  // ma >2% — Warszawa 8,94%, Kraków 5,88%, Trójmiasto 5,52%, Toruń 5,02%,
+  // Poznań 3,16%, Bydgoszcz 2,79%, Kielce 2,59% (linie podmiejskie wychodzą poza
+  // siatkę; to stan stały, nie awaria), pozostałe 0–1%. Dawny próg bezwzględny 2%
+  // zapalałby się więc co odświeżenie dla 39% miast. Właściwy sygnał to WZROST
+  // względem poprzedniego buildu; pułap bezwzględny zostaje tylko jako zabezpieczenie
+  // dla miasta bez baseline (np. pomyłka w gridBbox nowego miasta).
+  outsideShareWarn: 0.25,       // pułap awaryjny: najwyższy dziś 8,94% (Warszawa), zapas ~2,8x
+  outsideShareRiseWarn: 0.005,  // wzrost o ≥0,5 pp wobec poprzedniego buildu...
+  outsideRiseMinStops: 5,       // ...ale tylko gdy przybyło ≥5 przystanków (0,5 pp to 2 przystanki w Gorzowie, 433 szt.)
   valveDays: WARN_DAYS,         // zawór: stary rozkład wygasa w ≤ tylu dniach
   delaysParseMaxBytes: 256,     // delays.json do tylu bajtów parsujemy (odróżnienie `{}`); większy = są profile
 };
@@ -135,7 +145,10 @@ export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force 
   if (typeof share === 'number') {
     const was = baseline.grid?.outsideShare;
     const rise = typeof was === 'number' ? share - was : 0;
-    if (share > GATE.outsideShareWarn || rise >= GATE.outsideShareRiseWarn) {
+    const wasStops = baseline.grid?.outsideStops, nowStops = fresh.grid.outsideStops;
+    // brak liczności po którejś stronie = decyduje sam próg względny
+    const stopsRise = typeof wasStops === 'number' && typeof nowStops === 'number' ? nowStops - wasStops : Infinity;
+    if (share > GATE.outsideShareWarn || (rise >= GATE.outsideShareRiseWarn && stopsRise >= GATE.outsideRiseMinStops)) {
       const from = typeof was === 'number' ? ` (było ${pct(was)})` : '';
       add('warn', `przystanki poza siatką pieszą: ${pct(share)}${from}, najdalszy ${fresh.grid.maxOutsideKm ?? '?'} km od siatki`);
     }

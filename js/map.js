@@ -7,6 +7,7 @@
 
 
 import { M_PER_DEG_LAT } from './data.js';
+import { reducedMotionFrom, geoErrorMessage } from './uilogic.js';
 
 export const ZONE_ALPHA = 0.55;
 
@@ -16,7 +17,7 @@ export const ZONE_ALPHA = 0.55;
  * Tylko wątek główny (worker.js nie ma `window`).
  */
 export const prefersReducedMotion = () =>
-  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  reducedMotionFrom(window.matchMedia?.('(prefers-reduced-motion: reduce)'));
 
 export function createMap(container, center, zoom) {
   const calm = prefersReducedMotion();
@@ -48,6 +49,59 @@ export function createMap(container, center, zoom) {
     maxZoom: 19,
   }).addTo(map);
   return map;
+}
+
+/**
+ * Kontrolka „Wyśrodkuj na mnie" (Z-002): jednorazowy getCurrentPosition (bez ciągłego
+ * śledzenia), zgrubna pozycja wystarcza — oszczędza baterię. Przesuwa
+ * widok i rysuje kółko dokładności; NIE zmienia punktu startowego ani nie
+ * przelicza. Dymek kółka ma przycisk wywołujący `onSetStart`.
+ * Wołający sprawdza wcześniej bezpieczny kontekst — bez geolokalizacji nie
+ * dodaje kontrolki.
+ */
+export function addLocateControl(map, { onLocate, onError, onSetStart, label = 'Wyśrodkuj na mnie' }) {
+  let circle = null;
+  const Ctl = L.Control.extend({
+    options: { position: 'bottomright' },
+    onAdd() {
+      const bar = L.DomUtil.create('div', 'leaflet-bar locate-ctl');
+      const a = L.DomUtil.create('a', 'locate-btn', bar);
+      a.href = '#';
+      a.setAttribute('role', 'button');
+      a.setAttribute('aria-label', label);
+      a.title = label;
+      a.textContent = '◎';
+      L.DomEvent.disableClickPropagation(bar);
+      L.DomEvent.on(a, 'click', e => {
+        L.DomEvent.preventDefault(e);
+        if (a.getAttribute('aria-busy') === 'true') return;
+        a.setAttribute('aria-busy', 'true');
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            a.removeAttribute('aria-busy');
+            const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+            map.setView(ll, Math.max(map.getZoom(), 14), { animate: !prefersReducedMotion() });
+            circle?.remove();
+            circle = L.circle(ll, { radius: pos.coords.accuracy, weight: 1 }).addTo(map);
+            if (onSetStart) {
+              const btn = L.DomUtil.create('button', 'locate-set');
+              btn.type = 'button';
+              btn.textContent = 'Ustaw tu punkt startowy';
+              L.DomEvent.on(btn, 'click', () => { map.closePopup(); onSetStart(ll); });
+              circle.bindPopup(btn);
+            }
+            onLocate?.(ll, pos.coords.accuracy);
+          },
+          err => { a.removeAttribute('aria-busy'); onError?.(geoErrorMessage(err?.code)); },
+          { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 },
+        );
+      });
+      return bar;
+    },
+  });
+  const ctl = new Ctl();
+  ctl.addTo(map);
+  return ctl;
 }
 
 /** Warstwa stref na własnym canvasie w overlayPane. */

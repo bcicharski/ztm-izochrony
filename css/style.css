@@ -571,6 +571,19 @@ html, body {
 
 /* ---------- status / stopka ---------- */
 
+/* Tylko dla czytników ekranu (komunikat o wyniku, Z-045). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .status {
   margin: 0 0 8px;
   min-height: 1em;
@@ -919,3 +932,29 @@ html, body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- kontrolka „Wyśrodkuj na mnie" (Z-002) ---------- */
+
+/* styl bazowy z .leaflet-bar; tu tylko pole dotykowe, focus i dymek */
+.leaflet-bar a.locate-btn {
+  display: block;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  line-height: var(--tap);
+  font-size: 20px;
+  text-align: center;
+  touch-action: manipulation;
+}
+.leaflet-bar a.locate-btn[aria-busy="true"] { opacity: 0.5; cursor: progress; }
+.locate-set {
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--surface);
+  font: inherit;
+  cursor: pointer;
+}
+.locate-set:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.leaflet-bar a.locate-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

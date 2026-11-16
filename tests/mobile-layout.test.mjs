@@ -10,10 +10,11 @@ const app = read('js/app.js');
 const mapJs = read('js/map.js');
 
 // Liczba użyć var(--tap) w CSS: 17 po Z-028..Z-030, 19 po dołożeniu przycisków
-// z Z-022 (#dayNote button) i Z-025 (#diagCopy, .diag summary). Zabezpiecza pola
+// z Z-022 (#dayNote button) i Z-025 (#diagCopy, .diag summary), 21 po kontrolce
+// lokalizacji z Z-002 (.locate-btn min-width/min-height, .locate-set). Zabezpiecza pola
 // dotykowe 44 px: zagęszczanie marginesów ani porządki w CSS nie mogą usunąć
 // żadnej deklaracji wysokości. Podnoś tę stałą, gdy dochodzi kolejna kontrolka.
-const TAP_USES_MIN = 19;
+const TAP_USES_MIN = 21;
 
 test('offset kontrolek mapy podąża za --panel-h, bez reguły zerującej', () => {
   assert.ok(css.includes('bottom: calc(var(--panel-h, 62vh) + 8px)'));
@@ -48,4 +49,15 @@ test('baner zgody na mobile jest u góry mapy', () => {
 test('pola dotykowe: liczba var(--tap) nie zmalała', () => {
   const n = css.split('var(--tap)').length - 1;
   assert.ok(n >= TAP_USES_MIN, `var(--tap): ${n} < ${TAP_USES_MIN}`);
+});
+
+test('kontrolka lokalizacji: pole dotykowe var(--tap), focus, pozycja przez --panel-h, bez watchPosition', () => {
+  const block = css.slice(css.indexOf('.leaflet-bar a.locate-btn {'));
+  assert.ok(/min-width:\s*var\(--tap\)/.test(block));
+  assert.ok(/min-height:\s*var\(--tap\)/.test(block));
+  assert.ok(css.includes('.leaflet-bar a.locate-btn:focus-visible'));
+  // kontrolka siedzi w .leaflet-bottom.leaflet-right, które podąża za --panel-h
+  assert.ok(mapJs.includes("position: 'bottomright'"));
+  assert.ok(!mapJs.includes('watchPosition') && !app.includes('watchPosition'));
+  assert.ok(app.includes('addLocateControl') && app.includes('isSecureContext'));
 });

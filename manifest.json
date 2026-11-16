@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Dokąd dojadę? — izochrony komunikacji miejskiej",
+  "short_name": "Dokąd dojadę",
+  "description": "Interaktywna mapa pokazująca, jak daleko można dotrzeć komunikacją miejską w największych polskich miastach i aglomeracjach (m.in. Warszawa, Trójmiasto, Śląsk, Kraków, Wrocław, Poznań, Łódź, Szczecin, Lublin, Bydgoszcz) w zadanym czasie.",
+  "lang": "pl",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "categories": ["travel", "navigation", "maps"],
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

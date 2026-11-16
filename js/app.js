@@ -5,7 +5,13 @@
 
 import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, distM } from './data.js';
 import { BANDS } from './isochrone.js';
-import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion } from './map.js';
+import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateControl } from './map.js';
+import {
+  warsawNow, dayTypeOf, HHMM, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
+  accessIcons as accessIconsFor, statusLine, dayInfoView,
+  geoErrorMessage, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
+  esc, optionId, delayCoverageText, safeNoteText,
+} from './uilogic.js';
 import { Engine } from './engine.js';
 import { dayDataNotice } from './calendar.js';
 import { report, records, setSink, installHandlers, formatReport, locate } from './diag.js';
@@ -29,33 +35,8 @@ const DEFAULT_CITY = 'trojmiasto';
 
 // --- stan domyślny: „gdybym wyszedł teraz" -----------------------------------
 
-/**
- * „Teraz" w strefie Europe/Warsaw (nie przeglądarki): data yyyymmdd, minuty od
- * północy i dzień tygodnia (0 = niedziela). Rozkład jest polski, więc turysta
- * z innej strefy też ma dostać dzisiejszy typ dnia i godzinę w Polsce.
- */
-function warsawNow() {
-  try {
-    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short',
-    }).formatToParts(new Date()).map(x => [x.type, x.value]));
-    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday);
-    if (weekday < 0) throw new Error('weekday');
-    return { ymd: `${p.year}${p.month}${p.day}`, minutes: +p.hour * 60 + +p.minute, weekday };
-  } catch {
-    const d = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    return {
-      ymd: `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`,
-      minutes: d.getHours() * 60 + d.getMinutes(),
-      weekday: d.getDay(),
-    };
-  }
-}
-
 const now = warsawNow();
-const todayDay = now.weekday === 0 ? 'sunday' : now.weekday === 6 ? 'saturday' : 'workday';
+const todayDay = dayTypeOf(now.weekday);
 
 const state = {
   city: DEFAULT_CITY,
@@ -100,59 +81,23 @@ const isWalkOnly = () => cityCfg().veh.every(g => !state.veh[g.key]);
 let pointFromUrl = false;
 let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dnia
 {
-  const q = new URLSearchParams(location.search);
-  if (CITIES[q.get('city')]) state.city = q.get('city');
+  const u = parseUrlState(location.search, CITIES);
+  if (u.city) state.city = u.city;
   state.point = L.latLng(...cityCfg().pointA);
   state.point2 = L.latLng(...cityCfg().pointB);
   state.veh = defaultVeh();
 
-  const p = q.get('p')?.split(',').map(Number);
-  if (p?.length === 2 && p.every(Number.isFinite)) {
-    state.point = L.latLng(p[0], p[1]);
-    pointFromUrl = true;
+  if (u.point) { state.point = L.latLng(u.point.lat, u.point.lng); pointFromUrl = true; }
+  if (u.point2) state.point2 = L.latLng(u.point2.lat, u.point2.lng);
+  for (const k of ['compare', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe']) {
+    if (k in u) state[k] = u[k];
   }
-  const p2 = q.get('p2')?.split(',').map(Number);
-  if (p2?.length === 2 && p2.every(Number.isFinite)) state.point2 = L.latLng(p2[0], p2[1]);
-  if (q.get('cmp') === '1') state.compare = true;
-  if (q.get('dir') === 'to') state.direction = 'to';
-  if (q.get('walk') === '0') state.walk = false;
-  if (['bike', 'bike-onboard'].includes(q.get('acc'))) state.access = q.get('acc');
-  if (q.get('mode') === 'general') state.mode = 'general';
-  const t = q.get('t')?.match(/^(\d{1,2}):(\d{2})$/);
-  if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
-  if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) { state.day = q.get('day'); dayFromUrl = true; }
-  if (q.get('st') === '1') state.stats = true;
-  if (q.get('safe') === '1') state.safe = true;
-  const veh = q.get('veh');
-  if (veh != null) {
-    const on = new Set(veh.split(','));
-    for (const k of Object.keys(state.veh)) state.veh[k] = on.has(k);
-  }
+  dayFromUrl = u.dayFromUrl;
+  if (u.veh) for (const k of Object.keys(state.veh)) state.veh[k] = u.veh.has(k);
 }
 
 function updateUrl() {
-  const q = new URLSearchParams();
-  q.set('city', state.city);
-  q.set('p', `${state.point.lat.toFixed(5)},${state.point.lng.toFixed(5)}`);
-  if (state.compare) {
-    q.set('cmp', '1');
-    q.set('p2', `${state.point2.lat.toFixed(5)},${state.point2.lng.toFixed(5)}`);
-  }
-  q.set('dir', state.direction);
-  q.set('walk', state.walk ? '1' : '0');
-  if (state.access !== 'foot') q.set('acc', state.access);
-  q.set('mode', state.mode);
-  if (state.mode === 'time') {
-    const h = Math.floor(state.timeMin / 60), m = state.timeMin % 60;
-    q.set('t', `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    q.set('day', state.day);
-  }
-  if (state.stats && !state.compare) q.set('st', '1');
-  if (state.safe) q.set('safe', '1');
-  const vehKeys = Object.keys(state.veh);
-  const vehOn = vehKeys.filter(k => state.veh[k]);
-  if (vehOn.length < vehKeys.length) q.set('veh', vehOn.join(','));
-  history.replaceState(null, '', '?' + q.toString());
+  history.replaceState(null, '', buildQuery(state));
 }
 
 // --- mapa ---------------------------------------------------------------
@@ -316,9 +261,6 @@ async function searchAddress(query) {
   return r.json();
 }
 
-/** Stabilny, unikalny w obrębie listy `id` opcji wyniku (aria-activedescendant). */
-export const optionId = (listId, i) => `${listId}-opt-${i}`;
-
 /**
  * Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników.
  * Klawiatura: Enter szuka (albo wybiera podświetlony wynik), ↑/↓ przesuwają
@@ -410,18 +352,47 @@ function attachSearch(inputId, listId, statusId, onPick) {
 attachSearch('searchInput', 'searchResults', 'searchStatus', latlng => setPoint(latlng, true));
 attachSearch('searchInput2', 'searchResults2', 'searchStatus2', latlng => setPoint2(latlng, true));
 
-$('locateBtn').addEventListener('click', () => {
-  if (!navigator.geolocation) {
-    $('status').textContent = 'Przeglądarka nie udostępnia lokalizacji.';
-    return;
-  }
-  $('status').textContent = 'Ustalam lokalizację…';
-  navigator.geolocation.getCurrentPosition(
-    pos => setPoint(L.latLng(pos.coords.latitude, pos.coords.longitude), true),
-    () => { $('status').textContent = 'Nie udało się pobrać lokalizacji (brak zgody?).'; },
-    { enableHighAccuracy: true, timeout: 10000 },
-  );
-});
+// Lokalizacja (Z-002): geolokalizacja istnieje tylko w bezpiecznym kontekście.
+// Dwie intencje, dwa przyciski: #locateBtn ustawia punkt startowy i przelicza,
+// kontrolka na mapie tylko wyśrodkowuje widok (dymek kółka ma „Ustaw tu…").
+const geoAvailable = window.isSecureContext && !!navigator.geolocation;
+
+/** Pozycja poza bieżącym miastem → komunikat z propozycją najbliższego; true = poza. */
+function warnIfOutsideCity(lat, lng) {
+  if (inBbox(lat, lng, cityCfg().bbox)) return false;
+  const near = nearestCity(lat, lng, CITIES);
+  $('status').textContent = `Jesteś poza obszarem: ${cityCfg().name}.` +
+    (near && near !== state.city ? ` Najbliższe miasto: ${CITIES[near].name}.` : '');
+  return true;
+}
+
+if (geoAvailable) {
+  $('locateBtn').addEventListener('click', () => {
+    $('status').textContent = 'Ustalam lokalizację…';
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        if (warnIfOutsideCity(lat, lng)) return;
+        setPoint(L.latLng(lat, lng), true);
+      },
+      err => { $('status').textContent = geoErrorMessage(err?.code); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  });
+  addLocateControl(map, {
+    label: 'Wyśrodkuj na mnie',
+    onLocate: ll => { warnIfOutsideCity(ll.lat, ll.lng); },
+    onError: msg => { $('status').textContent = msg; },
+    onSetStart: ll => {
+      if (!warnIfOutsideCity(ll.lat, ll.lng)) setPoint(ll, true);
+    },
+  });
+} else {
+  $('locateBtn').disabled = true;
+  $('locateBtn').title = window.isSecureContext
+    ? 'Przeglądarka nie udostępnia lokalizacji.'
+    : 'Lokalizacja wymaga bezpiecznego połączenia (HTTPS).';
+}
 
 $('shareBtn').addEventListener('click', async () => {
   const btn = $('shareBtn');
@@ -471,8 +442,11 @@ if (typeof ResizeObserver !== 'undefined') {
   BANDS.forEach((band, i) => {
     const cell = document.createElement('div');
     cell.className = 'legend-cell';
+    cell.setAttribute('role', 'listitem');
+    cell.setAttribute('aria-label', band.label);
     const sw = document.createElement('span');
     sw.className = 'swatch';
+    sw.setAttribute('aria-hidden', 'true');
     // swatch w tej samej przezroczystości, w jakiej strefa leży na mapie
     sw.style.background = band.color;
     sw.style.opacity = ZONE_ALPHA;
@@ -497,6 +471,7 @@ function renderStats(rows, showArea) {
     cell.className = 'zone-cell';
     const sw = document.createElement('span');
     sw.className = 'swatch';
+    sw.setAttribute('aria-hidden', 'true');
     sw.style.background = row.color;
     sw.style.opacity = ZONE_ALPHA;
     cell.append(sw, row.label);
@@ -530,7 +505,7 @@ function renderStats(rows, showArea) {
  */
 function createEngineClient() {
   const canWorker = typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined'
-    && new URLSearchParams(location.search).get('engine') !== 'main'; // ?engine=main — tryb awaryjny do testów
+    && !wantsMainEngine(location.search); // ?engine=main — tryb awaryjny do testów
   if (canWorker) {
     try { return createWorkerClient(); } catch (err) { console.warn('Worker niedostępny — liczę w wątku głównym:', err); }
   }
@@ -631,15 +606,6 @@ async function refreshJourneyPopup() {
   jp.popup.setContent(journeyHtml(j));
 }
 
-/** Sekundy doby → „GG:MM"; ujemne (wyjście przed północą przy „do miejsca") zawijane do poprzedniego dnia. */
-const HHMM = s => {
-  const d = ((Math.floor(s) % 86400) + 86400) % 86400;
-  return `${String(Math.floor(d / 3600)).padStart(2, '0')}:${String(Math.floor(d / 60) % 60).padStart(2, '0')}`;
-};
-/** Escapuje tekst do HTML (węzeł tekstowy i atrybut). `&` musi być pierwszy. */
-const esc = t => String(t)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
 /**
@@ -650,11 +616,7 @@ const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 
  * Przesiadki w trakcie podróży są zawsze piesze (patrz README).
  */
 function accessIcons() {
-  const start = state.access !== 'foot' ? '🚲' : '🚶';
-  const end = state.access === 'bike-onboard' ? '🚲' : '🚶';
-  return state.direction === 'from'
-    ? { atPoint: start, atTarget: end }
-    : { atPoint: end, atTarget: start };
+  return accessIconsFor(state.access, state.direction);
 }
 
 /** Lista etapów trasy jako HTML (etapy z nazwami przystanków — patrz Engine.describeLegs). */
@@ -734,21 +696,28 @@ function journeyHtml(j) {
 let computeSeq = 0;
 
 /** Czytelny opis bieżącego widoku do paska statusu. */
+/**
+ * Komunikat dla czytników ekranu (#zoneSummary, Z-045): z opóźnieniem 1 s od
+ * ostatniego wywołania, żeby seria przeliczeń (suwak godziny, przeciąganie
+ * markera) dała jeden komunikat. Region czyszczony przed wstawieniem tekstu —
+ * inaczej czytnik pomija identyczny komunikat powtórzony drugi raz.
+ */
+let announceTimer = 0;
+function cancelAnnounce() { clearTimeout(announceTimer); }
+function announce(text) {
+  cancelAnnounce();
+  announceTimer = setTimeout(() => {
+    const el = $('zoneSummary');
+    el.textContent = '';
+    setTimeout(() => { el.textContent = text; }, 50);
+  }, 1000);
+}
+
 function statusText(walkOnly) {
-  if (walkOnly) {
-    // rozkład i godzina nie mają wpływu na sam spacer
-    return state.compare
-      ? 'Wspólny zasięg pieszo dwóch punktów.'
-      : (state.direction === 'from' ? 'Zasięg pieszo z punktu.' : 'Obszar z dojściem pieszo do punktu.');
-  }
-  const what = state.compare
-    ? (state.direction === 'from' ? 'Wspólny zasięg dwóch punktów' : 'Obszar z dojazdem do obu punktów')
-    : (state.direction === 'from' ? 'Zasięg z punktu' : 'Obszar z dojazdem do punktu');
-  const when = state.mode === 'time'
-    ? `${DAY_LABELS[state.day]}, ${$('timeInput').value}`
-    : 'tryb ogólny (bez oczekiwania)';
-  const safe = state.safe ? ' · z marginesem na opóźnienia' : '';
-  return `${what} · ${when}${safe}.`;
+  return statusLine({
+    walkOnly, compare: state.compare, direction: state.direction, mode: state.mode, safe: state.safe,
+    whenTime: `${DAY_LABELS[state.day]}, ${$('timeInput').value}`,
+  });
 }
 
 /**
@@ -759,8 +728,10 @@ function statusText(walkOnly) {
 async function recompute() {
   if (!cityReady) return; // loadCityAssets uruchomi przeliczenie, gdy miasto będzie gotowe
   const seq = ++computeSeq;
+  const t0 = performance.now();
   updateUrl();
   const status = $('status');
+  cancelAnnounce(); // nie ogłaszamy „Obliczam zasięg…" ani wyniku poprzedniego przeliczenia
   status.textContent = 'Obliczam zasięg…';
   const walkOnly = isWalkOnly();
   const types = allowedTypes();
@@ -793,14 +764,28 @@ async function recompute() {
         status.textContent = (msg.reachable === 0 && !walkOnly)
           ? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.'
           : statusText(walkOnly);
+        announce(zoneSummaryText({
+          statusText: statusText(walkOnly), city: cityCfg().name, reachable: msg.reachable,
+          walkOnly, compare: state.compare, stats: msg.stats, showArea: state.walk || walkOnly,
+        }));
         refreshJourneyPopup();
+        if (shouldVibrate({
+          supported: typeof navigator.vibrate === 'function',
+          reduceMotion: prefersReducedMotion(),
+          elapsedMs: performance.now() - t0,
+          // brak API (undefined) nie blokuje; Chrome blokuje vibrate bez aktywacji i loguje interwencję
+          userActivated: navigator.userActivation?.hasBeenActive,
+        })) navigator.vibrate(20);
       } else if (msg.phase === 'contours') {
         zoneLayer.update({ contours: msg.contours });
       }
     });
   } catch (err) {
     console.error(err);
-    if (seq === computeSeq) status.textContent = 'Błąd wczytywania danych rozkładowych.';
+    if (seq === computeSeq) {
+      status.textContent = loadErrorMessage(navigator.onLine, 'Błąd wczytywania danych rozkładowych.');
+      announce(status.textContent);
+    }
   }
 }
 
@@ -811,8 +796,6 @@ function renderCredits() {
     .map(c => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.label)}</a>`)
     .join(' · ');
 }
-
-const fmtDate = d => (d && /^\d{8}$/.test(d) ? `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}` : null);
 
 /** Dzisiejsza data (Europa/Warszawa) jako yyyymmdd — do porównania z datami z meta.json. */
 const todayKey = () => warsawNow().ymd;
@@ -830,30 +813,13 @@ function renderDayInfo() {
   if (!cityMetaReady) return;
   const today = warsawNow();
   const n = dayDataNotice(cityMeta, state.day, today.ymd);
-  $('feedDate').textContent = fmtDate(n.date) ?? '—';
-  $('feedDateNote').textContent = n.regime === 'summer' ? ' (rozkład wakacyjny)' : '';
-
-  const parts = [];
-  let offerSunday = false;
-  if (n.todayHoliday && !dayFromUrl && state.day === 'workday' && todayDay === 'workday') {
-    if (n.todayShortened) {
-      parts.push(`Dziś ${n.todayHoliday} — komunikacja jedzie rozkładem skróconym, wyniki dla dnia roboczego mogą odbiegać.`);
-    } else {
-      parts.push(`Dziś święto (${n.todayHoliday}) — komunikacja jedzie zwykle rozkładem niedzielnym.`);
-      offerSunday = true;
-    }
-  }
-  if (n.regimeMismatch) {
-    const d = fmtDate(n.date)?.slice(0, 5);
-    parts.push(n.regime === 'summer'
-      ? `Rozkład pochodzi z okresu wakacyjnego${d ? ` (${d})` : ''} — w ciągu roku szkolnego kursów jest więcej.`
-      : `Rozkład pochodzi z roku szkolnego${d ? ` (${d})` : ''} — w wakacje kursów jest mniej.`);
-  }
-  if (n.holiday) parts.push(`Rozkład z dnia świątecznego (${n.holiday}) — może odbiegać od zwykłego.`);
+  const view = dayInfoView(n, { dayFromUrl, day: state.day, todayDay });
+  $('feedDate').textContent = view.feedDate;
+  $('feedDateNote').textContent = view.feedDateNote;
 
   const note = $('dayNote');
-  note.textContent = parts.join(' ');
-  if (offerSunday) {
+  note.textContent = view.text;
+  if (view.offerSunday) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = 'Pokaż niedzielę';
@@ -910,16 +876,7 @@ const coverage = () => delayCoverage(cityMeta, cityCfg());
  * bez pola): wpis ukryty, stopka wygląda jak dawniej.
  */
 function renderDelayCoverage() {
-  const c = coverage();
-  const text = {
-    profiles: () => {
-      const n = c.routesTotal == null ? `${c.routes} linii` : `${c.routes} z ${c.routesTotal} linii`;
-      const d = fmtDate(c.updated);
-      return d ? `${n} (pomiary do ${d})` : n;
-    },
-    collecting: () => 'zbieramy pomiary',
-    none: () => 'brak — margines szacunkowy',
-  }[c.state]?.() ?? '';
+  const text = delayCoverageText(coverage());
   $('delayCoverage').textContent = text;
   $('delayCoverageRow').hidden = !text;
   renderSafeNote();
@@ -931,14 +888,7 @@ function renderDelayCoverage() {
  * szacunek — router.js wyłącza profile dla direction === 'to'.
  */
 function renderSafeNote() {
-  const parts = [];
-  if (state.safe) {
-    const c = coverage();
-    if (c.state === 'profiles') parts.push(`Margines z pomiarów dla ${c.routes} linii; dla pozostałych szacunek.`);
-    else if (c.state !== 'unknown') parts.push('Margines szacunkowy — dla tego miasta nie mamy jeszcze pomiarów.');
-    if (state.direction === 'to') parts.push('W kierunku „do miejsca" zawsze używany jest szacunek.');
-  }
-  $('safeNote').textContent = parts.join(' ');
+  $('safeNote').textContent = safeNoteText({ safe: state.safe, coverage: coverage(), direction: state.direction });
 }
 
 /**
@@ -973,7 +923,10 @@ async function loadCityAssets() {
   } catch (err) {
     console.error(err);
     report({ src: 'app', msg: err?.message ?? String(err), ctx: { phase: 'city' } });
-    if (state.city === key) $('status').textContent = 'Błąd wczytywania danych miasta.';
+    if (state.city === key) {
+      $('status').textContent = loadErrorMessage(navigator.onLine, 'Błąd wczytywania danych miasta.');
+      announce($('status').textContent);
+    }
     return;
   }
   cityReady = true;

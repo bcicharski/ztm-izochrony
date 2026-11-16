@@ -239,3 +239,51 @@ test('run: miasto z delays.json i meta bez delays trafia do warned także bez ba
   assert.equal(r2.code, 0);
   assert.deepEqual(r2.gate.noBaseline, ['x']);
 });
+
+// Z-031: dane syntetyczne odwzorowujące stan data/ z 2026-11-16 (udział przystanków
+// poza siatką policzony z day-json + gridBbox; stops/outsideStops to rzeczywiste liczby)
+const REAL_GRID = {
+  warszawa: [7737, 692], krakow: [4389, 258], trojmiasto: [3499, 193], torun: [897, 45],
+  poznan: [3354, 106], bydgoszcz: [1182, 33], kielce: [1351, 35], gzm: [7254, 5],
+  gorzow: [433, 0], lodz: [2384, 0],
+};
+const gridMeta = (stops, outside, km = 5) => meta({
+  counts: { ...meta().counts, stops },
+  grid: { outsideStops: outside, outsideShare: +(outside / stops).toFixed(4), maxOutsideKm: km },
+});
+
+test('Z-031: dzisiejszy, stały udział poza siatką (do 8,9%) nie zapala ostrzeżenia', () => {
+  for (const [city, [stops, outside]] of Object.entries(REAL_GRID)) {
+    const m = gridMeta(stops, outside, 134.7);
+    const r = gateCity(city, {}, m, m, { today: TODAY });
+    assert.equal(r.level, 'ok', `${city}: ${r.findings.join('; ')}`);
+  }
+});
+
+test('Z-031: wzrost udziału poza siatką wobec poprzedniego buildu = ostrzeżenie (Warszawa +46 przystanków)', () => {
+  const base = gridMeta(7737, 692);
+  const r = gate(gridMeta(7737, 738), base); // 8,94% -> 9,54% (+0,6 pp, +46 szt.)
+  assert.equal(r.level, 'warn');
+  assert.match(r.findings.join('\n'), /poza siatką pieszą: 9[.,]5%/);
+  assert.equal(gate(gridMeta(7737, 700), base).level, 'ok'); // +8 szt. = +0,1 pp
+});
+
+test('Z-031: wzrost o ≥0,5 pp, ale <5 przystanków (małe miasto) = ok; ≥5 przystanków = ostrzeżenie', () => {
+  const base = gridMeta(433, 0);
+  assert.equal(gate(gridMeta(433, 3), base).level, 'ok');   // 0,69 pp, +3 szt.
+  assert.equal(gate(gridMeta(433, 5), base).level, 'warn'); // 1,15 pp, +5 szt.
+});
+
+test('Z-031: brak outsideStops w baseline = decyduje próg względny (kompatybilność ze starym meta)', () => {
+  const base = gridMeta(1000, 3); delete base.grid.outsideStops;
+  assert.equal(gate(gridMeta(1000, 9), base).level, 'warn'); // +0,6 pp
+  assert.equal(gate(gridMeta(1000, 5), base).level, 'ok');   // +0,2 pp
+});
+
+test('Z-031: pułap awaryjny 25% łapie błędny gridBbox nawet bez wzrostu', () => {
+  const broken = gridMeta(1000, 300, 40);
+  const r = gate(broken, broken);
+  assert.equal(r.level, 'warn');
+  assert.match(r.findings.join('\n'), /30%/);
+  assert.equal(gate(gridMeta(1000, 249), gridMeta(1000, 249)).level, 'ok');
+});

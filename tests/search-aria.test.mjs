@@ -1,20 +1,13 @@
 // Z-026 (escapowanie HTML) i Z-027 (ARIA combobox wyszukiwarek) — bez DOM.
-// app.js dotyka DOM przy imporcie, więc fragmenty wyciągamy z źródła.
+// esc/optionId żyją w js/uilogic.js (Z-046) i są importowane; app.js czytamy
+// jako tekst tylko tam, gdzie sprawdzamy powiązanie z DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { esc, optionId } from '../js/uilogic.js';
 
 const appSrc = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-
-/** Wyciąga definicję `const <name> = ...;` z app.js i zwraca jej wartość. */
-function extract(name) {
-  const m = appSrc.match(new RegExp("(?:export )?const " + name + " = [^]*?;\r?\n"));
-  assert.ok(m, `brak ${name} w app.js`);
-  return new Function(`${m[0].replace(/^export /, '')}; return ${name};`)();
-}
-const esc = extract('esc');
-const optionId = extract('optionId');
 
 test('esc: wszystkie pięć znaków', () => {
   assert.equal(esc(`&<>"'`), '&amp;&lt;&gt;&quot;&#39;');
@@ -32,6 +25,30 @@ test('esc: standardowo podmienia & zawsze (&amp; -> &amp;amp;) — świadoma dec
 test('esc: nie-stringi i zwykły tekst', () => {
   assert.equal(esc(12), '12');
   assert.equal(esc('Plac Wolności 5'), 'Plac Wolności 5');
+});
+
+test('esc: każdy znak specjalny osobno', () => {
+  assert.equal(esc('&'), '&amp;');
+  assert.equal(esc('<'), '&lt;');
+  assert.equal(esc('>'), '&gt;');
+  assert.equal(esc('"'), '&quot;');
+  assert.equal(esc("'"), '&#39;');
+});
+
+test('esc: pusty string, null i undefined (String() -> tekst, bez wyjątku)', () => {
+  assert.equal(esc(''), '');
+  assert.equal(esc(null), 'null');
+  assert.equal(esc(undefined), 'undefined');
+});
+
+test('esc: tekst bez znaków specjalnych wraca niezmieniony', () => {
+  const s = 'Żółć 12/3 – ul. Długa, Gdańsk (przystanek)';
+  assert.equal(esc(s), s);
+});
+
+test('esc: znaki w środku tekstu i powtórzone', () => {
+  assert.equal(esc('a<b>&c'), 'a&lt;b&gt;&amp;c');
+  assert.equal(esc('<<>>'), '&lt;&lt;&gt;&gt;');
 });
 
 test('esc: wejście w atrybut nie wyłamuje się z cudzysłowu', () => {
@@ -67,6 +84,7 @@ for (const [inputId, listId, statusId] of [
 test('app.js: li.empty nie występuje w listboxie, a opcje mają id i aria-selected', () => {
   assert.ok(!/className = 'empty'/.test(appSrc));
   assert.match(appSrc, /li\.id = optionId\(listId, i\)/);
+  assert.match(appSrc, /import \{[^}]*\boptionId\b[^}]*\} from '\.\/uilogic\.js'/);
   assert.match(appSrc, /aria-activedescendant/);
 });
 

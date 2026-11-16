@@ -16,6 +16,7 @@
 
 import { Engine } from './engine.js';
 import { installHandlers, setSink, report, locate } from './diag.js';
+import { createLatestQueue } from './uilogic.js';
 
 // diagnostyka (Z-025): rekordy workera lecą do wątku głównego, który je
 // wrzuca do własnego bufora (i, po zgodzie, wysyła zanonimizowane do GA)
@@ -38,39 +39,28 @@ const engine = new Engine({
   onWalkNet: city => postMessage({ type: 'walknet', city }),
 });
 
-let queued = null;
-let running = false;
-
-async function pump() {
-  if (running) return;
-  running = true;
-  while (queued) {
-    const job = queued;
-    queued = null;
-    try {
-      await engine.compute(job.params, msg => {
-        if (msg.phase === 'zones') {
-          // raster jako ImageBitmap (przenoszony bez kopiowania); bufor
-          // OffscreenCanvas po transferze jest pusty i gotowy na następne użycie
-          const image = msg.image ? msg.image.transferToImageBitmap() : null;
-          postMessage({ type: 'result', id: job.id, ...msg, image }, image ? [image] : []);
-        } else {
-          const buffers = [];
-          for (const band of msg.contours) {
-            for (const r of band.rings) buffers.push(r.buffer);
-            for (const b of band.bbox) buffers.push(b.buffer);
-          }
-          postMessage({ type: 'result', id: job.id, ...msg }, buffers);
-        }
-      });
-      postMessage({ type: 'done', id: job.id });
-    } catch (err) {
-      reportError(err, 'compute');
-      postMessage({ type: 'error', id: job.id, message: String(err?.message ?? err) });
+// kolejka „ostatni wygrywa" (logika w uilogic.js)
+const queue = createLatestQueue(async job => {
+  await engine.compute(job.params, msg => {
+    if (msg.phase === 'zones') {
+      // raster jako ImageBitmap (przenoszony bez kopiowania); bufor
+      // OffscreenCanvas po transferze jest pusty i gotowy na następne użycie
+      const image = msg.image ? msg.image.transferToImageBitmap() : null;
+      postMessage({ type: 'result', id: job.id, ...msg, image }, image ? [image] : []);
+    } else {
+      const buffers = [];
+      for (const band of msg.contours) {
+        for (const r of band.rings) buffers.push(r.buffer);
+        for (const b of band.bbox) buffers.push(b.buffer);
+      }
+      postMessage({ type: 'result', id: job.id, ...msg }, buffers);
     }
-  }
-  running = false;
-}
+  });
+  postMessage({ type: 'done', id: job.id });
+}, (err, job) => {
+  reportError(err, 'compute');
+  postMessage({ type: 'error', id: job.id, message: String(err?.message ?? err) });
+});
 
 onmessage = async e => {
   const m = e.data;
@@ -83,8 +73,7 @@ onmessage = async e => {
       postMessage({ type: 'city', id: m.id, ok: false, message: String(err?.message ?? err) });
     }
   } else if (m.type === 'compute') {
-    queued = m;
-    pump();
+    queue.push(m);
   } else if (m.type === 'journey') {
     postMessage({ type: 'journey', id: m.id, result: engine.journey(m.latlng) });
   }

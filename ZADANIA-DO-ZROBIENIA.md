@@ -17,6 +17,18 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pozostaje: odczytać werdykt z pierwszego przebiegu i naprawić przyczynę po stronie feedów. Przyczyny nie ustalono lokalnie (brak dostępu do logów GitHuba, zakaz odpytywania feedów).
 - Pliki: data/delays/, tools/collect-delays.mjs, data/cities.json, .github/workflows/collect-delays.yml, README.md, tests/collect-delays.test.mjs.
 
+### Z-002 [P1] Mobile i PWA
+- Status: w toku
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak manifest.json i service workera; offline tylko przez cache przeglądarki. Dochodzi bottom sheet, przycisk „wyśrodkuj na mnie" i wibracja.
+- Dowód: brak odwołań do manifestu i service workera w index.html (stan przed etapem 1).
+- Wdrożone 2026-11-16:
+  - Etap 1 (manifest i ikony): `manifest.json` (`start_url` i `scope` jako `./`, `start_url` bez parametrów), generator `tools/build-icons.mjs` (zero zależności, wynik deterministyczny), `assets/icon.svg`, `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-maskable-512.png`, `assets/apple-touch-icon.png`; w `index.html` cztery linie w `<head>`, stara ikona data-URI zostaje jako awaryjna. Testy: `tests/pwa-manifest.test.mjs` (5), `tests/build-icons.test.mjs` (2).
+  - Etap 2 (lokalizacja i wibracja): kontrolka „Wyśrodkuj na mnie" (`addLocateControl` w `js/map.js`) z kółkiem dokładności i przyciskiem „Ustaw tu punkt startowy" w dymku; czyste funkcje w `js/uilogic.js`; rozróżnione komunikaty błędów lokalizacji, komunikat „Jesteś poza obszarem: <miasto>", jeden impuls wibracji 20 ms po przeliczeniu dłuższym niż 1,5 s, komunikat „Jesteś offline". Testy: `tests/uilogic.test.mjs`, `tests/mobile-layout.test.mjs` (`TAP_USES_MIN` 19 -> 21).
+- Rozwiązanie etapu 3 (service worker; szkic z wejścia fali, bez przeglądu rozwiazywacza): service worker shell-only, który nigdy nie odpowiada na żądania zawierające `/data/` (nie pokaże nieaktualnego rozkładu); powłoka jako jedna atomowa paczka `shell-<hash>`; bez `skipWaiting()` w tle; komunikat „Dostępna nowa wersja — odśwież" z przyciskiem; wyjście awaryjne `?sw=off`; stempel wersji z `tools/stamp-sw.mjs` pilnowany testem. Wariant „sam manifest, bez service workera" odpadł: GitHub Pages narzuca `Cache-Control: max-age=600` i nie pozwala tego zmienić, a bez handlera `fetch` Chrome nie pokaże promptu instalacji. Etap 3 czeka na decyzję właściciela, bo trwale instaluje się w przeglądarkach użytkowników i zmienia zachowanie offline.
+- Pliki: index.html, js/app.js, js/map.js, js/uilogic.js, css/style.css, manifest.json, tools/build-icons.mjs, assets/, tests/pwa-manifest.test.mjs, tests/build-icons.test.mjs. Etap 3: sw.js, js/pwa.js, tools/stamp-sw.mjs, tests/sw.test.mjs.
+- Niezweryfikowane: etap 1 — faktyczna instalowalność na telefonie i na iOS, ścieżki względne pod `github.io/ZTM/`. Etap 2 — prawdziwy prompt o zgodę, kod 3 (timeout), komunikat offline w przeglądarce, pozycjonowanie kontrolki na wąskim ekranie, wibracja na prawdziwym urządzeniu.
+
 ## Zaprojektowane (gotowe do wdrożenia)
 
 _(pusto)_
@@ -29,13 +41,6 @@ _(pusto)_
 - Problem: własny baner zgody nie spełnia wymogu Google dla EOG — potrzebny certyfikowany CMP. Uwaga: ryzyko prawne.
 - Dowód: index.html:321-359.
 - Pliki: index.html oraz ustawienie w panelu AdSense (poza kodem).
-
-### Z-002 [P1] Mobile i PWA
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak manifest.json i service workera; offline tylko przez cache przeglądarki. Dochodzi bottom sheet, przycisk „wyśrodkuj na mnie" i wibracja.
-- Dowód: brak odwołań do manifestu i service workera w index.html.
-- Pliki: index.html, js/app.js, css/style.css, nowy manifest.json.
 
 ### Z-003 [P1] Mniejsze dane
 - Status: nowe
@@ -135,41 +140,13 @@ _(pusto)_
 - Dowód: żaden workflow nie wywołuje build-walknet, build-water ani build-bridges; pliki mają datę 2026-09-18.
 - Pliki: .github/workflows/, tools/build-walknet.mjs, tools/build-water.mjs, tools/build-bridges.mjs.
 
-### Z-031 [P2] Kalibracja progów bramki jakości danych
-- Status: nowe
-- Zgłoszone: 2026-11-16 (wdrozeniowiec)
-- Problem: podłogi bezwzględne dla ostrzeżeń zostały dobrane arbitralnie, a `grid.outsideShare` ostrzega przy każdym odświeżeniu, jeśli miasto stale przekracza 2%. Po pierwszym przebiegu na prawdziwych danych trzeba sprawdzić, które miasta już są powyżej progu, i skalibrować.
-- Dowód: obiekt `GATE` w tools/check-data.mjs.
-- Pliki: tools/check-data.mjs
-
 ### Z-032 [P1] Wyciek współrzędnych do AdSense
 - Status: nowe
 - Zgłoszone: nieznane
 - Problem: po zgodzie żądania reklamowe (`pagead2.googlesyndication.com/.../ads?...url=`) niosą pełny adres strony razem z parametrem `p=lat,lon`, czyli lokalizacją użytkownika. Naprawa `page_location` z Z-040 dotyczyła wyłącznie Analytics.
-- Dowód: obserwacja listy żądań w przeglądarce podczas wdrożenia Z-025.
+- Dowód: obserwacja listy żądań w przeglądarce podczas wdrożenia Z-025. Potwierdzone 2026-11-16 w przeglądarce: żądania `https://pagead2.googlesyndication.com/pagead/ads?...` niosą pełny adres ze współrzędnymi w parametrach `url=` i `ref=`, dwa razy na odsłonę (jednostka 0x0 i 249x600). Przyczyna: AdSense czyta adres wprost z `location`, więc nadpisanie `page_location` w gtag go nie obejmuje. Zadanie nadal czeka na decyzję właściciela.
 - Uwaga: przeniesienie współrzędnych z query do fragmentu adresu zatrzymałoby wyciek, ale zmienia format linków — wymaga zgodności wstecznej ze starymi linkami i decyzji właściciela.
 - Pliki: index.html, js/app.js.
-
-### Z-033 [P2] Wydzielenie czystych funkcji z tools/build-data.mjs
-- Status: nowe
-- Zgłoszone: nieznane
-- Problem: plik nic nie eksportuje, czyta `process.argv` na poziomie modułu i od razu uruchamia build, więc import ma efekty uboczne i nie da się przetestować `pickDate`, składania wzorców, normalizacji czasów ani liczenia przesiadek. Blokuje to pokrycie testami najdłuższego skryptu w `tools/` (644 linie).
-- Dowód: nieznane.
-- Pliki: tools/build-data.mjs, nowy tools/build-lib.mjs, tests/.
-
-### Z-034 [P2] Testy logiki frontu bez DOM
-- Status: nowe
-- Zgłoszone: nieznane
-- Problem: `js/app.js`, `js/map.js` i `js/worker.js` nie mają testów, bo wymagają DOM, Leafletu albo środowiska workera. Wymaga wydzielenia logiki niezależnej od DOM.
-- Dowód: nieznane.
-- Pliki: js/app.js, js/map.js, js/worker.js, tests/.
-
-### Z-035 [P2] Weryfikacja page_view z history-change w GA4
-- Status: nowe
-- Zgłoszone: nieznane
-- Problem: naprawa z Z-040 nadpisuje `page_location` w `gtag('config', …)`, ale GA4 z włączonym pomiarem rozszerzonym wysyła własne `page_view` przy zmianach historii, a strona używa `history.replaceState` do aktualizacji adresu ze współrzędnymi. Trzeba sprawdzić w DebugView, czy takie zdarzenie nie niesie pełnego adresu.
-- Dowód: nieznane.
-- Pliki: index.html.
 
 ### Z-036 [P2] Panel mobilny, wariant B (decyzja właściciela)
 - Status: nowe
@@ -198,6 +175,43 @@ _(pusto)_
 - Problem: rozwiązanie z Z-025 daje lokalną diagnostykę plus zdarzenie w Analytics po zgodzie. Zewnętrzna usługa (np. Sentry) dałaby stosy i grupowanie, ale oznacza nową zależność runtime na froncie (złamanie nienegocjowalnego ograniczenia projektu), nowego procesora danych w polityce prywatności i możliwy koszt po przekroczeniu darmowego limitu. Kontrakt `setSink` w `js/diag.js` jest punktem wymiany, więc wdrożenie byłoby podmianą samego ujścia.
 - Dowód: nieznane.
 - Pliki: js/diag.js, js/app.js.
+
+### Z-044 [P2] Tryb ciemny (`prefers-color-scheme: dark`) — decyzja właściciela
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: strona nie ma wariantu dla systemowego trybu ciemnego. Zmiana wpływa na wygląd dla wszystkich z ciemnym motywem systemu, dlatego wymaga zgody właściciela. Powiązane: Z-016 (szerszy zakres).
+- Dowód: brak `prefers-color-scheme` w css/style.css (sprawdzone 2026-11-16).
+- Wygląd i UX (esteta, specyfikacja z wejścia fali): tokeny ciemne `--surface #1b1c24`, `--ink #ececf1` (14,40:1), `--muted #a3a7b5` (7,07:1), `--accent #e872bd` (6,12:1), `--line #3a3c4a`, `--line-strong #6b6e82` (3,37:1), nowe `--on-accent`, `--dot-a`, `--dot-b`; `color-scheme: dark` na `.panel`, nie na `:root`. Mapa zostaje jasna: filtr `invert` na kafelkach odrzucony (psuje wodę, zieleń i etykiety). Ciemna mapa wymagałaby nowej palety stref, bo pasma 45 i 60 min dają na ciemnym tle kontrast 1,19 i 1,06:1. Swatche legendy w ciemnym motywie bez alfa, z obrysem. Przełącznik w interfejsie niepotrzebny.
+- Pliki: css/style.css, js/app.js.
+
+### Z-047 [P2] Zapis miasta do użytku offline — decyzja właściciela
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: strona nie działa offline z danymi rozkładowymi, a użytkownik nie ma jawnego sposobu zapisania miasta na telefonie. Zależy od etapu 3 Z-002.
+- Dowód: nieznane.
+- Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): przycisk „Zapisz to miasto offline"; zapis `data/<miasto>/*` do nazwanego cache razem z `meta.generated`; widoczna data pobrania; przycisk „Odśwież"; automatyczne unieważnienie po 7 dniach; przycisk „Usuń dane offline". Koszt: kilka MB na telefonie użytkownika.
+- Pliki: nieznane.
+
+### Z-051 [P1] Rozkład Opola kończy się 2026-11-16
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: rozkład Opola kończy się dziś. To nie błąd kodu — feed przewoźnika wymaga odświeżenia albo trzeba znaleźć nowe źródło. Wymaga działania poza repozytorium.
+- Dowód: `node tools/check-data.mjs` (2026-11-16) zgłasza „rozkład kończy się za mniej niż 7 dni (16.11.2026)"; build z 2026-11-02.
+- Pliki: data/cities.json (ewentualna zmiana adresu feedu).
+
+### Z-052 [P2] Ostrzeżenie `overtaking` może być kolejnym stałym szumem
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: bramka zapala ostrzeżenie przy każdym `overtaking > 0`, gdy poprzedni build ma to pole. Czy to szum, da się ocenić dopiero na realnych wartościach po następnym buildzie — dziś nie ma ich w `meta.json`.
+- Dowód: pole `counts.days.<dzień>.overtaking` wprowadzone przy Z-005; ostrzeżenie w tools/check-data.mjs.
+- Pliki: tools/check-data.mjs
+
+### Z-053 [P2] Potwierdzenie progów bramki na realnych `counts` i `grid`
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: progi z Z-031 dobrano z wartości policzonych z plików rozkładowych, a nie z pól `counts` i `grid` w `meta.json`, bo tych jeszcze nie ma. Po pierwszym odświeżeniu danych trzeba sprawdzić, czy wyliczone udziały zgadzają się z zapisanymi.
+- Dowód: obserwacja 2026-11-16: żaden `meta.json` nie ma pól `counts` ani `grid`.
+- Pliki: tools/check-data.mjs
 
 ## Zrobione
 
@@ -342,6 +356,92 @@ _(pusto)_
 - Dowód: nieznane.
 - Wdrożone 2026-11-16: usunięty martwy CSS `.search-results li.empty`; komunikaty statusu obu wyszukiwarek są stale obecne w drzewie i zmienia się tylko ich tekst; `.hint:empty` zeruje margines, więc pusty komunikat nie robi luki.
 - Pliki: css/style.css, index.html, js/app.js, tests/search-aria.test.mjs.
+
+### Z-033 [P2] Wydzielenie czystych funkcji z tools/build-data.mjs
+- Status: zrobione
+- Zgłoszone: nieznane
+- Problem: plik nic nie eksportuje, czyta `process.argv` na poziomie modułu i od razu uruchamia build, więc import ma efekty uboczne i nie da się przetestować `pickDate`, składania wzorców, normalizacji czasów ani liczenia przesiadek. Blokuje to pokrycie testami najdłuższego skryptu w `tools/` (644 linie).
+- Dowód: nieznane.
+- Wdrożone 2026-11-16: nowy `tools/build-lib.mjs` z czystymi funkcjami bez efektów ubocznych przy imporcie (bez `fs`, bez `process.argv`). `tools/build-data.mjs` ma o ok. 280 linii mniej i importuje z modułu; I/O i orkiestracja zostały w nim. Wydzielono 21 nazw (funkcje i stałą `WEEKDAY_COLS`), m.in. `splitCsv`, `parseStopTimeRow`, `buildDayPatterns`, `crossesWater`, `gridCoverage`. Nie wydzielono pętli decyzyjnej `buildTransfers` (zrośniętej z grafem pieszym) ani streamingu `stop_times`.
+- Weryfikacja: build z `HEAD` i nowy build na syntetycznym GTFS dały `workday.json`, `saturday.json` i `sunday.json` bajt w bajt identyczne; `meta.json` identyczny poza polem `generated`.
+- Pliki: tools/build-data.mjs, tools/build-lib.mjs (nowy), tests/build-lib.test.mjs (nowy, 32 testy).
+- Niezweryfikowane: build na prawdziwych danych miast (ścieżka z `walknet.json` i `water.json`).
+
+### Z-034 [P2] Testy logiki frontu bez DOM
+- Status: zrobione
+- Zgłoszone: nieznane
+- Problem: `js/app.js`, `js/map.js` i `js/worker.js` nie mają testów, bo wymagają DOM, Leafletu albo środowiska workera. Wymaga wydzielenia logiki niezależnej od DOM.
+- Dowód: nieznane.
+- Wdrożone 2026-11-16: nowy `js/uilogic.js` (ok. 200 linii) z czystą logiką niezależną od `document`, `window` i `location`: 13 funkcji, m.in. `warsawNow`, `parseUrlState`, `buildQuery`, `statusLine`, `createLatestQueue`. `js/app.js`, `js/map.js` i `js/worker.js` importują z modułu; ręczna pętla `pump` w workerze zastąpiona kolejką „ostatni wygrywa". Zachowanie strony bez zmian.
+- Pliki: js/uilogic.js (nowy), js/app.js, js/map.js, js/worker.js, tests/uilogic.test.mjs (nowy, 36 testów).
+- Testy brzegowe: błędne parametry URL, północ, zmiana czasu CET/CEST, obca strefa czasowa procesu.
+- Sprawdzone w przeglądarce: klik na mapie, zmiana dnia i godziny, dymek trasy, silnik w wątku głównym (`engine=main`), konsola bez nowych błędów.
+- Odstępstwo: `esc`, `optionId` i tekst pokrycia opóźnień zostały w `app.js`, bo `search-aria.test.mjs` i `front-diag.test.mjs` czytają `app.js` jako tekst. Przeniesienie: Z-046.
+
+### Z-035 [P2] Weryfikacja page_view z history-change w GA4
+- Status: zrobione
+- Zgłoszone: nieznane
+- Problem: naprawa z Z-040 nadpisuje `page_location` w `gtag('config', …)`, ale GA4 z włączonym pomiarem rozszerzonym wysyła własne `page_view` przy zmianach historii, a strona używa `history.replaceState` do aktualizacji adresu ze współrzędnymi.
+- Dowód: nieznane przy zgłoszeniu; weryfikacja 2026-11-16 w przeglądarce.
+- Werdykt 2026-11-16: wycieku do Google Analytics NIE MA. Żądania do `region1.google-analytics.com/g/collect` niosą `dl=http%3A%2F%2Flocalhost%3A8123%2F` i `dr=` tej samej postaci, bez `p=` i bez współrzędnych. Po dwóch wywołaniach `history.replaceState` GA4 nie wysłało dodatkowego `page_view`; w całej sesji były tylko `page_view` (start) i `scroll`. Nadpisanie `page_location` z Z-040 działa i wystarcza.
+- Zmiany w kodzie: brak. Pliki: index.html (bez zmian).
+- Zastrzeżenie: obserwacja dla jednej wersji gtag.js, nie gwarancja na przyszłość; sprawdzone tylko na localhost w Chromium.
+
+### Z-031 [P2] Kalibracja progów bramki jakości danych
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (wdrozeniowiec)
+- Problem: podłogi bezwzględne dla ostrzeżeń zostały dobrane arbitralnie, a `grid.outsideShare` ostrzega przy każdym odświeżeniu, jeśli miasto stale przekracza 2%. Po pierwszym przebiegu na prawdziwych danych trzeba sprawdzić, które miasta już są powyżej progu, i skalibrować.
+- Dowód: obiekt `GATE` w tools/check-data.mjs. Stale powyżej progu 2 % na danych z 2026-11-16: Warszawa 8,94%, Kraków 5,88%, Trójmiasto 5,52%, Toruń 5,02%, Poznań 3,16%, Bydgoszcz 2,79%, Kielce 2,59%. Przyczyna: linie podmiejskie wychodzą poza siatkę.
+- Wdrożone 2026-11-16: `outsideShareWarn` z 0,02 (2%) na 0,25 (zapas ok. 2,8x wobec najwyższego dzisiejszego udziału; nadal łapie błędny `gridBbox` nowego miasta bez punktu odniesienia); `outsideShareRiseWarn` bez zmian (0,005); nowe `outsideRiseMinStops` 5 (0,5 punktu procentowego to w Gorzowie tylko 2 przystanki, więc sam wzrost procentowy nie wystarcza). Pozostałych progów absolutnych nie ruszono — nie ma dowodu, że szumią.
+- Pliki: tools/check-data.mjs; testy: tests/check-data.test.mjs (5 nowych).
+- Niezweryfikowane: żaden `meta.json` nie ma jeszcze pól `counts` ani `grid`, więc bramka dla wszystkich miast kończy dziś jako „brak punktu odniesienia"; nowy próg do potwierdzenia po pierwszym odświeżeniu danych (Z-053).
+
+### Z-045 [P2] ARIA dla stref izochron
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: czytnik ekranu nie ogłasza zasięgów stref, a legenda podaje same liczby. Szkic gotowy, bez decyzji właściciela.
+- Dowód: nieznane.
+- Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): nowy region `<p class="sr-only" id="zoneSummary" role="status" aria-live="polite" aria-atomic="true">` tuż za `#status`; `#status` dostaje `aria-live="off"`, żeby nie dublować komunikatów. Treść: `statusText`, miasto, zasięgi w kilometrach na pasmo (tylko gdy włączone „Pokaż statystyki" i brak trybu porównania) i liczba przystanków w zasięgu; przy wyłączonych statystykach skrócony wariant z podpowiedzią. Ogłaszanie z debounce 1000 ms od ostatniej fazy `zones`, region czyszczony przed nowym tekstem. Legenda: `role="group"` z `aria-labelledby`, każda komórka `role="listitem"` z pełną etykietą („do 10 min", „10–20 min", „ponad 60 min"), swatche `aria-hidden="true"`. Wymaga klasy `.sr-only` w CSS.
+- Wdrożone 2026-11-16: składanie tekstu w czystej funkcji `zoneSummaryText` w `js/uilogic.js`; `js/app.js` ma tylko `announce()` z debounce 1000 ms, czyszczeniem regionu przed nowym tekstem i `cancelAnnounce()` na starcie przeliczenia. Region `#zoneSummary` stoi tuż za `#status`, który dostał `aria-live="off"`. Legenda: `role="group"` z `aria-labelledby`, `#legendBar` jako `role="list"`, komórki `role="listitem"` z pełnymi etykietami, swatche `aria-hidden="true"` także w tabeli statystyk. Nowa klasa `.sr-only` w CSS. Komunikat dla Krakowa (potwierdzony w przeglądarce): „Zasięg z punktu · dzień roboczy, 08:30. Miasto: Kraków. Zasięg w linii prostej od punktu: do 10 min — 2,2 km, 0,7% miasta, 10–20 min — 5,8 km, 6,3% miasta, 20–30 min — 10,4 km, 19% miasta, 30–45 min — 17,3 km, 45% miasta, 45–60 min — 27,4 km, 59% miasta, ponad 60 min — 50,5 km, 70% miasta. Przystanków w zasięgu: 3697." Pięć szybkich zmian godziny dało jeden komunikat.
+- Pliki: index.html, css/style.css, js/app.js, js/uilogic.js; testy: tests/uilogic.test.mjs (7 nowych).
+- Niezweryfikowane: prawdziwy czytnik ekranu (NVDA, VoiceOver), tryb porównania i tryb tylko pieszo w przeglądarce, ścieżki błędu w przeglądarce.
+
+### Z-046 [P2] Przepisanie testów tekstowych na importy
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: `tests/search-aria.test.mjs` wyciąga `esc` i `optionId` wyrażeniem regularnym z `js/app.js`, a `tests/front-diag.test.mjs` tnie źródło między `renderDelayCoverage` a `renderSafeNote`. Przez to te fragmenty nie mogły przejść do `js/uilogic.js` przy Z-034.
+- Dowód: tests/search-aria.test.mjs, tests/front-diag.test.mjs (odstępstwo przy Z-034).
+- Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): przepisać oba testy na import z modułu, potem przenieść kod do `js/uilogic.js` i dopisać przypadki brzegowe `esc` (`& < > " '`).
+- Wdrożone 2026-11-16: `esc`, `optionId`, `delayCoverageText` i `safeNoteText` przeniesione do `js/uilogic.js`; `renderDelayCoverage` i `renderSafeNote` w `js/app.js` tylko wstawiają wynik do DOM. Oba testy importują funkcje zamiast wycinać kod wyrażeniem regularnym. Dopisane przypadki brzegowe `esc`: każdy z pięciu znaków osobno, wszystkie naraz, znaki powtórzone i w środku tekstu, pusty string, `null`, `undefined`, tekst bez znaków specjalnych.
+- Pliki: js/uilogic.js, js/app.js, tests/search-aria.test.mjs, tests/front-diag.test.mjs.
+
+### Z-048 [P2] Interwencja Chrome przy `navigator.vibrate`
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: gdy pierwsze przeliczenie po wczytaniu strony trwa ponad 1,5 s, a użytkownik niczego nie dotknął, Chrome wypisuje w konsoli „Blocked call to navigator.vibrate because user hasn't tapped…". Nic się nie psuje, ale wpis zaśmieca konsolę.
+- Dowód: obserwacja w konsoli Chrome (wersja i miejsce nieznane).
+- Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): sprawdzić `navigator.userActivation?.hasBeenActive` przed wywołaniem wibracji.
+- Wdrożone 2026-11-16: `shouldVibrate` dostaje pole `userActivated` i blokuje wibrację tylko przy dokładnie `false`; `js/app.js` podaje `navigator.userActivation?.hasBeenActive`, a brak tego API (`undefined`) nie blokuje. Konsola nie zbiera już wpisu „Blocked call to navigator.vibrate", gdy pierwsze przeliczenie po wczytaniu strony trwa dłużej niż 1,5 s.
+- Pliki: js/uilogic.js, js/app.js; testy: tests/uilogic.test.mjs.
+- Niezweryfikowane: czysty dowód z konsoli (bufor narzędzia nie jest czyszczony po przeładowaniu); wibracja na prawdziwym urządzeniu dotykowym.
+
+### Z-049 [P2] Próg 60 km w `nearestCity`
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: próg 60 km w `nearestCity` (miasto z `center` w promieniu 60 km, gdy punkt nie trafia w żaden `bbox`) został dobrany arbitralnie przy wdrożeniu Z-002 etap 2 i nie był kalibrowany na rozkładzie miast z `data/cities.json`.
+- Dowód: js/uilogic.js, funkcja `nearestCity`. Pomiar z `data/cities.json`: odległość od środka miasta do krawędzi `bbox` wynosi od 5,3 km (Opole) do 47,7 km (GZM, do rogu 62,3 km), typowo 8–20 km. Stary próg dawał dwie wady: punkt bez żadnego `bbox` dostawał propozycję miasta oddalonego nawet o 53,6 km od jego krawędzi, a punkt 6 km za krawędzią dużego `bbox` (GZM) nie dostawał żadnej propozycji (156 takich punktów w symulacji siatką co 0,02°).
+- Wdrożone 2026-11-16: funkcja mierzy odległość do prostokąta `bbox` (miasto bez `bbox` nadal od środka); próg to wyeksportowane `NEAREST_CITY_MAX_KM = 15` włącznie. 15 km to pas podmiejski; najbliższe sąsiednie `bbox` leżą dalej niż 30 km, więc miasta nie konkurują. **Zmiana widoczna dla użytkownika**: propozycja przełączenia miasta po użyciu lokalizacji pojawia się teraz w innych miejscach niż wcześniej.
+- Pliki: js/uilogic.js; testy: tests/uilogic.test.mjs.
+- Niezweryfikowane w przeglądarce: tylko testy i symulacja siatką.
+
+### Z-050 [P1] Gubienie metadanych pokrycia opóźnieniami w `meta.json`
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: trzy miasta (Trójmiasto, Kraków, Poznań) mają `delays.json`, ale w `meta.json` zniknęło pole `delays`, więc stopka nie pokazuje pokrycia profilami opóźnień. Funkcja wdrożona przy Z-017 po cichu nie działa dla tych miast.
+- Dowód: wykryte przebiegiem `node tools/check-data.mjs` na danych z 2026-11-16. `tools/build-data.mjs` składał `meta.json` od zera, bez czytania poprzedniej zawartości; `tools/build-delays.mjs` dopisuje do niego wyłącznie pole `delays`. Kolejność w `refresh-data.yml` (`build-data`, potem `build-delays`) jest poprawna, ale nie chroni ręcznego lub lokalnego uruchomienia `build-data` po `build-delays`.
+- Wdrożone 2026-11-16: czysta funkcja `carryOverMeta(prevMeta, { delaysFileExists })` w `tools/build-lib.mjs` przenosi pole `delays` ze starego `meta.json` tylko wtedy, gdy `delays.json` nadal istnieje. Po wypadnięciu feedu GTFS-RT strona nie pokaże więc nieprawdziwej informacji. Naprawa przy zapisie, nie przez kolejność w workflow.
+- Pliki: tools/build-lib.mjs, tools/build-data.mjs; testy: tests/build-lib.test.mjs (3 nowe).
+- Niezweryfikowane: naprawa na prawdziwym buildzie. Oczekiwane: Trójmiasto, Kraków i Poznań odzyskają pole przy najbliższym odświeżeniu danych, bez osobnego kroku.
 
 ## Odrzucone
 
