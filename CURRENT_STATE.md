@@ -4,6 +4,10 @@ Stan na 2026-07-27, na bazie commitu `81e970f` (wdrożone na https://transport.e
 
 ## 1. Ostatnie modyfikacje
 
+### Sesja 2026-11-16 — bramka jakości danych po odświeżeniu (Z-021)
+
+`build-data.mjs` zapisuje w `meta.json` pola `counts` (stops, routes, transfers, days.{typ}.{patterns,trips,bytes}) i `grid` (outsideStops, outsideShare, maxOutsideKm). `tools/check-data.mjs` porównuje je z `meta.json` z `HEAD` (`git show`; szew testowy `--baseline-dir`) i dla każdego miasta zwraca ok/warn/block (`gateCity`, progi w obiekcie `GATE`; tabela progów w README, sekcja „Bramka jakości danych"). Workflow `refresh-data.yml`: krok „Bramka jakości danych" (raport + `gate.json`) -> „Cofnij zablokowane miasta" (`git checkout HEAD -- data/<miasto>`) -> „Zapisz zmiany" (do commita linia „Pominięte (bramka jakości)") -> „Zgłoś problemy". Fail-open: brak/uszkodzony `gate.json` = nic nie zablokowane. Zawór: baseline wygasający w ≤7 dni obniża blokadę do ostrzeżenia (nie dotyczy 0 kursów ani zniknięcia typu dnia). Ręczne przepuszczenie: Run workflow -> pole `force` (`<miasto>` albo `all`). Do czasu pierwszego odświeżenia po wdrożeniu wszystkie miasta są „bez punktu odniesienia" (stare `meta.json` nie mają `counts`). Testy: `tests/check-data.test.mjs`.
+
 ### Sesja 2026-07-27 (niezacommitowane) — dojścia i przesiadki w silniku po sieci ulic (backlog #12a)
 
 Ostatnie miejsce, w którym woda nie istniała: sam silnik rozkładowy. Graf naprawiał kształt stref, ale `findAccessStops` (dobór przystanków startowych) i `buildTransfers` (pary przesiadkowe ≤500 m) mierzyły dojście w linii prostej z ryczałtem 1,3 — przystanek za kanałem portowym był startem podróży w 28 min marszu, a dwa brzegi Motławy parą przesiadkową.

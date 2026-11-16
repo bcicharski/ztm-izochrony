@@ -10,13 +10,31 @@ import { M_PER_DEG_LAT } from './data.js';
 
 export const ZONE_ALPHA = 0.55;
 
+/**
+ * Czy system prosi o ograniczenie ruchu. Pytanie zadawane w chwili wywołania,
+ * nie raz na starcie — zmiana ustawienia systemu działa bez przeładowania.
+ * Tylko wątek główny (worker.js nie ma `window`).
+ */
+export const prefersReducedMotion = () =>
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
 export function createMap(container, center, zoom) {
+  const calm = prefersReducedMotion();
   const map = L.map(container, {
     center,
     zoom,
     zoomControl: false,
+    // prefers-reduced-motion: bez animowanego zoomu, zanikania kafelków,
+    // animacji znaczników i bezwładności przesuwania (inertia)
+    zoomAnimation: !calm,
+    fadeAnimation: !calm,
+    markerZoomAnimation: !calm,
+    inertia: !calm,
   });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
+  // Pinezki A/B (domyślny marker Leaflet 25x41) świadomie zostają poniżej
+  // 44x44 px: kliknięcie mapy ustawia punkt równoważnie, więc pinezka nie jest
+  // jedyną drogą do celu (WCAG 2.5.5 — równoważna alternatywa).
   // Standardowe kafelki OSM (bez klucza API). Jasny podkład CARTO light_all,
   // używany wcześniej, od 2026 wymaga klucza i bez niego oddaje znak wodny
   // „API KEY REQUIRED". Kolorystykę OSM wygasza filtr CSS na .leaflet-tile-pane

@@ -5,6 +5,10 @@
    --line     #e6e7eb   obramowania / tło kontrolek
    --accent   #b83289   akcent interaktywny (z rampy stref)          */
 
+/* Pola dotykowe: --tap = 44 px (WCAG 2.5.5 AAA, zalecenie Apple/Material).
+   Lighthouse sprawdza próg 48 px — świadomie go nie gonimy: 48 px kosztowałoby
+   ok. +50 px wysokości panelu na telefonie. To token wymiaru, nie koloru. */
+
 :root {
   --surface: #ffffff;
   --ink: #1c1c28;
@@ -12,6 +16,7 @@
   --line: #e6e7eb;
   --accent: #b83289;
   --radius: 12px;
+  --tap: 44px;
   --shadow: 0 4px 24px rgba(28, 28, 40, 0.14);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -79,8 +84,8 @@ html, body {
 .help-btn {
   position: absolute;
   top: 12px;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -88,14 +93,38 @@ html, body {
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
 }
+/* środki przycisków co 44 px (12+16 i 56+16 od prawej), żeby ich obszary
+   dotyku (nakładka niżej) się nie nachodziły */
 .collapse-btn { right: 12px; }
 .help-btn {
-  right: 46px;
+  right: 56px;
   font-size: 14px;
   font-weight: 700;
 }
 .collapse-btn:hover, .help-btn:hover { color: var(--ink); }
+
+/* Obszar dotyku >= 44 px bez zmiany wyglądu przycisku. Nakładka ::before wolno
+   TYLKO tam, gdzie wokół elementu jest co najmniej (44 - rozmiar)/2 px wolnej
+   przestrzeni, która nie jest innym celem kliknięcia (tu: 3 miejsca, >= 12 px).
+   Gdzie tego nie ma — realny min-height (patrz niżej).
+   KONTRAKT: reguła NIE ustawia `position` — element musi być już
+   pozycjonowany własną regułą, inaczej nakładka zaczepi się o pierwszego
+   pozycjonowanego przodka (np. .help-head jest sticky). */
+.help-btn::before,
+.collapse-btn::before,
+.leaflet-container a.leaflet-popup-close-button::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  min-width: var(--tap);
+  min-height: var(--tap);
+}
 
 .panel-body {
   flex: 1 1 auto;
@@ -113,20 +142,25 @@ html, body {
 
 /* ---------- wybór miasta ---------- */
 
-.city-select {
+.city-select,
+#accessSelect {
   width: 100%;
+  height: var(--tap);
   margin: 0 0 12px;
-  padding: 8px 10px;
+  padding: 0 10px;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--muted);
   border-radius: 8px;
   cursor: pointer;
+  touch-action: manipulation;
 }
-.city-select:focus-visible {
+#accessSelect { margin: 8px 0 0; }
+.city-select:focus-visible,
+#accessSelect:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -135,11 +169,6 @@ html, body {
 
 .app-mode {
   margin: 0 0 14px;
-}
-/* krótsze etykiety trybu — niższe przyciski */
-.app-mode label {
-  padding-top: 5px;
-  padding-bottom: 5px;
 }
 
 /* ---------- wyszukiwarka ---------- */
@@ -167,18 +196,27 @@ html, body {
 .search-row input {
   flex: 1;
   min-width: 0;
-  padding: 7px 10px;
+  min-height: var(--tap);
+  padding: 0 10px;
   font-size: 13.5px;
   font-family: inherit;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--muted);
   border-radius: 8px;
+}
+
+/* tekst podpowiedzi w polach: --muted na bieli; Firefox domyślnie przyciemnia
+   placeholder przez opacity */
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
 }
 
 .search-row button {
   flex: none;
-  width: 34px;
+  width: var(--tap);
+  height: var(--tap);
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -186,6 +224,7 @@ html, body {
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .search-row button:hover { color: var(--ink); }
 
@@ -202,19 +241,26 @@ html, body {
   list-style: none;
   border: 1px solid var(--line);
   border-radius: 8px;
-  max-height: 180px;
+  max-height: 228px; /* 5 wyników Nominatim x 44 px + padding */
   overflow-y: auto;
 }
 .search-results[hidden] { display: none; }
 
 .search-results li {
-  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 12px 8px;
   font-size: 12.5px;
   border-radius: 6px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .search-results li:hover,
 .search-results li.active { background: var(--line); }
+/* aktywny wynik (strzałki) wyróżniony obrysem, nie samym tłem — samo tło
+   --line na bieli ma kontrast ok. 1,2:1 */
+.search-results li.active { box-shadow: inset 0 0 0 2px var(--accent); }
 .search-results li.empty { color: var(--muted); cursor: default; }
 .search-results li.empty:hover { background: none; }
 
@@ -241,7 +287,7 @@ html, body {
 
 /* kontrolka bez wpływu w bieżącym trybie (np. spacer przy „tylko pieszo") */
 .control.dimmed {
-  opacity: 0.45;
+  opacity: 0.6;
 }
 .control.dimmed label { cursor: default; }
 
@@ -264,22 +310,35 @@ html, body {
 
 .segmented input { position: absolute; opacity: 0; }
 
+/* Etykieta ma 44 px dotyku (cały pasek reaguje), a wizualnie 38 px: przezroczysta
+   ramka 3 px u góry i na dole + ujemny margines znoszący padding kontenera;
+   tło i cień rysują się tylko w polu 38 px (background-clip, drop-shadow). */
 .segmented label {
   flex: 1;
-  padding: 7px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  margin: -3px 0;
+  padding: 0 4px;
+  border-block: 3px solid transparent;
+  background-clip: padding-box;
   text-align: center;
   font-size: 13px;
-  border-radius: 7px;
+  border-radius: 7px / 10px;
   cursor: pointer;
-  color: var(--muted);
-  transition: background 0.15s, color 0.15s;
+  /* --ink, nie --muted: --muted na --line to 3,87:1 (< 4,5:1) */
+  color: var(--ink);
+  touch-action: manipulation;
 }
 
 .segmented input:checked + label {
-  background: var(--surface);
+  background-color: var(--surface);
   color: var(--ink);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(28, 28, 40, 0.15);
+  /* stan „włączony" nie różni się już kolorem tekstu — obrys akcentem */
+  box-shadow: inset 0 0 0 1px var(--accent);
+  filter: drop-shadow(0 1px 1.5px rgba(28, 28, 40, 0.15));
 }
 
 .segmented input:focus-visible + label {
@@ -292,8 +351,10 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: var(--tap);
   font-size: 13.5px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .switch input { position: absolute; opacity: 0; }
 .switch .track {
@@ -302,8 +363,10 @@ html, body {
   height: 21px;
   border-radius: 11px;
   background: var(--line);
+  /* obrys wyłączonego toru: --line na bieli to 1,2:1, a dla elementu
+     nietekstowego wymagane jest 3:1 */
+  box-shadow: inset 0 0 0 1px var(--muted);
   position: relative;
-  transition: background 0.15s;
 }
 .switch .track::after {
   content: "";
@@ -315,9 +378,11 @@ html, body {
   border-radius: 50%;
   background: var(--surface);
   box-shadow: 0 1px 3px rgba(28, 28, 40, 0.25);
-  transition: left 0.15s;
 }
-.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track {
+  background: var(--accent);
+  box-shadow: none;
+}
 .switch input:checked + .track::after { left: 17px; }
 .switch input:focus-visible + .track {
   outline: 2px solid var(--accent);
@@ -340,13 +405,15 @@ html, body {
 .time-row select {
   flex: 1;
   min-width: 0;
-  padding: 7px 9px;
+  height: var(--tap);
+  padding: 0 9px;
   font-size: 13.5px;
   font-family: inherit;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--muted);
   border-radius: 8px;
+  touch-action: manipulation;
 }
 .time-row input:focus-visible,
 .time-row select:focus-visible {
@@ -359,21 +426,23 @@ html, body {
 .veh-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px 10px;
+  gap: 0 10px; /* wysokość daje min-height wiersza (.veh) */
 }
 
 .veh {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-height: var(--tap);
   font-size: 13px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .veh input {
   accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   margin: 0;
 }
 
@@ -387,6 +456,7 @@ html, body {
 
 .journey h4 {
   margin: 0 0 6px;
+  padding-right: 28px; /* miejsce na przycisk zamknięcia dymka (obszar dotyku) */
   font-size: 13px;
 }
 
@@ -511,8 +581,9 @@ html, body {
 .share-btn {
   display: block;
   width: 100%;
+  height: var(--tap);
   margin: 0 0 10px;
-  padding: 7px 10px;
+  padding: 0 10px;
   font-size: 12.5px;
   font-family: inherit;
   color: var(--accent);
@@ -520,6 +591,7 @@ html, body {
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .share-btn:hover { border-color: var(--accent); }
 .share-btn:focus-visible {
@@ -528,9 +600,12 @@ html, body {
 }
 
 .coffee-btn {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--tap);
   margin: 0 0 10px;
-  padding: 7px 10px;
+  padding: 0 10px;
   font-size: 12.5px;
   text-align: center;
   text-decoration: none;
@@ -538,6 +613,7 @@ html, body {
   background: var(--surface);
   border: 1px dashed var(--line);
   border-radius: 8px;
+  touch-action: manipulation;
 }
 .coffee-btn:hover {
   color: var(--accent);
@@ -564,10 +640,18 @@ html, body {
   padding-top: 10px;
   border-top: 1px solid var(--line);
   font-size: 11.5px;
+  line-height: 1.8; /* linki w sąsiednich liniach nie stykają się */
   color: var(--muted);
 }
-.credits a { color: var(--accent); text-decoration: none; }
-.credits a:hover { text-decoration: underline; }
+/* Linki śródtekstowe (.credits a, .help-body a, atrybucja Leaflet) zostają
+   w rozmiarze tekstu: WCAG 2.5.8 wyłącza je z wymogu rozmiaru celu. Nie
+   „naprawiać" w kolejnym audycie. Link musi się odróżniać od tekstu nie tylko
+   barwą (WCAG 1.4.1) — stąd podkreślenie. */
+.credits a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* ---------- pomoc ---------- */
 
@@ -603,7 +687,11 @@ html, body {
 }
 
 .help-head .collapse-btn {
-  position: static;
+  /* relative (nie static): nakładka ::before musi zaczepić się o ten przycisk,
+     a nie o sticky .help-head; top/right z reguły bazowej wyzerowane */
+  position: relative;
+  top: auto;
+  right: auto;
   flex: none;
 }
 
@@ -652,7 +740,8 @@ html, body {
 
 .consent-actions button {
   flex: 1;
-  padding: 7px 10px;
+  height: var(--tap);
+  padding: 0 10px;
   font-size: 12.5px;
   font-family: inherit;
   border-radius: 8px;
@@ -660,6 +749,7 @@ html, body {
   background: var(--accent);
   color: var(--surface);
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .consent-actions button.secondary {
@@ -690,6 +780,64 @@ html, body {
     max-height: 62vh;
     border-radius: var(--radius) var(--radius) 0 0;
   }
-  .leaflet-bottom.leaflet-right { bottom: 40vh; }
+  /* kontrolka zoomu nad panelem; offset to stała (62vh = max-height panelu) —
+     synchronizacja z realną wysokością panelu to osobne zadanie */
+  .leaflet-bottom.leaflet-right { bottom: calc(62vh + 8px); }
   body.panel-collapsed .leaflet-bottom.leaflet-right { bottom: 0; }
+
+  /* kompensata wysokości po powiększeniu pól dotykowych */
+  .panel-body { padding: 12px 16px 14px; }
+  .control { margin-bottom: 10px; }
+  .hint { margin-bottom: 10px; }
+  /* 16 px: poniżej tego iOS Safari przybliża stronę po fokusie na polu */
+  .panel input,
+  .panel select,
+  #accessSelect { font-size: 16px; }
+}
+
+/* ---------- dostępność ---------- */
+
+/* Przyciski zoomu Leaflet 44x44 tylko dla wskaźnika zgrubnego (palec). Na
+   desktopie z myszą zostaje domyślny rozmiar — precyzja wskaźnika; nie
+   „naprawiać" w kolejnym audycie. */
+@media (pointer: coarse) {
+  .leaflet-container .leaflet-bar a {
+    width: var(--tap);
+    height: var(--tap);
+    line-height: var(--tap);
+    touch-action: manipulation;
+  }
+}
+
+/* :focus-visible — te same zasady, co dla pól wyżej (2 px --accent).
+   Offset: 1 px pola tekstowe i selecty, 2 px przyciski, checkboxy, linki. */
+.collapse-btn:focus-visible,
+.help-btn:focus-visible,
+.coffee-btn:focus-visible,
+.consent-actions button:focus-visible,
+.veh input:focus-visible,
+.credits a:focus-visible,
+.help-body a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* przycisk wypełniony akcentem: offset min. 2 px, inaczej obrys zleje się z tłem */
+.consent-actions button:not(.secondary):focus-visible { outline-offset: 3px; }
+/* elementy Leaflet mają overflow — obrys do wewnątrz */
+.leaflet-bar a:focus-visible,
+.leaflet-container a.leaflet-popup-close-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* prefers-reduced-motion: kill-switch zamiast `none`. 0,01 ms (nie `none`),
+   bo zdarzenie `transitionend` musi nadal lecieć — Leaflet na nim kończy
+   animację zoomu. Animacje samej mapy wyłącza dodatkowo createMap (js/map.js). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

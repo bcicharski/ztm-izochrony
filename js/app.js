@@ -5,7 +5,7 @@
 
 import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, distM } from './data.js';
 import { BANDS } from './isochrone.js';
-import { createMap, ZoneLayer, ZONE_ALPHA } from './map.js';
+import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion } from './map.js';
 import { Engine } from './engine.js';
 
 let CITIES;
@@ -157,14 +157,14 @@ map.on('click', e => {
 function setPoint(latlng, pan = false) {
   state.point = latlng;
   marker.setLatLng(latlng);
-  if (pan) map.setView(latlng, Math.max(map.getZoom(), 13));
+  if (pan) map.setView(latlng, Math.max(map.getZoom(), 13), { animate: !prefersReducedMotion() });
   recompute();
 }
 
 function setPoint2(latlng, pan = false) {
   state.point2 = latlng;
   marker2.setLatLng(latlng);
-  if (pan) map.setView(latlng, Math.max(map.getZoom(), 13));
+  if (pan) map.setView(latlng, Math.max(map.getZoom(), 13), { animate: !prefersReducedMotion() });
   recompute();
 }
 
@@ -822,7 +822,7 @@ function switchCity(key) {
   for (const id of ['searchInput', 'searchInput2']) $(id).value = '';
   for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
   map.closePopup();
-  map.setView(cityCfg().center, cityCfg().zoom);
+  map.setView(cityCfg().center, cityCfg().zoom, { animate: !prefersReducedMotion() });
   // zasoby poprzedniego miasta zwalnia silnik (setCity); tu tylko cache
   // meta/wody wątku głównego i warstwa stref
   cityReady = false;

@@ -118,6 +118,40 @@ workflow zakłada zgłoszenie z etykietą `dane` (albo dopisuje komentarz do
 otwartego). Kolektor opóźnień (`collect-delays.yml`, co 15 min) liczy każdy
 kurs raz na godzinę w danym dniu — pole `_seen` w agregacie.
 
+### Bramka jakości danych (Z-021)
+
+Workflow nie publikuje danych w ciemno. `build-data.mjs` dopisuje do
+`meta.json` metryki (`counts`: przystanki, linie, przesiadki, a per typ dnia
+wzorce, kursy i bajty; `grid`: udział przystanków poza siatką pieszą).
+Przed commitem `tools/check-data.mjs` porównuje świeże `meta.json` z tym
+z `HEAD`, osobno dla każdego miasta:
+
+| Metryka | Ostrzeżenie | Blokada |
+|---|---|---|
+| kursy (per typ dnia) | spadek ≥10% (i ≥20) | spadek ≥30% i ≥200 |
+| wzorce (per typ dnia) | ≥10% (i ≥5) | ≥30% i ≥50 |
+| przystanki | ≥5% (i ≥5) | ≥20% i ≥50 |
+| linie | ≥5% (i ≥2) | ≥20% i ≥5 |
+| przesiadki | ≥15% (i ≥50) | — |
+| rozmiar pliku dnia | ≥15% (i ≥20 kB) | ≥40% |
+| typ dnia, który zniknął | — | zawsze |
+| 0 kursów w którymkolwiek dniu | — | zawsze |
+| wzrost dowolnej metryki ≥150% | tak | — |
+| przystanki poza siatką pieszą | >2% albo +0,5 pp | — |
+
+Miasto z blokadą jest cofane (`git checkout HEAD -- data/<miasto>`), reszta
+publikuje się normalnie; raport „było → jest" trafia do podsumowania workflowu
+i zgłoszenia `dane`. Zawór: jeśli opublikowany rozkład wygasa w ≤7 dni (albo
+już wygasł), blokada schodzi do ostrzeżenia („PRZEPUSZCZONE AWARYJNIE") — nie
+dotyczy 0 kursów ani zniknięcia typu dnia. Brak punktu odniesienia (nowe miasto,
+stary `meta.json` bez `counts`) = przejście. Awaria samej bramki nie wstrzymuje
+publikacji (komunikat `::warning::`).
+
+**Ręczne przepuszczenie spadku:** Actions → Odśwież dane rozkładowe → Run
+workflow → pole `force`: `<miasto>` (kilka po przecinku albo `all`). Po tym
+przebiegu punkt odniesienia przesuwa się na nowe dane. Bramka nie dotyczy
+`data/delays`.
+
 `fetch-feeds.mjs` pobiera i rozpakowuje wszystkie feedy miasta (w tym
 dwustopniowe API Wrocławia). `build-data.mjs` łączy feedy (prefiksując
 identyfikatory), odrzuca przystanki bez kursów (feedy zbiorcze wnoszą tysiące
@@ -156,7 +190,7 @@ tools/build-bridges.mjs mosty/kładki/mola z OSM -> data/<miasto>/bridges.json
 tools/build-city.mjs   granice administracyjne -> data/<miasto>/city.json
 tools/collect-delays.mjs kolektor opóźnień (GTFS-RT / ZTM Gdańsk) -> gałąź delays
 tools/build-delays.mjs profile opóźnień -> data/<miasto>/delays.json
-tools/check-data.mjs   kontrola stanu danych po odświeżeniu (raport -> zgłoszenie GitHub)
+tools/check-data.mjs   kontrola stanu danych + bramka regresji po odświeżeniu (raport -> zgłoszenie GitHub)
 assets/og-image.png    obrazek podglądu linku (og:image), generowany skryptem bez zależności
 robots.txt, sitemap.xml  indeksowanie
 tools/geo.mjs          wspólne funkcje geometryczne skryptów build-*

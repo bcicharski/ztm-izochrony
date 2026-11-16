@@ -603,6 +603,7 @@ const stopsOut = {
 const transfers = buildTransfers();
 console.log(`Przesiadki piesze (pary ≤${TRANSFER_MAX_M} m): ${transfers.length}`);
 
+const dayCounts = {}; // metryki dla bramki jakości (tools/check-data.mjs)
 for (let d = 0; d < dayTypes.length; d++) {
   const patterns = buildDay(d);
   const nTrips = patterns.reduce((s, p) => s + p.t.length, 0);
@@ -617,8 +618,9 @@ for (let d = 0; d < dayTypes.length; d++) {
     patterns,
   };
   fs.writeFileSync(file, JSON.stringify(payload));
-  const mb = (fs.statSync(file).size / 1e6).toFixed(2);
-  console.log(`${dayTypes[d].key}: wzorce=${patterns.length}, kursy=${nTrips}, plik=${mb} MB`);
+  const bytes = fs.statSync(file).size;
+  dayCounts[dayTypes[d].key] = { patterns: patterns.length, trips: nTrips, bytes };
+  console.log(`${dayTypes[d].key}: wzorce=${patterns.length}, kursy=${nTrips}, plik=${(bytes / 1e6).toFixed(2)} MB`);
 }
 
 // typ dnia, którego nie dało się zbudować (feed za krótki na weekend), nie może
@@ -633,6 +635,20 @@ for (const key of DAY_KEYS) {
   }
 }
 
+// pokrycie siatki pieszej: przystanki poza gridBbox/bbox to znany tryb degradacji
+// (router nie ma dla nich dojść pieszych)
+const [gS, gW, gN, gE] = cities[cityKey].gridBbox ?? cities[cityKey].bbox;
+const cosLat = Math.cos(((gS + gN) / 2) * Math.PI / 180);
+let outsideStops = 0, maxOutsideM = 0;
+for (let i = 0; i < stopsOut.lat.length; i++) {
+  const lat = stopsOut.lat[i] / 1e5, lon = stopsOut.lon[i] / 1e5;
+  const dLatM = Math.max(gS - lat, lat - gN, 0) * M_PER_DEG_LAT;
+  const dLonM = Math.max(gW - lon, lon - gE, 0) * M_PER_DEG_LAT * cosLat;
+  if (dLatM === 0 && dLonM === 0) continue;
+  outsideStops++;
+  maxOutsideM = Math.max(maxOutsideM, Math.hypot(dLatM, dLonM));
+}
+
 fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({
   city: cityKey,
   generated: new Date().toISOString(),
@@ -640,5 +656,11 @@ fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({
   dates: Object.fromEntries(dayTypes.map(d => [d.key, d.date])),
   sources: cities[cityKey].credits.map(c => `${c.label} — ${c.url}`),
   routeNames, // route_id -> nazwa linii (dla kolektora opóźnień GTFS-RT)
+  counts: { stops: stopsOut.name.length, routes: routeList.length, transfers: transfers.length, days: dayCounts },
+  grid: {
+    outsideStops,
+    outsideShare: +(outsideStops / Math.max(1, stopsOut.name.length)).toFixed(4),
+    maxOutsideKm: +(maxOutsideM / 1000).toFixed(1),
+  },
 }, null, 2));
 console.log('Gotowe.');
