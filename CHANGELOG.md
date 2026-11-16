@@ -9,7 +9,7 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-051 Rozkład Opola kończy się 2026-11-16; Łódź i Olsztyn mają nowe adresy źródeł — etap: wdrożenie (częściowo; Opole -> Z-054, Gorzów -> Z-055, przegląd przed 2026-12-30).
 - Z-008 Tryb czystego widoku i eksport — etap: wdrożenie (część eksportu GeoJSON zrobiona; tryb czystego widoku i PNG otwarte).
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
-- Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów zrobiona; wyszukiwanie po przystanku zaprojektowane jako Z-056).
+- Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
 
 ## 2026-11-16
 
@@ -26,6 +26,7 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-002 (etap 1) Strona da się dodać do ekranu głównego telefonu: ma własny manifest, komplet ikon i kolor paska zgodny z motywem. (pliki: manifest.json, index.html, tools/build-icons.mjs, assets/icon.svg, assets/icon-192.png, assets/icon-512.png, assets/icon-maskable-512.png, assets/apple-touch-icon.png; testy: tests/pwa-manifest.test.mjs (5), tests/build-icons.test.mjs (2); npm run check: lint czysty, 202 testy, 201 pass, 0 fail, 1 skipped; nie sprawdzone: instalowalność na telefonie i na iOS, ścieżki pod github.io/ZTM/)
 - Z-002 (etap 2) Przycisk „Wyśrodkuj na mnie" pokazuje Twoją pozycję na mapie bez zmiany punktu startowego, a kółko dokładności mówi, jak pewny jest pomiar; w dymku można ustawić tu punkt startowy. Komunikaty o błędzie lokalizacji są konkretne, poza obszarem strona podpowiada najbliższe miasto, a po przeliczeniu dłuższym niż 1,5 s telefon wibruje raz. Gdy nie ma sieci, strona mówi, że rozkłady wymagają połączenia. (pliki: js/map.js, js/app.js, js/uilogic.js, css/style.css; testy: tests/uilogic.test.mjs, tests/mobile-layout.test.mjs (TAP_USES_MIN 19 -> 21); npm run check: lint czysty, 202 testy, 201 pass, 0 fail, 1 skipped; nie sprawdzone: prawdziwy prompt o zgodę, timeout lokalizacji (kod 3), komunikat offline w przeglądarce, kontrolka na wąskim ekranie, wibracja na urządzeniu)
 - Z-045 Czytnik ekranu ogłasza wynik przeliczenia słowami: miasto, zasięg w kilometrach i procentach miasta dla każdego pasma oraz liczbę przystanków; legenda czytana jest pełnymi etykietami („do 10 min", „ponad 60 min"). Dla wzroku nic się nie zmienia. Pięć szybkich zmian godziny daje jeden komunikat. (pliki: index.html, css/style.css, js/app.js, js/uilogic.js; testy: tests/uilogic.test.mjs — 7 nowych; npm run check: lint czysty, 228 testów, 227 pass, 0 fail, 1 skipped; potwierdzone w przeglądarce dla Krakowa; nie sprawdzone: NVDA, VoiceOver, tryb porównania, tryb tylko pieszo, ścieżki błędu w przeglądarce)
+- Z-056 Wpisanie nazwy przystanku (od 2 znaków) od razu pokazuje pasujące przystanki, bez zapytania do sieci. Enter dokleja pod spodem adresy z geokodera. Każdy wiersz mówi, czy to przystanek, czy adres. Wybór przystanku ustawia punkt i trafia do historii ostatnich punktów. (pliki: js/uilogic.js, js/engine.js, js/worker.js, js/app.js, css/style.css, README.md; testy: tests/uilogic.test.mjs, tests/search-aria.test.mjs, tests/front-diag.test.mjs (asercja `reportError` podniesiona z 2 do 3); npm run check: lint czysty, 269 testów, 268 pass, 0 fail, 1 skipped (dosłowny wynik w sekcji Wewnętrzne); nie sprawdzone: wygląd oceniony z DOM i stylów, nie ze zrzutu ekranu (kontrast chipa i stan `.active` tylko z CSS), komunikat błędu geokodera na żywo, stan „dane miasta jeszcze się ładują", ścieżka `engine=main` (tylko w kodzie), czas dopasowania na ok. 15 tys. nazw, czytnik ekranu)
 
 ### Zmienione
 - Z-051 Łódź i Olsztyn pobierają rozkład z działających adresów (stare zwracały 404, przez co cotygodniowe odświeżenie pomijało te miasta od co najmniej 2026-11-09). Gorzów nie zmieniony — jego dane są ważne do 2026-12-30. Opole bez zmian: rozkład kończy się 2026-11-16 (Z-054). Strona nadal pokazuje dane z poprzedniego przeliczenia; nowe pliki pobrano tylko do katalogu tymczasowego. (pliki: data/cities.json, tools/fetch-feeds.mjs; testy: tests/fetch-feeds.test.mjs — 7 nowych; npm run check: lint czysty, 259 testów, 258 pass, 0 fail, 1 skipped; nie sprawdzone: przeliczenie danych z nowych feedów, bramka jakości na nowych feedach)
@@ -74,3 +75,15 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 ℹ todo 0
 ℹ duration_ms 527.329
 ```
+- Z-056 Dosłowny wynik `npm run check` po wdrożeniu wyszukiwania przystanków:
+```
+ℹ tests 269
+ℹ suites 0
+ℹ pass 268
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 473.6722
+```
+- Z-058 Repozytorium ma jedną konwencję końców linii: nowy `.gitattributes` (`* text=auto eol=lf`, wyłączenie dla plików binarnych), a `js/calendar.js`, `js/walkgrid.js` i `tests/a11y-css.test.mjs` przekonwertowane z CRLF na LF bez zmian treści. (pliki: .gitattributes, js/calendar.js, js/walkgrid.js, tests/a11y-css.test.mjs; testy: bez nowych; npm run check: 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty (wynik podany przez wątek główny); nie sprawdzone: checkout na czystym klonie Windows)

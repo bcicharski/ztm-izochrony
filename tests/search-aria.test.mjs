@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, optionId } from '../js/uilogic.js';
+import { esc, optionId, mergeSearchResults } from '../js/uilogic.js';
 
 const appSrc = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -108,4 +108,25 @@ test('statusy wyszukiwarek: bez atrybutu hidden, a app.js czyści tekst zamiast 
   }
   assert.ok(!/status\.hidden|searchStatus2'\)\.hidden/.test(appSrc));
   assert.match(appSrc, /status\.textContent = ''/);
+});
+
+// Z-056: wiersz wyniku = ikona + nazwa + rodzaj; numeracja id po scalonej liście.
+test('app.js: wiersz wyniku niesie rodzaj (chip + aria-label), id po scalonej liście', () => {
+  assert.match(appSrc, /className = 'res-kind'/);
+  assert.ok(appSrc.includes("setAttribute('aria-label', `${item.label}, ${kind}`)"));
+  assert.ok(appSrc.includes('mergeSearchResults(stops, places)'));
+  // etykieta pola z rows[i].label, nie z textContent wiersza (chip wpadłby do pola)
+  assert.match(appSrc, /input.value = r.label/);
+  assert.ok(!/input.value = r.li.textContent/.test(appSrc));
+});
+
+test('numeracja optionId scalonej listy jest ciągła', () => {
+  const merged = mergeSearchResults([{ name: 'A', lat: 0, lon: 0 }], [{ label: 'B', lat: 0, lng: 0 }, { label: 'C', lat: 0, lng: 0 }]);
+  const ids = merged.map((_, i) => optionId('searchResults', i));
+  assert.deepEqual(ids, ['searchResults-opt-0', 'searchResults-opt-1', 'searchResults-opt-2']);
+});
+
+test('style.css: chip .res-kind i nazwa z wielokropkiem', () => {
+  assert.match(css, /.res-kind {[^}]*flex: none/);
+  assert.match(css, /.res-name {[^}]*text-overflow: ellipsis/);
 });

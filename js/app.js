@@ -10,7 +10,7 @@ import {
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
   geoErrorMessage, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
-  esc, optionId, delayCoverageText, safeNoteText,
+  esc, optionId, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
   zonesToGeoJSON, exportFileName, shouldShowIntro,
 } from './uilogic.js';
@@ -281,19 +281,49 @@ function rememberPoint(label, latlng) {
 }
 function clearRecent() { saveRecent([]); }
 
+// Indeks nazw przystanków (Z-056): buduje go silnik (worker trzyma sieć), tu tylko
+// leniwie, raz na miasto+dzień. Przed gotowością miasta albo przy błędzie: null
+// (wyszukiwarka działa wtedy jak dotąd — samym geokoderem).
+let stopIdx = null; // {key, index} albo {key, promise}
+async function getStopIndex() {
+  if (!cityReady) return null;
+  const city = state.city;
+  const dayKey = state.mode === 'time' ? state.day : 'workday';
+  const key = `${city}/${dayKey}`;
+  if (stopIdx?.key !== key) {
+    const entry = { key, index: null, promise: null };
+    entry.promise = engine.stopIndex(dayKey).then(ix => { entry.index = ix; return ix; }, err => {
+      console.error(err);
+      if (stopIdx === entry) stopIdx = null; // błąd nie zostaje w cache
+      return null;
+    });
+    stopIdx = entry;
+  }
+  const ix = stopIdx.index ?? await stopIdx.promise;
+  return state.city === city ? ix : null;
+}
+/** Przystanki z już zbudowanego indeksu (bez czekania) — pusto, gdy go jeszcze nie ma. */
+const cachedStops = query => searchStops(stopIdx?.index ?? null, query);
+
 /**
  * Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników.
  * Klawiatura: Enter szuka (albo wybiera podświetlony wynik), ↑/↓ przesuwają
  * podświetlenie, Escape zamyka listę; klik poza listą też ją zamyka.
+ * Pisanie (od 2 znaków) pokazuje od razu przystanki z danych już wczytanych
+ * (bez sieci); Enter dokłada adresy z geokodera pod przystankami (Z-056).
  */
 function attachSearch(inputId, listId, statusId, onPick) {
   const input = $(inputId), ul = $(listId);
   // czysta etykieta trzymana osobno od tekstu <li> (nagłówek i „Wyczyść" nie wpadną do pola)
   let rows = []; // [{li, latlng, label, kind}] — kind: 'result' | 'recent' | 'clear'
   let active = -1;
+  let seq = 0;        // numer zapytania — spóźnione odpowiedzi są pomijane
+  let typeTimer = 0;  // debounce pisania (150 ms), żeby role=status nie gadał co znak
   // komunikat „brak wyników" żyje poza listboxem (li.empty nie byłby poprawnym dzieckiem)
   const status = $(statusId);
   const hide = () => {
+    clearTimeout(typeTimer);
+    seq++;
     ul.hidden = true;
     status.textContent = '';
     active = -1;
@@ -364,7 +394,8 @@ function attachSearch(inputId, listId, statusId, onPick) {
     ul.hidden = false;
     input.setAttribute('aria-expanded', 'true');
   };
-  const showResults = items => {
+  /** @param items scalona lista [{label, lat, lng, source}] — numeracja id po tej tablicy */
+  const showResults = (items, statusText = '') => {
     ul.innerHTML = '';
     rows = [];
     active = -1;
@@ -372,23 +403,54 @@ function attachSearch(inputId, listId, statusId, onPick) {
     if (!items.length) {
       ul.hidden = true;
       input.setAttribute('aria-expanded', 'false');
-      status.textContent = 'Nie znaleziono — spróbuj doprecyzować.';
+      status.textContent = statusText;
       return;
     }
-    status.textContent = '';
+    status.textContent = statusText;
     ul.hidden = false;
     input.setAttribute('aria-expanded', 'true');
     items.forEach((item, i) => {
+      const kind = item.source === 'stop' ? 'przystanek' : 'adres';
       const li = document.createElement('li');
       li.id = optionId(listId, i);
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', 'false');
-      const label = item.display_name.split(', ').slice(0, 4).join(', ');
-      li.textContent = label;
+      li.setAttribute('aria-label', `${item.label}, ${kind}`);
+      const icon = document.createElement('span');
+      icon.className = 'res-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = item.source === 'stop' ? '🚏' : '📍';
+      const name = document.createElement('span');
+      name.className = 'res-name';
+      name.textContent = item.label;
+      name.title = item.label;
+      const chip = document.createElement('span');
+      chip.className = 'res-kind';
+      chip.textContent = kind;
+      li.append(icon, name, chip);
       li.addEventListener('click', () => pick(i));
       ul.appendChild(li);
-      rows.push({ li, latlng: L.latLng(+item.lat, +item.lon), label, kind: 'result' });
+      rows.push({ li, latlng: L.latLng(item.lat, item.lng), label: item.label, kind: 'result' });
     });
+  };
+  const stopItems = stops => mergeSearchResults(stops, []);
+  // wyniki z pisania: tylko przystanki, zero zapytań sieciowych
+  const typeSearch = async () => {
+    const mine = ++seq;
+    const query = input.value.trim();
+    const len = normalizeStopQuery(query).length;
+    if (!query) return;
+    if (len < STOP_QUERY_MIN) {
+      showResults([], 'Wpisz co najmniej 2 znaki.');
+      return;
+    }
+    const index = await getStopIndex();
+    if (mine !== seq) return;
+    if (!index) { showResults([], ''); return; } // dane miasta jeszcze się ładują
+    const stops = searchStops(index, query);
+    showResults(stopItems(stops), stops.length
+      ? 'Enter szuka też adresów.'
+      : 'Brak przystanku o takiej nazwie — naciśnij Enter, aby poszukać adresu.');
   };
   input.addEventListener('keydown', async e => {
     const open = !ul.hidden && rows.length > 0;
@@ -403,15 +465,33 @@ function attachSearch(inputId, listId, statusId, onPick) {
     if (open && active >= 0) { pick(active); return; }
     const query = input.value.trim();
     if (query.length < 3) return;
+    clearTimeout(typeTimer);
+    const mine = ++seq;
+    const stops = cachedStops(query);
+    // przystanki zostają na ekranie na czas zapytania (bez migania listy)
+    if (stops.length) showResults(stopItems(stops), 'Szukam adresu…');
+    else status.textContent = 'Szukam adresu…';
     try {
-      showResults(await searchAddress(query));
+      const found = await searchAddress(query);
+      if (mine !== seq) return;
+      const places = found.map(item => ({
+        label: item.display_name.split(', ').slice(0, 4).join(', '), lat: +item.lat, lng: +item.lon,
+      }));
+      const merged = mergeSearchResults(stops, places);
+      showResults(merged, merged.length ? '' : 'Nie znaleziono — spróbuj doprecyzować.');
     } catch (err) {
       console.error(err);
-      $('status').textContent = 'Wyszukiwarka adresów chwilowo niedostępna.';
+      if (mine !== seq) return;
+      status.textContent = stops.length
+        ? 'Wyszukiwarka adresów niedostępna — pokazuję tylko przystanki.'
+        : 'Wyszukiwarka adresów niedostępna.';
     }
   });
   input.addEventListener('input', () => {
-    if (!input.value) { hide(); showHistory(); }
+    clearTimeout(typeTimer);
+    if (!input.value) { hide(); showHistory(); return; }
+    seq++; // unieważnia trwające zapytanie z poprzedniego tekstu
+    typeTimer = setTimeout(typeSearch, 150);
   });
   input.addEventListener('focus', () => {
     if (!input.value && ul.hidden) showHistory();
@@ -675,6 +755,7 @@ function createDirectClient() {
   client.setCity = (city, cfg) => eng.setCity(city, cfg);
   client.compute = (params, onPhase) => eng.compute(params, onPhase);
   client.journey = async latlng => eng.journey(latlng);
+  client.stopIndex = dayKey => eng.stopIndex(dayKey);
   return client;
 }
 
@@ -694,6 +775,7 @@ function createWorkerClient() {
     if (m.type === 'error' || m.message) p.reject(new Error(m.message));
     else if (m.type === 'city') p.resolve(m.ok);
     else if (m.type === 'journey') p.resolve(m.result);
+    else if (m.type === 'stops') p.resolve(m.index);
     else p.resolve();
   };
   worker.onerror = err => {
@@ -714,6 +796,7 @@ function createWorkerClient() {
   client.setCity = (city, cfg) => call({ type: 'city', city, cfg });
   client.compute = (params, onPhase) => call({ type: 'compute', params }, onPhase);
   client.journey = latlng => call({ type: 'journey', latlng });
+  client.stopIndex = dayKey => call({ type: 'stops', dayKey });
   return client;
 }
 

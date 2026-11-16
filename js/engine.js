@@ -17,6 +17,7 @@ import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNode
 import { computeReachability } from './router.js';
 import { buildZones, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
 import { computeStats } from './stats.js';
+import { buildStopIndex } from './uilogic.js';
 import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, buildContours, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
 
 /** Cap fali pieszej [s] — jak CAP_SEC w walkgrid.js (pasmo „ponad 60" do 90 min). */
@@ -424,6 +425,17 @@ export class Engine {
       : l.kind === 'walk'
         ? { kind: 'walk', durSec: l.durSec, fromName: names[l.fromStop], toName: names[l.toStop] }
         : { kind: 'ride', durSec: l.durSec, route: l.route, fromName: names[l.fromStop], toName: names[l.toStop], depSec: l.depSec, arrSec: l.arrSec });
+  }
+
+  /**
+   * Indeks nazw przystanków do wyszukiwarki (Z-056). Dane dnia są zwykle już
+   * w cache (`loadDay`), więc to tylko przejście po sieci. null = brak miasta.
+   */
+  async stopIndex(dayKey) {
+    const city = this.city;
+    if (!city) return null;
+    const net = await loadDay(city, dayKey);
+    return this.city === city ? buildStopIndex(net) : null;
   }
 
   /**

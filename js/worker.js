@@ -8,6 +8,7 @@
  *   {type:'compute', id, params}          → {type:'result', id, phase, …}× → {type:'done', id}
  *                                            albo {type:'error', id, message}
  *   {type:'journey', id, latlng}          → {type:'journey', id, result}
+ *   {type:'stops', id, dayKey}            → {type:'stops', id, index|null}  (indeks nazw przystanków, Z-056)
  * worker → main bez pytania: {type:'walknet', city} gdy graf ulic się wczyta.
  *
  * Przeliczenia są kolejkowane „ostatni wygrywa": gdy w trakcie liczenia
@@ -75,6 +76,14 @@ onmessage = async e => {
     }
   } else if (m.type === 'compute') {
     queue.push(m);
+  } else if (m.type === 'stops') {
+    try {
+      const index = await engine.stopIndex(m.dayKey);
+      postMessage({ type: 'stops', id: m.id, index }, index ? [index.lat.buffer, index.lon.buffer] : []);
+    } catch (err) {
+      reportError(err, 'stops');
+      postMessage({ type: 'error', id: m.id, message: String(err?.message ?? err) });
+    }
   } else if (m.type === 'journey') {
     postMessage({ type: 'journey', id: m.id, result: engine.journey(m.latlng) });
   }

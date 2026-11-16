@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
+  normalizeStopQuery, buildStopIndex, searchStops, mergeSearchResults,
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine,
   buildQuery, reducedMotionFrom, accessIcons, statusLine, dayInfoView, createLatestQueue,
   geoErrorMessage, nearestCity, shouldVibrate, loadErrorMessage, inBbox, zoneSummaryText, NEAREST_CITY_MAX_KM,
@@ -711,4 +712,85 @@ test('index.html: #exportBtn stoi między #shareBtn a .coffee-btn i startuje wy�
   const a = indexHtml.indexOf('id="shareBtn"'), b = indexHtml.indexOf('id="exportBtn"'), c = indexHtml.indexOf('class="coffee-btn"');
   assert.ok(a > 0 && a < b && b < c);
   assert.match(indexHtml, /id="exportBtn" type="button" disabled/);
+});
+
+// --- wyszukiwanie przystanków (Z-056) ---------------------------------------------
+
+test('normalizeStopQuery: diakrytyki, ł, separatory, spacje, pusty', () => {
+  assert.equal(normalizeStopQuery('Żabianka-AWFiS'), 'zabianka awfis');
+  assert.equal(normalizeStopQuery('Łąkowa'), 'lakowa');
+  assert.equal(normalizeStopQuery('  Gdańsk   Wrzeszcz  PKP '), 'gdansk wrzeszcz pkp');
+  assert.equal(normalizeStopQuery(''), '');
+  assert.equal(normalizeStopQuery(null), '');
+});
+
+const mkNet = rows => ({
+  nStops: rows.length,
+  stopName: rows.map(r => r[0]),
+  lat: Float64Array.from(rows.map(r => r[1])),
+  lon: Float64Array.from(rows.map(r => r[2])),
+});
+
+test('buildStopIndex: 6 słupków zespołu = 1 wpis, ta sama nazwa 20 km dalej = 2', () => {
+  const pole = i => ['Dworzec Główny', 54.3560 + i * 0.0003, 18.6430 + i * 0.0003];
+  const net = mkNet([0, 1, 2, 3, 4, 5].map(pole).concat([['Dworzec Główny', 54.5360, 18.6430]]));
+  const ix = buildStopIndex(net);
+  assert.equal(ix.names.length, 2);
+  assert.ok(ix.lat instanceof Float32Array && ix.lon instanceof Float32Array);
+  assert.equal(ix.lat.length, 2);
+});
+
+test('buildStopIndex: zespół na granicy komórki siatki nadal daje jeden wpis (Z-056)', () => {
+  // 54.3499/54.3501 leżą po dwóch stronach granicy 0,01 stopnia, a dzieli je 22 m.
+  // Klucz siatkowy dawał tu dwa identyczne wiersze w podpowiedziach.
+  const ix = buildStopIndex(mkNet([
+    ['Wrzeszcz PKP', 54.3499, 18.6099],
+    ['Wrzeszcz PKP', 54.3501, 18.6101],
+  ]));
+  assert.deepEqual(ix.names, ['Wrzeszcz PKP']);
+});
+
+test('buildStopIndex: ta sama nazwa tuż za progiem skupiska = dwa wpisy', () => {
+  // 0,02 stopnia szerokości to ok. 2,2 km, czyli powyżej STOP_CLUSTER_KM.
+  const ix = buildStopIndex(mkNet([
+    ['Ratuszowa', 52.2300, 21.0100],
+    ['Ratuszowa', 52.2500, 21.0100],
+  ]));
+  assert.equal(ix.names.length, 2);
+});
+
+test('buildStopIndex: pusta sieć i puste nazwy', () => {
+  assert.deepEqual(buildStopIndex(mkNet([])).names, []);
+  assert.equal(buildStopIndex(mkNet([['', 54, 18], ['A', 54, 18]])).names.length, 1);
+});
+
+test('searchStops: prefiks nazwy < prefiks słowa < podciąg; limit; brak trafień; 1 znak', () => {
+  const ix = buildStopIndex(mkNet([
+    ['Stary Wrzeszcz', 54.1, 18.1],       // podciąg w słowie? nie — prefiks słowa
+    ['Gdańsk Wrzeszcz PKP', 54.2, 18.2],  // prefiks słowa
+    ['Wrzeszcz', 54.3, 18.3],             // prefiks nazwy
+    ['Nowowrzeszczyn', 54.4, 18.4],       // podciąg
+  ]));
+  const r = searchStops(ix, 'wrzesz');
+  assert.deepEqual(r.map(x => x.rank), [0, 1, 1, 2]);
+  assert.equal(r[0].name, 'Wrzeszcz');
+  assert.equal(r[3].name, 'Nowowrzeszczyn');
+  assert.equal(searchStops(ix, 'wrzesz', { limit: 2 }).length, 2);
+  assert.deepEqual(searchStops(ix, 'xyz'), []);
+  assert.deepEqual(searchStops(ix, 'w'), []);
+  assert.deepEqual(searchStops(null, 'wrzesz'), []);
+  assert.equal(searchStops(ix, 'WRZEŚZ').length, 4); // wielkość liter i diakrytyki bez znaczenia
+  assert.ok(Array.isArray(ix._norm));
+});
+
+test('mergeSearchResults: przystanki przed adresami, limit, puste wejścia, stabilność', () => {
+  const stops = [{ name: 'A', lat: 1, lon: 2 }, { name: 'B', lat: 3, lon: 4 }];
+  const places = [{ label: 'ul. X', lat: 5, lng: 6 }];
+  const m = mergeSearchResults(stops, places);
+  assert.deepEqual(m.map(x => [x.label, x.source]), [['A', 'stop'], ['B', 'stop'], ['ul. X', 'place']]);
+  assert.deepEqual(m[0], { label: 'A', lat: 1, lng: 2, source: 'stop' });
+  assert.equal(mergeSearchResults(stops, places, { limit: 2 }).length, 2);
+  assert.deepEqual(mergeSearchResults([], []), []);
+  assert.equal(mergeSearchResults(null, places).length, 1);
+  assert.deepEqual(mergeSearchResults(stops, places), m);
 });

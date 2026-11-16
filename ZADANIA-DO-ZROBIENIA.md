@@ -66,23 +66,22 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: brak krótkich linków, dynamicznego obrazka OG, iframe, wyszukiwania po nazwie przystanku offline i historii adresów.
 - Dowód: nieznane.
 - Wdrożone 2026-11-16 (część A, historia ostatnich punktów): klik w puste pole adresu pokazuje do pięciu ostatnio wybranych punktów bieżącego miasta; jeden klik ustawia punkt; ostatnia pozycja czyści historię. Wpis powstaje tylko przy wyborze z listy wyników (nie przy kliknięciu w mapę, przeciągnięciu znacznika, GPS ani punkcie z URL). 12 wpisów globalnie, 5 pokazywanych po filtrze na miasto, deduplikacja po współrzędnych zaokrąglonych do 5 miejsc, wygasanie po 90 dniach, klucz `recent-points`, kształt `{v:1, items:[...]}`, `localStorage` w `try/catch`. Pamięć funkcjonalna, nie analityczna — zdanie o tym jest w pomocy. ARIA: nagłówek grupy jako `li[role=presentation]` pomijany strzałkami, wiersze `role="option"`.
-- Pozostaje: wyszukiwanie po nazwie przystanku (część B, zaprojektowana jako Z-056); krótkie linki; dynamiczny obrazek OG; iframe.
+- Pozostaje: krótkie linki; dynamiczny obrazek OG; iframe. Część B (wyszukiwanie przystanków po nazwie) zrobiona jako Z-056.
 - Pliki: js/uilogic.js, js/app.js, index.html, css/style.css.
 - Niezweryfikowane: zachowanie przy niedostępnym `localStorage` (kod w `try/catch`, nie wymuszano); wybór z żywych wyników Nominatim.
 
 ## Zaprojektowane (gotowe do wdrożenia)
 
-### Z-056 [P2] Wyszukiwanie przystanku po nazwie w załadowanych danych
-- Status: zaprojektowane
+_(pusto)_
+
+## Nowe (bez projektu rozwiązania)
+
+### Z-057 [P2] Współrzędne przystanku przez Float32Array i przebudowa indeksu przy zmianie dnia
+- Status: nowe
 - Zgłoszone: 2026-11-16 (nieznane)
-- Problem: wyszukiwarka adresów nie znajduje przystanków po nazwie; część B Z-015. Historia punktów (część A Z-015) jest na to przygotowana.
-- Dowód: nieznane.
-- Rozwiązanie (z wdrożenia fali 5, bez przeglądu rozwiazywacza; NIEWDROŻONE): wymaga nowego komunikatu workera `stops` — worker buduje kompaktowy indeks z `net` i odsyła go raz na miasto, leniwie przy pierwszym wpisanym znaku. Czyste funkcje w `js/uilogic.js`: `normalizeStopQuery`, `buildStopIndex`, `searchStops`, `mergeSearchResults`. Wyniki lokalne i z geokodera w jednej liście: przystanki na górze, chip tekstowy „przystanek" / „adres", `optionId` numeruje scaloną listę. `rememberPoint(label, latlng)` przyjmie też przystanek. Ocena analityka: średnie zadanie, nie drobne.
-- Pliki: js/worker.js, js/uilogic.js, js/app.js.
-
-## Nowe (bez projektu rozwiązania)
-
-## Nowe (bez projektu rozwiązania)
+- Problem: współrzędne przystanku przechodzą przez `Float32Array`, więc punkt ustawiony z podpowiedzi ma dokładność rzędu metra (54.49620819 zamiast 54.49621). W adresie strony i tak są pięć miejsc po przecinku, więc skutek jest dziś niewidoczny. Przy okazji: przy zmianie typu dnia indeks przystanków jest budowany od nowa dla klucza miasto/dzień, mimo że dane dnia są w cache.
+- Dowód: obserwacja przy wdrożeniu Z-056 (2026-11-16).
+- Pliki: js/worker.js, js/app.js, js/engine.js.
 
 ### Z-001 [P1] Certyfikowany CMP (Consent Mode v2)
 - Status: nowe
@@ -480,6 +479,25 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Wdrożone 2026-11-16: czysta funkcja `carryOverMeta(prevMeta, { delaysFileExists })` w `tools/build-lib.mjs` przenosi pole `delays` ze starego `meta.json` tylko wtedy, gdy `delays.json` nadal istnieje. Po wypadnięciu feedu GTFS-RT strona nie pokaże więc nieprawdziwej informacji. Naprawa przy zapisie, nie przez kolejność w workflow.
 - Pliki: tools/build-lib.mjs, tools/build-data.mjs; testy: tests/build-lib.test.mjs (3 nowe).
 - Niezweryfikowane: naprawa na prawdziwym buildzie. Oczekiwane: Trójmiasto, Kraków i Poznań odzyskają pole przy najbliższym odświeżeniu danych, bez osobnego kroku.
+
+### Z-056 [P2] Wyszukiwanie przystanku po nazwie w załadowanych danych
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: wyszukiwarka adresów nie znajduje przystanków po nazwie; część B Z-015. Historia punktów (część A Z-015) jest na to przygotowana.
+- Dowód: nieznane.
+- Rozwiązanie (z wdrożenia fali 5, bez przeglądu rozwiazywacza; wdrożone 2026-11-16): wymaga nowego komunikatu workera `stops` — worker buduje kompaktowy indeks z `net` i odsyła go raz na miasto, leniwie przy pierwszym wpisanym znaku. Czyste funkcje w `js/uilogic.js`: `normalizeStopQuery`, `buildStopIndex`, `searchStops`, `mergeSearchResults`. Wyniki lokalne i z geokodera w jednej liście: przystanki na górze, chip tekstowy „przystanek" / „adres", `optionId` numeruje scaloną listę. `rememberPoint(label, latlng)` przyjmie też przystanek. Ocena analityka: średnie zadanie, nie drobne.
+- Wdrożone 2026-11-16: nowy komunikat workera `stops`: worker buduje z `net` kompaktowy indeks nazw i odsyła go raz na miasto i typ dnia, leniwie przy pierwszym wpisanym znaku (galąź w `js/worker.js` z transferem buforów `lat`/`lon`; błąd idzie do `reportError` i do wiadomości `error`). `Engine.stopIndex(dayKey)` w `js/engine.js` buduje indeks z `loadDay` (trafienie w cache) albo zwraca null. W `js/uilogic.js`: `normalizeStopQuery` (lowercase, jawne `ł` -> `l`, NFD bez znaków łączących, nie-alfanumeryczne na spacje), `buildStopIndex`, `searchStops` (memo znormalizowanych nazw w `index._norm`; priorytet: prefiks całej nazwy, prefiks słowa, podciąg; w obrębie rangi krótsza nazwa wyżej), `mergeSearchResults` (przystanki zawsze na górze), stałe `STOP_QUERY_MIN` = 2 i `STOP_CLUSTER_KM` = 1. `js/app.js`: `stopIndex` w obu klientach silnika (worker i direct), leniwy cache indeksu na miasto i dzień, debounce 150 ms, limit 5 wyników lokalnych, scalanie z geokoderem, render wiersza (ikona `🚏`/`📍` z `aria-hidden`, chip, `aria-label` np. „Wrzeszcz PKP, przystanek"), `pick()` bierze `r.label`, wybór przystanku idzie przez `rememberPoint` do historii. Gdy geokoder padnie, przystanki zostają, a komunikat idzie do `#searchStatus`; dotyczy obu wyszukiwarek w trybie porównania. `css/style.css`: `gap: 8px` w wierszu wyników, klasy `.res-icon`, `.res-name`, `.res-kind`, chip `9.5px` przy `max-width: 560px`; bez nowego koloru i bez nowego `var(--tap)`. `README.md`: akapit o wyszukiwarce. Zmiana zakresu względem projektu: skupiska przystanków liczone odległością do już przyjętych przystanków o tej samej nazwie, próg `STOP_CLUSTER_KM` = 1 km, zamiast klucza siatkowego (nazwa + komórka 0,01°) z pierwotnego projektu — klucz dawał dwa identyczne wiersze, gdy zespół leżał na granicy komórki („Wrzeszcz PKP" w Trójmieście pokazywał się dwa razy). Poprawione przed commitem przez wątek główny. Ta sama nazwa dalej niż kilometr (np. „Ratuszowa" w dwóch dzielnicach) nadal daje osobne wpisy.
+- Pliki: js/uilogic.js, js/engine.js, js/worker.js, js/app.js, css/style.css, README.md; testy: tests/uilogic.test.mjs (w tym dwa przypadki skupisk: zespół na granicy komórki daje jeden wpis, ta sama nazwa 2,2 km dalej dwa), tests/search-aria.test.mjs (chip i `aria-label`, ciągła numeracja `id` scalonej listy, `r.label` zamiast `textContent`, CSS chipa), tests/front-diag.test.mjs (asercja liczby `reportError` w `worker.js` podniesiona z 2 do 3, bo doszedł trzeci `catch`).
+- Sprawdzone w przeglądarce (Trójmiasto): wpisanie „wrzesz" bez Entera daje pięć przystanków z ikoną i chipem, status „Enter szuka też adresów.", zero zapytań do Nominatim (mierzone przez `performance.getEntriesByType`); „wrzesz" daje pięć różnych przystanków, „Wrzeszcz PKP" tylko raz; Enter na „Długa" dokleja adresy pod przystankami, a podczas zapytania lista przystanków zostaje ze statusem „Szukam adresu…"; strzałkami przez całą scaloną listę, w tym zawinięcie, `aria-activedescendant` wskazuje istniejące `id` na każdym kroku; klik w przystanek ustawia punkt, zmienia `p=` w adresie, zostawia w polu czystą etykietę i dopisuje wpis do historii; przy 360 px wiersz ma 44 px, chip się mieści, nazwa nie jest ucinana; zero nowych błędów w konsoli.
+- Niezweryfikowane: wygląd oceniony z DOM i wyliczonych styli, nie ze zrzutu ekranu (panel podglądu nie zdążył narysować strony) — kontrast chipa i stan `.active` sprawdzone tylko z CSS; komunikat o błędzie geokodera nie był wywołany na żywo; stan „dane miasta jeszcze się ładują" nie testowany na żywo; ścieżka `engine=main` sprawdzona tylko w kodzie; czas dopasowania na ok. 15 tys. nazw nie był mierzony; czytnik ekranu nie był użyty.
+
+### Z-058 [P2] Niespójne końcówki linii w repozytorium
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: `js/calendar.js`, `js/walkgrid.js` i `tests/a11y-css.test.mjs` miały końcówki CRLF, reszta plików LF. `tests/front-diag.test.mjs` szuka dosłownego `"\n}\n"`, więc rozjazd mógł wywalić testy po edycji niewłaściwym narzędziem.
+- Dowód: nieznane (zgłoszone przy wdrożeniu Z-056, 2026-11-16).
+- Wdrożone 2026-11-16: nowy `.gitattributes` w korzeniu: `* text=auto eol=lf`, z wyłączeniem konwersji dla `*.png`, `*.zip`, `*.ico`, `*.woff2`; trzy wymienione pliki przekonwertowane z CRLF na LF, treść bez zmian. Od teraz jedna konwencja w repozytorium, a checkout na Windowsie daje LF. `npm run check` po zmianie (wynik podany przez wątek główny): 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty.
+- Pliki: .gitattributes (nowy), js/calendar.js, js/walkgrid.js, tests/a11y-css.test.mjs.
 
 ## Odrzucone
 

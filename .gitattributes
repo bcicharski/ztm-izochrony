@@ -1,0 +1,11 @@
+# Jedna konwencja końcówek linii w całym repozytorium (Z-058).
+# Część testów szuka dosłownych wzorców z "\n" w plikach źródłowych
+# (np. tests/front-diag.test.mjs), więc rozjazd CRLF/LF potrafi je wywalić
+# po edycji narzędziem, które zmienia końcówki.
+* text=auto eol=lf
+
+# Dane binarne — bez konwersji.
+*.png binary
+*.zip binary
+*.ico binary
+*.woff2 binary

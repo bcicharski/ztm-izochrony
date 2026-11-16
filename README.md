@@ -71,8 +71,10 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
   i agreguje je per linia × typ dnia × godzina (n, suma, histogram 6 kubełków)
   na gałęzi `delays` — po kilku tygodniach dane wepniemy w silnik.
 
-Punkt można też wskazać wyszukiwarką adresów (Nominatim/OSM, wyniki zawężone
-do `bbox` wybranego miasta) albo przyciskiem geolokalizacji. Bieżący widok
+Punkt można też wskazać wyszukiwarką: od 2 znaków pokazuje od razu przystanki
+o pasującej nazwie (z danych już wczytanych, bez zapytań sieciowych), a Enter
+dokłada pod nimi adresy (Nominatim/OSM, wyniki zawężone do `bbox` wybranego
+miasta). Można też użyć przyciskiem geolokalizacji. Bieżący widok
 (punkt i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj
 link" pozwala go udostępnić.
 

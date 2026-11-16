@@ -498,3 +498,98 @@ export function exportFileName(state, ymd) {
 /** Wskazówka tylko gdy: nie widziana (`seen` = '1' z localStorage albo true; śmieci to „nie widziana"), pasek zgody nie czeka na decyzję i adres nie niesie punktu. */
 export const shouldShowIntro = ({ seen, consentPending, pointFromUrl }) =>
   !(seen === '1' || seen === true) && !consentPending && !pointFromUrl;
+
+// --- wyszukiwanie przystanków po nazwie (Z-056) --------------------------------
+
+/** Najkrótsze zapytanie o przystanek (znaki po normalizacji). */
+export const STOP_QUERY_MIN = 2;
+
+/**
+ * Normalizacja nazw do porównań: małe litery, bez znaków diakrytycznych
+ * (NFD nie rozkłada „ł", stąd jawna mapa), niealfanumeryczne → spacja.
+ */
+export function normalizeStopQuery(s) {
+  return String(s ?? '')
+    .toLowerCase()
+    .replace(/ł/g, 'l')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** Promień [km], w którym przystanki o tej samej nazwie to jeden zespół. */
+export const STOP_CLUSTER_KM = 1;
+
+/**
+ * Kompaktowy indeks nazw przystanków z sieci `{nStops, stopName, lat, lon}`.
+ * Jeden reprezentant (pierwszy) na zespół: kilka słupków tej samej nazwy bliżej
+ * niż `STOP_CLUSTER_KM` daje jeden wpis, ta sama nazwa kilometry dalej osobny.
+ * `lat`/`lon` jako Float32Array, żeby bufory dało się przenieść z workera.
+ */
+export function buildStopIndex(net) {
+  const names = [], la = [], lo = [];
+  // Reprezentanci per znormalizowana nazwa. Klucz siatkowy odpadł: zespół leżący
+  // na granicy komórki dawał dwa identyczne wpisy („Wrzeszcz PKP” w Trójmieście).
+  // Liczymy odległość do już przyjętych o tej samej nazwie — poniżej progu to ten
+  // sam zespół, powyżej (np. „Ratuszowa” w dwóch dzielnicach) osobne miejsce.
+  const kept = new Map();
+  for (let i = 0; i < (net?.nStops ?? 0); i++) {
+    const name = net.stopName[i];
+    const norm = normalizeStopQuery(name);
+    if (!norm) continue;
+    const lat = net.lat[i], lon = net.lon[i];
+    const near = kept.get(norm);
+    if (near) {
+      let dup = false;
+      for (const [plat, plon] of near) {
+        const dy = (lat - plat) * 111.32;
+        const dx = (lon - plon) * 111.32 * Math.cos(lat * Math.PI / 180);
+        if (dx * dx + dy * dy <= STOP_CLUSTER_KM * STOP_CLUSTER_KM) { dup = true; break; }
+      }
+      if (dup) continue;
+      near.push([lat, lon]);
+    } else {
+      kept.set(norm, [[lat, lon]]);
+    }
+    names.push(name);
+    la.push(lat);
+    lo.push(lon);
+  }
+  return { names, lat: Float32Array.from(la), lon: Float32Array.from(lo) };
+}
+
+/**
+ * Dopasowanie po nazwie: prefiks całej nazwy (0) → prefiks dowolnego słowa (1)
+ * → podciąg (2); w obrębie rangi krótsza nazwa wyżej, potem kolejność w indeksie.
+ * Znormalizowane nazwy liczone raz i pamiętane w `index._norm`.
+ */
+export function searchStops(index, query, { limit = 5 } = {}) {
+  const q = normalizeStopQuery(query);
+  if (!index || q.length < STOP_QUERY_MIN) return [];
+  const norm = index._norm ??= index.names.map(normalizeStopQuery);
+  const hits = [];
+  for (let i = 0; i < norm.length; i++) {
+    const n = norm[i];
+    let rank = -1;
+    if (n.startsWith(q)) rank = 0;
+    else if (n.includes(' ' + q)) rank = 1;
+    else if (n.includes(q)) rank = 2;
+    if (rank >= 0) hits.push({ i, rank, len: n.length });
+  }
+  hits.sort((a, b) => a.rank - b.rank || a.len - b.len || a.i - b.i);
+  return hits.slice(0, limit).map(h => ({
+    name: index.names[h.i], lat: index.lat[h.i], lon: index.lon[h.i], rank: h.rank,
+  }));
+}
+
+/**
+ * Jedna lista do listboxa: przystanki zawsze na górze, potem adresy z geokodera.
+ * `places`: [{label, lat, lng}]. Numeracja `optionId` idzie po tej finalnej tablicy.
+ */
+export function mergeSearchResults(stops, places, { limit = 8 } = {}) {
+  return [
+    ...(stops ?? []).map(s => ({ label: s.name, lat: s.lat, lng: s.lon, source: 'stop' })),
+    ...(places ?? []).map(p => ({ label: p.label, lat: p.lat, lng: p.lng, source: 'place' })),
+  ].slice(0, limit);
+}

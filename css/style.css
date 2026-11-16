@@ -251,6 +251,7 @@ html, body {
 .search-results li {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-height: var(--tap);
   padding: 12px 8px;
   font-size: 12.5px;
@@ -258,11 +259,35 @@ html, body {
   cursor: pointer;
   touch-action: manipulation;
 }
+/* wynik wyszukiwania (Z-056): ikona + nazwa + rodzaj; rodzaj rozróżniony
+   tekstem, ikoną i kolejnością (przystanki zawsze nad adresami), nie kolorem */
+.res-icon { flex: none; width: 16px; text-align: center; font-size: 13px; }
+.res-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.res-kind {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface);
+}
 .search-results li:hover,
 .search-results li.active { background: var(--line); }
 /* aktywny wynik (strzałki) wyróżniony obrysem, nie samym tłem — samo tło
    --line na bieli ma kontrast ok. 1,2:1 */
 .search-results li.active { box-shadow: inset 0 0 0 2px var(--accent); }
+
+@media (max-width: 560px) {
+  .res-kind { font-size: 9.5px; }
+}
 
 /* historia ostatnich punktów (Z-015) w tym samym listboxie */
 .search-results li.recent-head {

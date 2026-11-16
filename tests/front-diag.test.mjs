@@ -74,7 +74,7 @@ test('js/app.js: ?diag=1 nie jest zapisywany w adresie, a worker.onmessage obsł
 test('js/worker.js: installHandlers i przekazanie rekordów do wątku głównego', () => {
   assert.match(worker, /installHandlers\(self\)/);
   assert.match(worker, /postMessage\(\{ type: 'diag', record \}\)/);
-  assert.equal([...worker.matchAll(/reportError\(err, '/g)].length, 2, 'rekord w obu catch');
+  assert.equal([...worker.matchAll(/reportError\(err, '/g)].length, 3, 'rekord w każdym catch (city, compute, stops)');
 });
 
 test('pomoc: akapit o trybie ostrożnym nie mówi „na żywo" ani „w czasie rzeczywistym"', () => {
