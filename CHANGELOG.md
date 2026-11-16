@@ -11,6 +11,10 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
 - Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
 
+## 2026-11-17
+### Wewnętrzne
+- Z-051 i Z-054 Decyzja właściciela: rozkład Opola zostaje widoczny ze starymi danymi i z ostrzeżeniem o nieaktualnym rozkładzie; wariant „czasowo ukryć miasto" odrzucony. Ostrzeżenie potwierdzone w przeglądarce dla `?city=opole`; Z-054 (konwerter TransXChange na GTFS) pozostaje otwarte jako jedyna droga do naprawy Opola. (bez zmian w kodzie; npm run check: nie dotyczy, brak zmian w kodzie)
+
 ## 2026-11-16
 
 ### Dodane
