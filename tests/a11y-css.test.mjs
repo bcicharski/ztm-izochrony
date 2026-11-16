@@ -37,6 +37,9 @@ const SIZED = [
   '.time-row select',
   '.share-btn',
   '.coffee-btn',
+  '#dayNote button', // „Pokaż niedzielę" (Z-022)
+  '#diagCopy',       // „Kopiuj raport diagnostyczny" (Z-025)
+  '.diag summary',   // rozwijane szczegóły diagnostyki (Z-025)
   '.consent-actions button',
   '.leaflet-container .leaflet-bar a', // tylko @media (pointer: coarse)
 ];

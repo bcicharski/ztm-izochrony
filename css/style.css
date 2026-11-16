@@ -139,6 +139,8 @@ html, body {
   font-size: 12.5px;
   color: var(--muted);
 }
+/* pusty komunikat (role=status zostaje w drzewie, zmienia się tylko tekst) nie zajmuje miejsca */
+.hint:empty { margin: 0; }
 
 /* ---------- wybór miasta ---------- */
 
@@ -261,8 +263,6 @@ html, body {
 /* aktywny wynik (strzałki) wyróżniony obrysem, nie samym tłem — samo tło
    --line na bieli ma kontrast ok. 1,2:1 */
 .search-results li.active { box-shadow: inset 0 0 0 2px var(--accent); }
-.search-results li.empty { color: var(--muted); cursor: default; }
-.search-results li.empty:hover { background: none; }
 
 /* ostrzeżenie o nieaktualnym rozkładzie */
 .warn {
@@ -599,6 +599,66 @@ html, body {
   outline-offset: 1px;
 }
 
+/* przycisk „Pokaż niedzielę" w #dayNote i „Kopiuj raport diagnostyczny" (Z-022, Z-025) */
+#dayNote button,
+#diagCopy {
+  min-height: var(--tap);
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#dayNote button { display: block; margin-top: 6px; }
+#diagCopy { width: 100%; }
+#dayNote button:hover,
+#diagCopy:hover { border-color: var(--accent); }
+#dayNote button:focus-visible,
+#diagCopy:focus-visible,
+.diag summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* blok diagnostyki (Z-025); atrybut hidden wystarcza, bo display zostaje domyślny */
+.diag {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.diag h2 { margin: 0 0 4px; font-size: 13px; }
+.diag p { margin: 0 0 6px; color: var(--muted); }
+.diag summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.diag-list {
+  max-height: 160px;
+  margin: 0 0 8px;
+  padding-left: 20px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.diag-text {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .coffee-btn {
   display: flex;
   align-items: center;
@@ -760,12 +820,18 @@ html, body {
 .consent-actions button.secondary:hover { color: var(--ink); }
 
 @media (max-width: 560px) {
+  /* baner u góry mapy: panel zostaje w całości dostępny, a góra mapy nie ma
+     żadnych kontrolek; nie pozycjonować względem panelu (kolizja z --panel-h) */
   .consent {
-    right: 12px;
+    top: 12px;
+    bottom: auto;
     left: 12px;
-    bottom: 12px;
+    right: 12px;
     width: auto;
+    padding: 12px 14px;
+    line-height: 1.4;
   }
+  .consent p { margin: 0 0 8px; }
 }
 
 /* ---------- mobile ---------- */
@@ -780,15 +846,27 @@ html, body {
     max-height: 62vh;
     border-radius: var(--radius) var(--radius) 0 0;
   }
-  /* kontrolka zoomu nad panelem; offset to stała (62vh = max-height panelu) —
-     synchronizacja z realną wysokością panelu to osobne zadanie */
-  .leaflet-bottom.leaflet-right { bottom: calc(62vh + 8px); }
-  body.panel-collapsed .leaflet-bottom.leaflet-right { bottom: 0; }
+  /* zoom i atrybucja nad panelem; --panel-h ustawia ResizeObserver w app.js
+     (offsetHeight panelu), 62vh = max-height panelu do pierwszego odczytu */
+  .leaflet-bottom.leaflet-right { bottom: calc(var(--panel-h, 62vh) + 8px); }
+  /* atrybucja w jednej linii: doklejka o rozkładach tylko na desktopie */
+  .attr-extra { display: none; }
 
   /* kompensata wysokości po powiększeniu pól dotykowych */
   .panel-body { padding: 12px 16px 14px; }
-  .control { margin-bottom: 10px; }
-  .hint { margin-bottom: 10px; }
+  /* marginesy zagęszczone (Z-030 A); pola dotykowe zostają 44 px */
+  .control { margin-bottom: 6px; }
+  .control legend { margin-bottom: 3px; }
+  .city-select { margin-bottom: 8px; }
+  .app-mode { margin-bottom: 8px; }
+  .search-row { margin-bottom: 8px; }
+  .hint { margin-bottom: 8px; }
+  .time-row { margin-top: 6px; }
+  #accessSelect { margin-top: 6px; }
+  .legend { margin: 2px 0 8px; }
+  .stats-switch { margin-bottom: 6px; }
+  .share-btn,
+  .coffee-btn { margin-bottom: 8px; }
   /* 16 px: poniżej tego iOS Safari przybliża stronę po fokusie na polu */
   .panel input,
   .panel select,

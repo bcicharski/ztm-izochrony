@@ -292,6 +292,7 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
 
 /** Najwcześniejszy kurs wzorca z odjazdem z pozycji pos o czasie ≥ ready. */
 function earliestTrip(p, pos, ready) {
+  if (p.monotone === false) return earliestTripScan(p, pos, ready); // rzadka ścieżka
   const base = pos * p.nTrips;
   let lo = 0, hi = p.nTrips - 1, ans = -1;
   // odjazdy z danej pozycji są (w praktyce) posortowane rosnąco po kursach
@@ -299,6 +300,24 @@ function earliestTrip(p, pos, ready) {
     const mid = (lo + hi) >> 1;
     if (p.depAt[base + mid] >= ready) { ans = mid; hi = mid - 1; }
     else lo = mid + 1;
+  }
+  return ans;
+}
+
+/**
+ * Wariant liniowy dla wzorca z wyprzedzaniem (odjazdy nie rosną z indeksem kursu).
+ * Zwraca kurs o minimalnym odjeździe ≥ ready (przy remisie najmniejszy indeks).
+ * Uwaga: skan gwarantuje najwcześniejszy złapywalny odjazd Z TEJ POZYCJI, ale
+ * pełna optymalność przy wyprzedzaniu wynika z rozbicia wzorca w buildzie
+ * (tools/build-data.mjs) — kurs wsiadany wcześniej może dojechać później
+ * niż wyprzedzający go kurs z późniejszym odjazdem.
+ */
+function earliestTripScan(p, pos, ready) {
+  const base = pos * p.nTrips;
+  let ans = -1, bestDep = Infinity;
+  for (let t = 0; t < p.nTrips; t++) {
+    const d = p.depAt[base + t];
+    if (d >= ready && d < bestDep) { bestDep = d; ans = t; }
   }
   return ans;
 }

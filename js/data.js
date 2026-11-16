@@ -3,6 +3,8 @@
  * do struktur zoptymalizowanych pod algorytmy routingu.
  */
 
+import { report } from './diag.js';
+
 export const DAY_KEYS = ['workday', 'saturday', 'sunday'];
 export const DAY_LABELS = { workday: 'dzień roboczy', saturday: 'sobota', sunday: 'niedziela' };
 
@@ -148,6 +150,8 @@ export function decodeNetwork(raw) {
     stopName: raw.stops.name,
     lat, lon, group,
     patterns,
+    // wzorce z wyprzedzaniem (monotone === false); router skanuje je liniowo
+    overtakingPatterns: patterns.reduce((n, p) => n + (p.monotone ? 0 : 1), 0),
     patternsAtStop,
     transferAdj,
     sameGroupAdj,
@@ -198,7 +202,82 @@ function decodePattern(p, scale) {
     const cum = profCum[tripProf[t]];
     for (let pos = 0; pos < nStops; pos++) depAt[pos * nTrips + t] = tripStart[t] + cum[pos];
   }
-  return { route: p.r, stops, flags, profCum, profArr, tripStart, tripProf, depAt, nTrips };
+  const monotone = isMonotone(tripStart, tripProf, profCum);
+  return { route: p.r, stops, flags, profCum, profArr, tripStart, tripProf, depAt, nTrips, monotone };
+}
+
+/**
+ * Największe opóźnienie profilu A względem B: max_pos (cumA[pos] − cumB[pos]).
+ * Kurs A (start sa) nie wyprzedza kursu B (start sb) na żadnej pozycji
+ * ⇔ sa + cumA[pos] ≤ sb + cumB[pos] dla każdego pos ⇔ profileLag(A, B) ≤ sb − sa.
+ * @param {Int32Array|number[]} cumA  skumulowane odjazdy profilu A
+ * @param {Int32Array|number[]} cumB  skumulowane odjazdy profilu B (ta sama długość)
+ */
+export function profileLag(cumA, cumB) {
+  let lag = -Infinity;
+  for (let i = 0; i < cumA.length; i++) {
+    const d = cumA[i] - cumB[i];
+    if (d > lag) lag = d;
+  }
+  return lag;
+}
+
+/**
+ * Rozbija kursy wzorca na łańcuchy bez wyprzedzania (zachłannie). Kurs trafia do
+ * łańcucha kończącego się tym samym profilem (zawsze pasuje, więc liczba łańcuchów
+ * nie przekracza liczby profili), a w razie braku — do pierwszego łańcucha,
+ * w którym go nie wyprzedza ostatni kurs; inaczej zaczyna nowy łańcuch.
+ * @param {Array<[number, number]>} trips  [startSec, profIdx], posortowane po startSec
+ * @param {Array<Int32Array|number[]>} profCum  skumulowane ODJAZDY per profil
+ * @returns {number[][]} łańcuchy jako listy indeksów w `trips`
+ */
+export function splitOvertaking(trips, profCum) {
+  const nProf = profCum.length;
+  const lagMemo = new Map();
+  const lag = (a, b) => {
+    const key = a * nProf + b;
+    let v = lagMemo.get(key);
+    if (v === undefined) { v = profileLag(profCum[a], profCum[b]); lagMemo.set(key, v); }
+    return v;
+  };
+  const chains = [];
+  const last = []; // ostatni kurs każdego łańcucha
+  const byProf = new Map(); // profil ostatniego kursu -> łańcuch
+  const fits = (c, t) => {
+    const prev = trips[last[c]];
+    return lag(prev[1], trips[t][1]) <= trips[t][0] - prev[0];
+  };
+  for (let t = 0; t < trips.length; t++) {
+    let c = byProf.get(trips[t][1]);
+    if (c === undefined || !fits(c, t)) {
+      c = -1;
+      for (let k = 0; k < chains.length; k++) if (fits(k, t)) { c = k; break; }
+    }
+    if (c < 0) { c = chains.length; chains.push([]); last.push(-1); }
+    else if (byProf.get(trips[last[c]][1]) === c) byProf.delete(trips[last[c]][1]);
+    chains[c].push(t);
+    last[c] = t;
+    byProf.set(trips[t][1], c);
+  }
+  return chains;
+}
+
+/** Czy odjazdy na każdej pozycji są niemalejące względem indeksu kursu (bez wyprzedzania). */
+function isMonotone(tripStart, tripProf, profCum) {
+  const nProf = profCum.length;
+  const memo = new Map();
+  for (let t = 1; t < tripStart.length; t++) {
+    const a = tripProf[t - 1], b = tripProf[t];
+    let ok = true;
+    if (a !== b) {
+      const key = a * nProf + b;
+      let lag = memo.get(key);
+      if (lag === undefined) { lag = profileLag(profCum[a], profCum[b]); memo.set(key, lag); }
+      ok = lag <= tripStart[t] - tripStart[t - 1];
+    } else ok = tripStart[t] >= tripStart[t - 1];
+    if (!ok) return false;
+  }
+  return true;
 }
 
 /**
@@ -250,7 +329,8 @@ function reverseNetwork(net) {
       const cum = profCum[tripProf[t]];
       for (let pos = 0; pos < nStops; pos++) depAt[pos * p.nTrips + t] = tripStart[t] + cum[pos];
     }
-    return { route: p.route, stops, flags, profCum, profArr, tripStart, tripProf, depAt, nTrips: p.nTrips };
+    const monotone = isMonotone(tripStart, tripProf, profCum);
+    return { route: p.route, stops, flags, profCum, profArr, tripStart, tripProf, depAt, nTrips: p.nTrips, monotone };
   });
 
   const patternsAtStop = Array.from({ length: net.nStops }, () => []);
@@ -289,9 +369,15 @@ export async function loadWater(cityKey) {
         polys: (raw.polys ?? []).map(dec),
         lines: (raw.lines ?? []).map(dec),
       };
-    }).catch(() => null));
+    }).catch(e => traceAsset('water.json', e)));
   }
   return cache.get(url);
+}
+
+/** Ślad diagnostyczny cichej gałęzi błędu zasobu opcjonalnego (zachowanie bez zmian: null). */
+function traceAsset(name, e) {
+  report({ src: 'data', msg: `${name}: ${e?.message ?? e}`, phase: 'asset' });
+  return null;
 }
 
 /** Granice administracyjne miasta (do statystyk powierzchni). */
@@ -310,7 +396,7 @@ export async function loadCity(cityKey) {
 export async function loadWalkNet(cityKey) {
   const url = dataUrl(`${cityKey}/walknet.json`);
   if (!cache.has(url)) {
-    cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null));
+    cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(e => traceAsset('walknet.json', e)));
   }
   return cache.get(url);
 }
@@ -323,7 +409,7 @@ export async function loadBridges(cityKey) {
       if (!r.ok) return null;
       const raw = await r.json();
       return raw.lines.map(line => line.map(([la, lo]) => [la / 1e5, lo / 1e5]));
-    }).catch(() => null));
+    }).catch(e => traceAsset('bridges.json', e)));
   }
   return cache.get(url);
 }
@@ -334,7 +420,7 @@ async function loadRings(url) {
       if (!r.ok) return null;
       const raw = await r.json();
       return raw.polys.map(ring => ring.map(([la, lo]) => [la / 1e5, lo / 1e5]));
-    }).catch(() => null));
+    }).catch(e => traceAsset('rings', e)));
   }
   return cache.get(url);
 }
@@ -346,9 +432,25 @@ async function loadRings(url) {
 export async function loadMeta(cityKey) {
   const url = dataUrl(`${cityKey}/meta.json`);
   if (!cache.has(url)) {
-    cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null));
+    cache.set(url, fetch(url).then(r => (r.ok ? r.json() : null)).catch(e => traceAsset('meta.json', e)));
   }
   return cache.get(url);
+}
+
+/**
+ * Stan pokrycia profilami opóźnień (`meta.delays` z tools/build-delays.mjs).
+ * `unknown` = stare meta.json bez pola — front ma wtedy milczeć.
+ * `collecting` = brak profili, ale miasto ma feed czasu rzeczywistego (cityCfg.rt).
+ * @returns {{state: 'profiles'|'collecting'|'none'|'unknown', routes: number,
+ *   routesTotal: number|null, updated: string|null}}
+ */
+export function delayCoverage(meta, cityCfg) {
+  const d = meta?.delays;
+  if (!d || typeof d.routes !== 'number') {
+    return { state: 'unknown', routes: 0, routesTotal: null, updated: null };
+  }
+  const state = d.routes > 0 ? 'profiles' : (cityCfg?.rt ? 'collecting' : 'none');
+  return { state, routes: d.routes, routesTotal: d.routesTotal ?? null, updated: d.updated ?? null };
 }
 
 /** Profile opóźnień linii: { "linia|typDnia|godzina": sekundy }. Może być pusty. */
@@ -357,7 +459,46 @@ export async function loadDelays(cityKey) {
   if (!cache.has(key)) {
     cache.set(key, fetch(dataUrl(`${cityKey}/delays.json`))
       .then(r => (r.ok ? r.json() : {}))
-      .catch(() => ({})));
+      .catch(e => { traceAsset('delays.json', e); return {}; }));
   }
   return cache.get(key);
+}
+
+/**
+ * Wpisy pliku dnia (format v3) dla jednego wzorca z buildu: zwykle jeden, a gdy
+ * kursy się wyprzedzają — po jednym na łańcuch bez wyprzedzania (patrz
+ * splitOvertaking), z profilami przycętymi do użytych. Współdzielone przez
+ * tools/build-data.mjs i testy.
+ * @param {{route:number, stops:number[], flags:number[], profileList:number[][],
+ *   dwellList:number[][], trips:Array<[number, number]>}} p  trips posortowane po starcie
+ * @returns {object[]} wpisy {r, s, f, p, t, d?}
+ */
+export function buildPatternEntries(p) {
+  const profCum = p.profileList.map(deltas => {
+    const cum = [0];
+    for (const d of deltas) cum.push(cum[cum.length - 1] + d);
+    return cum;
+  });
+  const chains = splitOvertaking(p.trips, profCum);
+  const f = p.flags.some(x => x) ? p.flags : 0;
+  if (chains.length === 1) {
+    // pole d (postoje) pomijamy, gdy wszystkie zerowe (feedy minutowe) — mniejszy plik
+    const entry = { r: p.route, s: p.stops, f, p: p.profileList, t: p.trips };
+    if (p.dwellList.some(dw => dw.some(x => x))) entry.d = p.dwellList;
+    return [entry];
+  }
+  return chains.map(chain => {
+    const used = [...new Set(chain.map(i => p.trips[i][1]))].sort((a, b) => a - b);
+    const renum = new Map(used.map((old, k) => [old, k]));
+    const entry = {
+      r: p.route,
+      s: p.stops,
+      f,
+      p: used.map(old => p.profileList[old]),
+      t: chain.map(i => [p.trips[i][0], renum.get(p.trips[i][1])]),
+    };
+    const dw = used.map(old => p.dwellList[old]);
+    if (dw.some(x => x.some(y => y))) entry.d = dw;
+    return entry;
+  });
 }

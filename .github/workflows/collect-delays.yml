@@ -40,7 +40,12 @@ jobs:
       - name: Zainstaluj dekoder GTFS-RT
         run: npm install --no-save gtfs-realtime-bindings
 
+      # Kolektor kończy się kodem 1, gdy miasto z rt nie dało ani jednej obserwacji.
+      # continue-on-error: zapis agregatów działających miast musi się wykonać
+      # zawsze; status przebiegu ustawia dopiero ostatni krok.
       - name: Zbierz obserwacje
+        id: collect
+        continue-on-error: true
         run: node tools/collect-delays.mjs
 
       - name: Zapisz agregaty na gałęzi delays
@@ -51,3 +56,17 @@ jobs:
           git add -f data/delays
           git commit -m "Agregaty opóźnień ($(date -u +%Y-%m-%dT%H:%MZ))" || { echo "Brak zmian."; exit 0; }
           git push -f origin delays
+
+      # Cron daje 76 przebiegów dziennie, więc czerwony status przy każdym
+      # to szum i mnóstwo maili. Przebieg jest czerwony tylko ręcznie
+      # (workflow_dispatch) i w pierwszej godzinie dnia (03 UTC, 4 przebiegi);
+      # w pozostałych — żółta adnotacja i podsumowanie przebiegu.
+      - name: Oceń wynik kolektora
+        if: steps.collect.outcome == 'failure'
+        run: |
+          MSG="Kolektor: miasto z rt bez obserwacji — tabela w podsumowaniu przebiegu."
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$(date -u +%H)" = "03" ]; then
+            echo "::error::$MSG"
+            exit 1
+          fi
+          echo "::warning::$MSG"

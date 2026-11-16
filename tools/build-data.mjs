@@ -36,7 +36,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, NET_WALK_MPS } from '../js/walknet.js';
-import { COMPLEX_MAX_M, WALK_MPS, M_PER_DEG_LAT, DAY_KEYS, distM } from '../js/data.js';
+import { holidayName, specialDayName, dateRegime, pickRepresentativeDate } from '../js/calendar.js';
+import { COMPLEX_MAX_M, WALK_MPS, M_PER_DEG_LAT, DAY_KEYS, distM, buildPatternEntries } from '../js/data.js';
 
 const cityKey = process.argv[2];
 const feedDirs = process.argv.slice(3);
@@ -165,13 +166,32 @@ if (!allDates.length) {
   console.warn('Uwaga: brak dat od dziś we wspólnym zakresie — używam pełnego zakresu.');
   allDates = [...servicesByDate.keys()].filter(d => d >= commonMin && d <= commonMax).sort();
 }
-const pickDate = pred => allDates.find(d => pred(dateToWeekday(d)));
+// data reprezentatywna: najwcześniejsza BEZ święta i dnia specjalnego (święto to
+// jednodniowa anomalia — omijamy); reżimu wakacyjnego nie omijamy, tylko
+// etykietujemy w meta.dayInfo (rozkład wakacyjny bywa jedynym obowiązującym)
+const pickDate = pred => pickRepresentativeDate(allDates, pred, dateToWeekday);
 const dayTypes = [
-  { key: 'workday', date: pickDate(w => w >= 2 && w <= 4) ?? pickDate(w => w >= 1 && w <= 5) },
-  { key: 'saturday', date: pickDate(w => w === 6) },
-  { key: 'sunday', date: pickDate(w => w === 0) },
-].filter(d => d.date);
-console.log('Wybrane daty:', dayTypes.map(d => `${d.key}=${d.date}`).join(', '));
+  { key: 'workday', pred: w => w >= 2 && w <= 4, alt: w => w >= 1 && w <= 5 },
+  { key: 'saturday', pred: w => w === 6 },
+  { key: 'sunday', pred: w => w === 0 },
+].map(t => ({ key: t.key, pred: t.pred, date: pickDate(t.pred) ?? (t.alt ? pickDate(t.alt) : null) }))
+  .filter(d => d.date);
+// adnotacje dla frontu: reżim, święto wybranej daty i święto, które ominęliśmy
+const dayInfo = Object.fromEntries(dayTypes.map(d => {
+  const first = allDates.find(x => d.pred(dateToWeekday(x)));
+  const avoided = first && first !== d.date ? (holidayName(first) ?? specialDayName(first)) : null;
+  return [d.key, {
+    date: d.date,
+    weekday: dateToWeekday(d.date),
+    regime: dateRegime(d.date),
+    holiday: holidayName(d.date) ?? specialDayName(d.date),
+    ...(avoided ? { avoidedHoliday: avoided } : {}),
+  }];
+}));
+console.log('Wybrane daty:', dayTypes.map(d => {
+  const i = dayInfo[d.key];
+  return `${d.key}=${d.date} [${i.regime}${i.holiday ? `, święto: ${i.holiday}` : ''}${i.avoidedHoliday ? `, pominięto: ${i.avoidedHoliday}` : ''}]`;
+}).join(', '));
 
 // --- 2. linie i kursy (usługa może kursować w kilku wybranych dniach) -----
 
@@ -372,6 +392,9 @@ function routeNameIndex(routeKey) {
   return routeNameIdx.get(key);
 }
 
+// statystyki rozbijania wyprzedzających się kursów z ostatniego buildDay
+let overtakeStats = { overtaking: 0, extraEntries: 0, ms: 0 };
+
 function buildDay(dayIdx) {
   const patterns = new Map();
   for (const [tripKey, arr] of tripStops) {
@@ -425,20 +448,16 @@ function buildDay(dayIdx) {
     }
   }
   const out = [];
+  let overtaking = 0, extraEntries = 0;
+  const t0 = Date.now();
   for (const p of patterns.values()) {
     p.trips.sort((a, b) => a[0] - b[0]);
-    // pole d (postoje) pomijamy, gdy wszystkie zerowe (feedy minutowe) — mniejszy plik
-    const anyDwell = p.dwellList.some(dw => dw.some(x => x));
-    const entry = {
-      r: p.route,
-      s: p.stops,
-      f: p.flags.some(f => f) ? p.flags : 0,
-      p: p.profileList,
-      t: p.trips,
-    };
-    if (anyDwell) entry.d = p.dwellList;
-    out.push(entry);
+    // zwykle jeden wpis; przy wyprzedzaniu kursów — po jednym na łańcuch bez wyprzedzania
+    const entries = buildPatternEntries(p);
+    if (entries.length > 1) { overtaking++; extraEntries += entries.length - 1; }
+    out.push(...entries);
   }
+  overtakeStats = { overtaking, extraEntries, ms: Date.now() - t0 };
   return out;
 }
 
@@ -619,8 +638,8 @@ for (let d = 0; d < dayTypes.length; d++) {
   };
   fs.writeFileSync(file, JSON.stringify(payload));
   const bytes = fs.statSync(file).size;
-  dayCounts[dayTypes[d].key] = { patterns: patterns.length, trips: nTrips, bytes };
-  console.log(`${dayTypes[d].key}: wzorce=${patterns.length}, kursy=${nTrips}, plik=${(bytes / 1e6).toFixed(2)} MB`);
+  dayCounts[dayTypes[d].key] = { patterns: patterns.length, trips: nTrips, bytes, overtaking: overtakeStats.overtaking };
+  console.log(`${dayTypes[d].key}: wzorce=${patterns.length}, kursy=${nTrips}, plik=${(bytes / 1e6).toFixed(2)} MB, wyprzedzanie: rozbito ${overtakeStats.overtaking} wzorców (+${overtakeStats.extraEntries} wpisów, ${overtakeStats.ms} ms)`);
 }
 
 // typ dnia, którego nie dało się zbudować (feed za krótki na weekend), nie może
@@ -654,6 +673,7 @@ fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({
   generated: new Date().toISOString(),
   feedEndDate: commonMax,
   dates: Object.fromEntries(dayTypes.map(d => [d.key, d.date])),
+  dayInfo, // reżim (szkolny/wakacje/przerwa świąteczna) i święta wybranych dat
   sources: cities[cityKey].credits.map(c => `${c.label} — ${c.url}`),
   routeNames, // route_id -> nazwa linii (dla kolektora opóźnień GTFS-RT)
   counts: { stops: stopsOut.name.length, routes: routeList.length, transfers: transfers.length, days: dayCounts },

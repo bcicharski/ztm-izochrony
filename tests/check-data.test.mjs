@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { gateCity, run } from '../tools/check-data.mjs';
+import { gateCity, hasDelayProfiles, run } from '../tools/check-data.mjs';
 
 const TODAY = new Date('2026-11-16T12:00:00Z');
 const day = (trips, patterns = 500, bytes = 900000) => ({ trips, patterns, bytes });
@@ -161,4 +161,81 @@ test('regresja: stare komunikaty (nieaktualny rozkład, brak typów dnia) i kod 
   const r2 = run(['--baseline-dir', path.join(dir, 'nie-ma')], { root: dir, today: TODAY });
   assert.equal(r2.code, 0);
   assert.match(r2.out, /Wszystkie 1 miasta w porządku/);
+});
+
+test('wyprzedzanie kursów: ostrzeżenie z liczbą, nigdy blokada', () => {
+  const withOver = (m, n) => withDays(m, { workday: { ...m.counts.days.workday, overtaking: n } });
+  const base = withOver(meta(), 0);
+  const r = gate(withOver(meta(), 3), base);
+  assert.equal(r.level, 'warn');
+  assert.ok(r.findings.some(f => f.includes('3') && f.includes('wyprzedzaniem')), r.findings.join('\n'));
+  // nawet ogromna liczba nie blokuje
+  assert.equal(gate(withOver(meta(), 5000), base).level, 'warn');
+  // 0 = ok
+  assert.equal(gate(withOver(meta(), 0), base).level, 'ok');
+});
+
+test('wyprzedzanie kursów: brak pola po którejkolwiek stronie = pominięcie', () => {
+  const withOver = (m, n) => withDays(m, { workday: { ...m.counts.days.workday, overtaking: n } });
+  assert.equal(gate(meta(), meta()).level, 'ok');
+  assert.equal(gate(withOver(meta(), 3), meta()).level, 'ok'); // baseline sprzed Z-005
+  assert.equal(gate(meta(), withOver(meta(), 0)).level, 'ok');
+});
+
+test('profile opóźnień bez meta.delays: ostrzeżenie z wskazaniem naprawy, także bez baseline', () => {
+  for (const base of [meta(), null]) {
+    const r = gate(meta(), base, { delaysProfiles: true });
+    assert.equal(r.level, 'warn');
+    assert.ok(r.findings.some(f => f.includes('x:') && f.includes('delays.json') && f.includes('build-delays.mjs')), r.findings.join('\n'));
+  }
+  assert.equal(gate(meta(), null, { delaysProfiles: true }).noBaseline, true);
+});
+
+test('profile opóźnień: meta.delays (nawet routes=0), brak profili albo brak meta = ok', () => {
+  const withDelays = meta({ delays: { routes: 0, routesTotal: 100, keys: 0, updated: null, source: 'gtfsrt' } });
+  assert.equal(gate(withDelays, meta(), { delaysProfiles: true }).level, 'ok');
+  assert.equal(gate(meta(), meta(), { delaysProfiles: false }).level, 'ok');
+  assert.equal(gate(meta(), meta()).level, 'ok');
+  assert.equal(gate(null, meta(), { delaysProfiles: true }).level, 'ok');
+});
+
+test('profile opóźnień: nigdy blokada, także z innym ostrzeżeniem lub blokującym spadkiem', () => {
+  const base = meta();
+  const r = gate(withDays(base, { workday: day(8500) }), base, { delaysProfiles: true });
+  assert.equal(r.level, 'warn');
+  assert.equal(r.findings.length, 2);
+  assert.ok(r.findings.every(f => f.startsWith('OSTRZEŻENIE')));
+  // przy prawdziwej blokadzie notatka o delays pozostaje ostrzeżeniem
+  const b = gate(withDays(base, { workday: day(6500) }), base, { delaysProfiles: true });
+  assert.equal(b.level, 'block');
+  assert.ok(b.findings.some(f => f.startsWith('OSTRZEŻENIE') && f.includes('build-delays.mjs')));
+});
+
+test('hasDelayProfiles: {} i brak pliku = false, profile = true (mały i duży plik)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delays-'));
+  const f = (name, txt) => { const p = path.join(dir, name); fs.writeFileSync(p, txt); return p; };
+  assert.equal(hasDelayProfiles(path.join(dir, 'nie-ma.json')), false);
+  assert.equal(hasDelayProfiles(f('a.json', '{}')), false);
+  assert.equal(hasDelayProfiles(f('b.json', '{ }\n')), false);
+  assert.equal(hasDelayProfiles(f('c.json', '{"100|0|16":900}')), true);
+  assert.equal(hasDelayProfiles(f('d.json', JSON.stringify(Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`${i}|0|16`, 60]))))), true);
+  assert.equal(hasDelayProfiles(f('e.json', 'nie json')), false);
+});
+
+test('run: miasto z delays.json i meta bez delays trafia do warned także bez baseline', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delays-run-'));
+  fs.mkdirSync(path.join(dir, 'data', 'x'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'data', 'cities.json'), JSON.stringify({ x: { name: 'Xowo' } }));
+  fs.writeFileSync(path.join(dir, 'data', 'x', 'meta.json'), JSON.stringify(meta()));
+  fs.writeFileSync(path.join(dir, 'data', 'x', 'delays.json'), '{"100|0|16":900}');
+  const r = run(['--baseline-dir', path.join(dir, 'nie-ma')], { root: dir, today: TODAY });
+  assert.deepEqual(r.gate.warned, ['x']);
+  assert.deepEqual(r.gate.noBaseline, []);
+  assert.deepEqual(r.gate.blocked, []);
+  assert.match(r.out, /build-delays\.mjs/);
+  // pusty delays.json = brak ostrzeżenia
+  fs.writeFileSync(path.join(dir, 'data', 'x', 'delays.json'), '{}');
+  const r2 = run(['--baseline-dir', path.join(dir, 'nie-ma')], { root: dir, today: TODAY });
+  assert.equal(r2.code, 0);
+  assert.deepEqual(r2.gate.noBaseline, ['x']);
 });

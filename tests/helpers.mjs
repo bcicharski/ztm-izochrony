@@ -155,14 +155,23 @@ export function oracleEarliest(g, sources, t0, walk, cautious = false, horizonSe
  * Losowa mała sieć: przystanki na siatce ~500 m, kilka linii o losowych
  * przebiegach, kursy bez wyprzedzania (jeden profil na wzorzec), przesiadki
  * piesze między przystankami bliżej niż 500 m.
+ * Opcja `overtaking`: każdy wzorzec dostaje drugi, szybszy profil (połowa czasów
+ * przejazdu), którym jeździ co trzeci kurs, startujący 60 s później — taki kurs
+ * wyprzedza wcześniej wyjeżdżającego „osobowego".
  */
-export function randomNetSpec(rand, { nStops = 9, nRoutes = 3 } = {}) {
+export function randomNetSpec(rand, { nStops = 9, nRoutes = 3, overtaking = false } = {}) {
   const stops = [];
   for (let i = 0; i < nStops; i++) {
     stops.push({ name: `S${i}`, lat: 50 + Math.floor(i / 3) * 0.0045 + rand() * 0.001, lon: 20 + (i % 3) * 0.007 + rand() * 0.001 });
   }
   const routes = [], patterns = [];
   const types = [3, 0, 2];
+  const withFast = pat => {
+    if (!overtaking) return pat;
+    pat.p.push(pat.p[0].map(d => Math.max(60, Math.round(d / 2))));
+    pat.t = pat.t.map(([s], i) => (i % 3 === 2 ? [s + 60, 1] : [s, 0]));
+    return pat;
+  };
   for (let r = 0; r < nRoutes; r++) {
     routes.push({ n: `L${r}`, t: types[r % types.length] });
     const len = 3 + Math.floor(rand() * 3);
@@ -171,9 +180,9 @@ export function randomNetSpec(rand, { nStops = 9, nRoutes = 3 } = {}) {
     const deltas = seq.slice(1).map(() => 120 + Math.floor(rand() * 6) * 60);
     const headway = 300 + Math.floor(rand() * 4) * 300;
     const first = 7 * 3600 + Math.floor(rand() * 10) * 60;
-    patterns.push({ r, s: seq, p: [deltas], t: everyN(first, first + 3 * 3600, headway) });
+    patterns.push(withFast({ r, s: seq, p: [deltas], t: everyN(first, first + 3 * 3600, headway) }));
     // kierunek powrotny jako osobny wzorzec tej samej linii
-    patterns.push({ r, s: seq.slice().reverse(), p: [deltas.slice().reverse()], t: everyN(first + 150, first + 150 + 3 * 3600, headway) });
+    patterns.push(withFast({ r, s: seq.slice().reverse(), p: [deltas.slice().reverse()], t: everyN(first + 150, first + 150 + 3 * 3600, headway) }));
   }
   const transfers = [];
   for (let a = 0; a < nStops; a++) {
@@ -184,4 +193,19 @@ export function randomNetSpec(rand, { nStops = 9, nRoutes = 3 } = {}) {
     }
   }
   return { stops, routes, patterns, transfers };
+}
+
+/**
+ * Wzorzec z wyprzedzaniem na linii prostej S0-S1-S2: osobowy (profil 0, 600 s
+ * między przystankami) startuje o 8:00, przyspieszony (profil 1, 240 s)
+ * 2 minuty później, a na S1 odjeżdża wcześniej od osobowego.
+ * Format buildu (profileList/dwellList/trips) — wejście dla buildPatternEntries.
+ */
+export function overtakingBuildPattern() {
+  return {
+    route: 0, stops: [0, 1, 2], flags: [0, 0, 0],
+    profileList: [[600, 600], [240, 240]],
+    dwellList: [[0, 0, 0], [0, 0, 0]],
+    trips: [[8 * 3600, 0], [8 * 3600 + 120, 1]],
+  };
 }

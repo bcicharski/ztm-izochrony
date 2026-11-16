@@ -15,6 +15,23 @@
  */
 
 import { Engine } from './engine.js';
+import { installHandlers, setSink, report, locate } from './diag.js';
+
+// diagnostyka (Z-025): rekordy workera lecą do wątku głównego, który je
+// wrzuca do własnego bufora (i, po zgodzie, wysyła zanonimizowane do GA)
+installHandlers(self);
+setSink(record => postMessage({ type: 'diag', record }));
+
+/** Rekord ze stosem do diagnostyki; użytkownik nadal dostaje sam `message`. */
+function reportError(err, phase) {
+  const m = String(err?.stack ?? '').match(/([^\s()/\\]+\.m?js):(\d+):(\d+)/);
+  report({
+    src: 'worker',
+    msg: err?.message ?? String(err),
+    at: m ? locate(m[1], Number(m[2]), Number(m[3])) : '',
+    ctx: { phase },
+  });
+}
 
 const engine = new Engine({
   createCanvas: (w, h) => new OffscreenCanvas(w, h),
@@ -48,6 +65,7 @@ async function pump() {
       });
       postMessage({ type: 'done', id: job.id });
     } catch (err) {
+      reportError(err, 'compute');
       postMessage({ type: 'error', id: job.id, message: String(err?.message ?? err) });
     }
   }
@@ -61,6 +79,7 @@ onmessage = async e => {
       const ok = await engine.setCity(m.city, m.cfg);
       postMessage({ type: 'city', id: m.id, ok });
     } catch (err) {
+      reportError(err, 'city');
       postMessage({ type: 'city', id: m.id, ok: false, message: String(err?.message ?? err) });
     }
   } else if (m.type === 'compute') {

@@ -20,6 +20,54 @@
   <meta name="twitter:title" content="Dokąd dojadę? — izochrony komunikacji miejskiej">
   <meta name="twitter:description" content="Dokąd dotrzesz komunikacją miejską w 10, 20, 30, 45 lub 60 minut? Mapa dla 18 polskich miast.">
   <meta name="twitter:image" content="https://transport.excelninja.pro/assets/og-image.png">
+  <!-- Diagnostyka błędów (Z-025): działa także gdy js/app.js się nie sparsuje.
+       Rekordy trafiają do window.__diag; moduł js/diag.js przejmuje je po starcie.
+       Nic stąd nie idzie do sieci. -->
+  <script>
+    window.__diag = [];
+    (function () {
+      var clean = function (s) {
+        return String(s == null ? '' : s).replace(/[?#]\S*/g, '').replace(/\d{2}\.\d{4,}/g, '[xx]').slice(0, 200);
+      };
+      var push = function (src, msg, at) {
+        try { if (window.__diag.length < 20) window.__diag.push({ src: src, msg: clean(msg), at: clean(at) }); } catch (e) { /* nic */ }
+      };
+      window.addEventListener('error', function (e) {
+        var file = String(e.filename || '').replace(/[?#].*$/, '').split(/[\\/]/).pop();
+        push('window', e.message || (e.error && e.error.message) || 'error', file ? file + ':' + e.lineno + ':' + e.colno : '');
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        push('promise', (r && r.message) || r || 'rejection', '');
+      });
+      // aplikacja nie wystartowała (np. błąd składni modułu) — powiedz to wprost
+      setTimeout(function () {
+        if (window.__appReady || !window.__diag.length) return;
+        var $ = function (id) { return document.getElementById(id); };
+        var text = 'Dokąd dojadę? — raport diagnostyczny\n' + window.__diag.map(function (r) {
+          return r.src + ' ' + r.at + ' — ' + r.msg;
+        }).join('\n');
+        if ($('status')) $('status').textContent = 'Strona nie uruchomiła się poprawnie — odśwież; szczegóły skopiujesz przyciskiem poniżej';
+        if ($('diagList')) {
+          window.__diag.slice().reverse().forEach(function (r) {
+            var li = document.createElement('li');
+            li.textContent = r.src + ' — ' + r.msg + (r.at ? ' (' + r.at + ')' : '');
+            $('diagList').appendChild(li);
+          });
+        }
+        if ($('diagCount')) $('diagCount').textContent = window.__diag.length;
+        if ($('diagBox')) $('diagBox').hidden = false;
+        if ($('diagCopy')) {
+          $('diagCopy').addEventListener('click', function () {
+            var ta = $('diagText');
+            var show = function () { ta.value = text; ta.hidden = false; ta.focus(); ta.select(); };
+            try { navigator.clipboard.writeText(text).catch(show); } catch (e) { show(); }
+          });
+        }
+      }, 10000);
+    })();
+  </script>
+
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230d0887'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23b83289'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23febd2a'/%3E%3C/svg%3E">
@@ -39,7 +87,14 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-9L3F11T91B');
+    // Adres strony nosi w query współrzędne klikniętego punktu (lat/lon), czyli
+    // lokalizację użytkownika. GA4 domyślnie wysyła page_location z pełnym query
+    // stringiem, więc bez tego nadpisania wyciekałaby ona do Google. Wysyłamy
+    // wyłącznie origin + ścieżkę. page_referrer przycinamy z tego samego powodu.
+    gtag('config', 'G-9L3F11T91B', {
+      page_location: location.origin + location.pathname,
+      page_referrer: document.referrer ? document.referrer.split(/[?#]/)[0] : undefined,
+    });
     window.loadGA = () => {
       if (document.getElementById('gaScript')) return;
       const s = document.createElement('script');
@@ -53,6 +108,15 @@
 </head>
 <body>
   <div id="map"></div>
+
+  <div class="consent" id="consentBar" role="region" aria-label="Zgoda na pliki cookie" hidden>
+    <p>Strona korzysta z Google Analytics (anonimowe statystyki) oraz reklam
+      Google — pliki cookie zapisywane tylko po zgodzie.</p>
+    <div class="consent-actions">
+      <button id="consentYes">Zgoda</button>
+      <button id="consentNo" class="secondary">Nie, dziękuję</button>
+    </div>
+  </div>
 
   <main class="panel" id="panel">
     <header class="panel-header">
@@ -74,18 +138,20 @@
 
       <div class="search-row">
         <span class="dot dot-a" aria-hidden="true"></span>
-        <input id="searchInput" type="search" placeholder="Adres punktu (Enter)…"
+        <input id="searchInput" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="searchResults" placeholder="Adres punktu (Enter)…"
                aria-label="Szukaj adresu punktu" autocomplete="off">
         <button id="locateBtn" title="Użyj mojej lokalizacji" aria-label="Użyj mojej lokalizacji">⌖</button>
       </div>
       <ul class="search-results" id="searchResults" role="listbox" aria-label="Wyniki wyszukiwania" hidden></ul>
+      <p class="hint" id="searchStatus" role="status"></p>
 
       <div class="search-row" id="searchRow2" hidden>
         <span class="dot dot-b" aria-hidden="true"></span>
-        <input id="searchInput2" type="search" placeholder="Adres drugiego punktu (Enter)…"
+        <input id="searchInput2" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="searchResults2" placeholder="Adres drugiego punktu (Enter)…"
                aria-label="Szukaj adresu drugiego punktu" autocomplete="off">
       </div>
       <ul class="search-results" id="searchResults2" role="listbox" aria-label="Wyniki wyszukiwania drugiego punktu" hidden></ul>
+      <p class="hint" id="searchStatus2" role="status"></p>
 
       <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
       <p class="warn" id="dataWarn" role="alert" hidden></p>
@@ -116,6 +182,7 @@
             <option value="sunday">niedziela</option>
           </select>
         </div>
+        <p class="hint" id="dayNote" role="status"></p>
       </fieldset>
 
       <fieldset class="control">
@@ -144,6 +211,7 @@
           <span class="track" aria-hidden="true"></span>
           <span>Tryb ostrożny (margines)</span>
         </label>
+        <p class="hint" id="safeNote" role="status"></p>
       </fieldset>
 
       <div class="legend" aria-label="Legenda stref czasowych">
@@ -174,6 +242,19 @@
       </div>
 
       <p class="status" id="status" role="status"></p>
+
+      <section class="diag" id="diagBox" role="group" aria-labelledby="diagTitle" hidden>
+        <h2 id="diagTitle">Coś nie zadziałało</h2>
+        <p>Strona napotkała błąd. Odśwież ją albo skopiuj raport i dołącz go do zgłoszenia —
+          raport nie zawiera współrzędnych ani wpisanego tekstu.</p>
+        <details>
+          <summary>Szczegóły (<span id="diagCount">0</span>)</summary>
+          <ol class="diag-list" id="diagList"></ol>
+        </details>
+        <button type="button" id="diagCopy">Kopiuj raport diagnostyczny</button>
+        <textarea class="diag-text" id="diagText" readonly hidden rows="6"
+                  aria-label="Raport diagnostyczny do skopiowania"></textarea>
+      </section>
       <button class="share-btn" id="shareBtn">Kopiuj link do tego widoku</button>
       <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
         ☕ Podoba się? Postaw kawę
@@ -191,8 +272,9 @@
 
       <footer class="credits">
         Dane: <span id="creditsLinks">…</span>
-        · rozkład z dnia <span id="feedDate">…</span>
+        · rozkład z dnia <span id="feedDate">…</span><span id="feedDateNote"></span>
         · ważny do <span id="feedEnd">…</span>
+        <span id="delayCoverageRow" hidden>· profile opóźnień: <span id="delayCoverage"></span></span>
         · kontakt: <a href="mailto:Bartosz@excelninja.pro">Bartosz@excelninja.pro</a>
       </footer>
     </div>
@@ -282,10 +364,13 @@
         <strong>Tryb ostrożny</strong> dodaje margines bezpieczeństwa:
         na każdą przesiadkę rezerwuje co najmniej 4 minuty (zamiast 1),
         a czasy jazdy wydłuża zależnie od środka transportu. Tam, gdzie zebraliśmy
-        już dość pomiarów z danych na żywo, zamiast tego szacunku używane jest
-        <strong>rzeczywiste typowe opóźnienie</strong> danej linii o danej porze
-        (wartość, w której mieści się 80% kursów). Baza pomiarów rośnie z każdym
-        dniem, więc wyniki będą coraz wierniejsze.</p>
+        już dość pomiarów, zamiast tego szacunku używane jest
+        <strong>typowe opóźnienie</strong> danej linii o danej porze
+        (wartość, w której mieści się 80% kursów). To statystyka z pomiarów
+        zbieranych co kilkanaście minut i uśrednianych w czasie, a nie podgląd
+        bieżących kursów. Stopka panelu podaje, dla ilu linii takie pomiary już
+        są. Baza rośnie z każdym dniem, więc wyniki będą coraz wierniejsze.
+        W kierunku „Do miejsca" zawsze używany jest szacunek.</p>
 
       <h3>Strefy na mapie</h3>
       <p>Kolory od ciepłych (blisko) do chłodnych (daleko): do 10, 10–20, 20–30,
@@ -318,14 +403,6 @@
     </div>
   </dialog>
 
-  <div class="consent" id="consentBar" hidden>
-    <p>Strona korzysta z Google Analytics (anonimowe statystyki) oraz reklam
-      Google — pliki cookie zapisywane tylko po zgodzie.</p>
-    <div class="consent-actions">
-      <button id="consentYes">Zgoda</button>
-      <button id="consentNo" class="secondary">Nie, dziękuję</button>
-    </div>
-  </div>
   <script>
     // ładuje skrypt i jednostkę AdSense — wyłącznie po zgodzie; do tego momentu
     // przeglądarka nie łączy się z googlesyndication.com

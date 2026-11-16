@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeReachability, findAccessStops } from '../js/router.js';
-import { REV_C } from '../js/data.js';
-import { makeNet, everyN, oracleEarliest, randomNetSpec, rng } from './helpers.mjs';
+import { REV_C, buildPatternEntries } from '../js/data.js';
+import { makeNet, everyN, oracleEarliest, randomNetSpec, rng, overtakingBuildPattern } from './helpers.mjs';
 
 // przystanki co ~500 m wzdłuż jednej linii (lat rośnie na północ)
 const line = n => Array.from({ length: n }, (_, i) => ({ name: `S${i}`, lat: 50 + i * 0.0045, lon: 20 }));
@@ -181,6 +181,90 @@ test('kierunek „do miejsca" = wyrocznia na sieci odwróconej', () => {
       for (let i = 0; i < g.nStops; i++) {
         assert.ok(Math.abs(r.minutes[i] * 60 - expect[i]) < 1e-6 || (r.minutes[i] === Infinity && expect[i] === Infinity),
           `seed ${seed} walk=${walk} stop ${i}: ${r.minutes[i] * 60} vs ${expect[i]}`);
+      }
+    }
+  }
+});
+
+// --- wyprzedzanie kursów (Z-005) ------------------------------------------------
+
+/** Linia S0-S1-S2 z wzorcem wyprzedzającym; split = rozbicie jak w buildzie. */
+function overtakingNet({ split, forceBinary = false }) {
+  const entries = split
+    ? buildPatternEntries(overtakingBuildPattern())
+    : [{ r: 0, s: [0, 1, 2], p: [[600, 600], [240, 240]], t: [[H8, 0], [H8 + 120, 1]] }];
+  const net = makeNet({ stops: line(3), routes: [{ n: '1', t: 3 }], patterns: entries });
+  if (forceBinary) {
+    // symulacja starego zachowania: wyszukiwanie binarne mimo wyprzedzania
+    for (const p of net.patterns) p.monotone = true;
+    for (const p of net.reversed.patterns) p.monotone = true;
+  }
+  return net;
+}
+
+/** Wynik RAPTOR-a (sekundy) i wyrocznia dla jednego zapytania. */
+function overtakingRun(net, direction) {
+  const o = direction === 'to'
+    ? opts({ lat: 50 + 2 * 0.0045, direction: 'to', timeMin: 510 })
+    : opts({ lat: 50 + 0.0045, timeMin: 480 });
+  const r = computeReachability(net, o);
+  const g = direction === 'to' ? net.reversed : net;
+  const sources = findAccessStops(g, o.lat, o.lon, false);
+  const t0 = direction === 'to' ? REV_C - o.timeMin * 60 : o.timeMin * 60;
+  return { got: [...r.minutes].map(m => m * 60), expect: [...oracleEarliest(g, sources, t0, false)] };
+}
+
+test('wyprzedzanie: po rozbiciu wzorca RAPTOR = wyrocznia (do i od miejsca)', () => {
+  for (const direction of ['from', 'to']) {
+    const net = overtakingNet({ split: true });
+    assert.equal(net.overtakingPatterns, 0);
+    assert.equal(net.reversed.patterns.every(p => p.monotone), true);
+    const { got, expect } = overtakingRun(net, direction);
+    assert.ok(expect.some(x => x > 0 && x < Infinity), 'wyrocznia coś znajduje');
+    assert.deepEqual(got, expect, direction);
+  }
+});
+
+test('wyprzedzanie: bez rozbicia skan daje wynik poprawny, a wyszukiwanie binarne nigdy optymistyczny', () => {
+  for (const direction of ['from', 'to']) {
+    // skan liniowy (flaga monotone === false)
+    const scan = overtakingNet({ split: false });
+    assert.equal(scan.overtakingPatterns, 1);
+    const s = overtakingRun(scan, direction);
+    s.expect.forEach((e, i) => assert.ok(s.got[i] >= e && (s.got[i] < Infinity) === (e < Infinity), `skan ${direction} stop ${i}: ${s.got[i]} vs ${e}`));
+    // wymuszone wyszukiwanie binarne: tylko pesymistyczne, ale skończone tam, gdzie wyrocznia
+    const bin = overtakingNet({ split: false, forceBinary: true });
+    const b = overtakingRun(bin, direction);
+    let worse = 0;
+    b.expect.forEach((e, i) => {
+      assert.ok(b.got[i] >= e, `binarne ${direction} stop ${i}: ${b.got[i]} < optimum ${e}`);
+      assert.equal(b.got[i] < Infinity, e < Infinity);
+      if (b.got[i] > e) worse++;
+    });
+    if (direction === 'from') assert.ok(worse > 0, 'scenariusz faktycznie pokazuje pesymizm wyszukiwania binarnego');
+  }
+});
+
+test('wyprzedzanie: losowe sieci z wyprzedzaniem — wynik ≥ wyrocznia, a po rozbiciu równy', () => {
+  const rand = rng(99);
+  for (let seed = 0; seed < 20; seed++) {
+    const spec = randomNetSpec(rand, { overtaking: true });
+    const origin = { lat: 50 + rand() * 0.01, lon: 20 + rand() * 0.015 };
+    // wersja z rozbiciem: każdy wzorzec przepuszczony przez buildPatternEntries
+    const splitSpec = {
+      ...spec,
+      patterns: spec.patterns.flatMap(p => buildPatternEntries({
+        route: p.r, stops: p.s, flags: p.s.map(() => 0),
+        profileList: p.p, dwellList: p.p.map(() => p.s.map(() => 0)), trips: p.t.slice().sort((a, b) => a[0] - b[0]),
+      })),
+    };
+    for (const [label, net] of [['skan', makeNet(spec)], ['rozbite', makeNet(splitSpec)]]) {
+      const r = computeReachability(net, opts({ ...origin, walk: true }));
+      const expect = oracleEarliest(net, findAccessStops(net, origin.lat, origin.lon, true), 480 * 60, true);
+      for (let i = 0; i < net.nStops; i++) {
+        const got = r.minutes[i] * 60;
+        assert.ok(got >= expect[i] - 1e-6, `seed ${seed} ${label} stop ${i}: ${got} < ${expect[i]}`);
+        if (label === 'rozbite') assert.ok(Math.abs(got - expect[i]) < 1e-6 || got === expect[i], `seed ${seed} rozbite stop ${i}: ${got} vs ${expect[i]}`);
       }
     }
   }

@@ -7,6 +7,14 @@ import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, d
 import { BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion } from './map.js';
 import { Engine } from './engine.js';
+import { dayDataNotice } from './calendar.js';
+import { report, records, setSink, installHandlers, formatReport, locate } from './diag.js';
+import { delayCoverage } from './data.js';
+
+// Diagnostyka (Z-025): handlery od razu, a rekordy złapane przez skrypt
+// w <head> (zanim moduł się wczytał) przejmujemy do bufora modułu.
+installHandlers(window);
+for (const r of window.__diag ?? []) report({ src: r.src, msg: r.msg, at: r.at });
 
 let CITIES;
 try {
@@ -21,8 +29,33 @@ const DEFAULT_CITY = 'trojmiasto';
 
 // --- stan domyślny: „gdybym wyszedł teraz" -----------------------------------
 
-const now = new Date();
-const todayDay = now.getDay() === 0 ? 'sunday' : now.getDay() === 6 ? 'saturday' : 'workday';
+/**
+ * „Teraz" w strefie Europe/Warsaw (nie przeglądarki): data yyyymmdd, minuty od
+ * północy i dzień tygodnia (0 = niedziela). Rozkład jest polski, więc turysta
+ * z innej strefy też ma dostać dzisiejszy typ dnia i godzinę w Polsce.
+ */
+function warsawNow() {
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short',
+    }).formatToParts(new Date()).map(x => [x.type, x.value]));
+    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday);
+    if (weekday < 0) throw new Error('weekday');
+    return { ymd: `${p.year}${p.month}${p.day}`, minutes: +p.hour * 60 + +p.minute, weekday };
+  } catch {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return {
+      ymd: `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`,
+      minutes: d.getHours() * 60 + d.getMinutes(),
+      weekday: d.getDay(),
+    };
+  }
+}
+
+const now = warsawNow();
+const todayDay = now.weekday === 0 ? 'sunday' : now.weekday === 6 ? 'saturday' : 'workday';
 
 const state = {
   city: DEFAULT_CITY,
@@ -33,7 +66,7 @@ const state = {
   walk: true,
   access: 'foot', // 'foot' | 'bike' (zostaje na przystanku) | 'bike-onboard'
   mode: 'time',
-  timeMin: now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5,
+  timeMin: Math.floor(now.minutes / 5) * 5,
   day: todayDay,
   stats: false,
   safe: false,   // tryb ostrożny: margines na opóźnienia
@@ -65,6 +98,7 @@ const isWalkOnly = () => cityCfg().veh.every(g => !state.veh[g.key]);
 // --- stan z adresu URL (linki do udostępniania) -----------------------------
 
 let pointFromUrl = false;
+let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dnia
 {
   const q = new URLSearchParams(location.search);
   if (CITIES[q.get('city')]) state.city = q.get('city');
@@ -86,7 +120,7 @@ let pointFromUrl = false;
   if (q.get('mode') === 'general') state.mode = 'general';
   const t = q.get('t')?.match(/^(\d{1,2}):(\d{2})$/);
   if (t) state.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
-  if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) state.day = q.get('day');
+  if (['workday', 'saturday', 'sunday'].includes(q.get('day'))) { state.day = q.get('day'); dayFromUrl = true; }
   if (q.get('st') === '1') state.stats = true;
   if (q.get('safe') === '1') state.safe = true;
   const veh = q.get('veh');
@@ -180,7 +214,7 @@ for (const el of document.querySelectorAll('input[name="appmode"]')) {
   });
 }
 for (const el of document.querySelectorAll('input[name="direction"]')) {
-  el.addEventListener('change', () => { state.direction = el.value; recompute(); });
+  el.addEventListener('change', () => { state.direction = el.value; renderSafeNote(); recompute(); });
 }
 for (const el of document.querySelectorAll('input[name="mode"]')) {
   el.addEventListener('change', () => {
@@ -237,7 +271,7 @@ function syncWalkToggle() {
   sel.disabled = walkOnly || !state.walk;
 }
 
-$('safeToggle').addEventListener('change', e => { state.safe = e.target.checked; recompute(); });
+$('safeToggle').addEventListener('change', e => { state.safe = e.target.checked; renderSafeNote(); recompute(); });
 $('statsToggle').addEventListener('change', e => {
   state.stats = e.target.checked;
   syncModeUi();
@@ -247,12 +281,17 @@ $('timeInput').addEventListener('change', e => {
   const [h, m] = e.target.value.split(':').map(Number);
   if (!Number.isNaN(h)) { state.timeMin = h * 60 + m; recompute(); }
 });
-$('daySelect').addEventListener('change', e => { state.day = e.target.value; recompute(); });
+$('daySelect').addEventListener('change', e => { state.day = e.target.value; renderDayInfo(); recompute(); });
 
 /** Dostosowuje panel do trybu: pola punktu B, statystyki, podpowiedź, znacznik. */
 function syncModeUi() {
   $('searchRow2').hidden = !state.compare;
-  if (!state.compare) $('searchResults2').hidden = true;
+  if (!state.compare) {
+    $('searchResults2').hidden = true;
+    $('searchStatus2').textContent = '';
+    $('searchInput2').setAttribute('aria-expanded', 'false');
+    $('searchInput2').removeAttribute('aria-activedescendant');
+  }
   $('statsToggleRow').hidden = state.compare;
   $('statsBox').hidden = state.compare || !state.stats;
   $('hint').innerHTML = (state.compare
@@ -277,18 +316,31 @@ async function searchAddress(query) {
   return r.json();
 }
 
+/** Stabilny, unikalny w obrębie listy `id` opcji wyniku (aria-activedescendant). */
+export const optionId = (listId, i) => `${listId}-opt-${i}`;
+
 /**
  * Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników.
  * Klawiatura: Enter szuka (albo wybiera podświetlony wynik), ↑/↓ przesuwają
  * podświetlenie, Escape zamyka listę; klik poza listą też ją zamyka.
  */
-function attachSearch(inputId, listId, onPick) {
+function attachSearch(inputId, listId, statusId, onPick) {
   const input = $(inputId), ul = $(listId);
   let rows = []; // [{li, latlng}]
   let active = -1;
-  const hide = () => { ul.hidden = true; active = -1; };
+  // komunikat „brak wyników" żyje poza listboxem (li.empty nie byłby poprawnym dzieckiem)
+  const status = $(statusId);
+  const hide = () => {
+    ul.hidden = true;
+    status.textContent = '';
+    active = -1;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  };
   const highlight = i => {
     active = i;
+    if (i >= 0) input.setAttribute('aria-activedescendant', rows[i].li.id);
+    else input.removeAttribute('aria-activedescendant');
     rows.forEach((r, k) => {
       r.li.classList.toggle('active', k === i);
       r.li.setAttribute('aria-selected', String(k === i));
@@ -304,19 +356,23 @@ function attachSearch(inputId, listId, onPick) {
   };
   const showResults = items => {
     ul.innerHTML = '';
-    ul.hidden = false;
     rows = [];
     active = -1;
+    input.removeAttribute('aria-activedescendant');
     if (!items.length) {
-      const li = document.createElement('li');
-      li.className = 'empty';
-      li.textContent = 'Nie znaleziono — spróbuj doprecyzować.';
-      ul.appendChild(li);
+      ul.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      status.textContent = 'Nie znaleziono — spróbuj doprecyzować.';
       return;
     }
+    status.textContent = '';
+    ul.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
     items.forEach((item, i) => {
       const li = document.createElement('li');
+      li.id = optionId(listId, i);
       li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
       li.textContent = item.display_name.split(', ').slice(0, 4).join(', ');
       li.addEventListener('click', () => pick(i));
       ul.appendChild(li);
@@ -351,8 +407,8 @@ function attachSearch(inputId, listId, onPick) {
   });
 }
 
-attachSearch('searchInput', 'searchResults', latlng => setPoint(latlng, true));
-attachSearch('searchInput2', 'searchResults2', latlng => setPoint2(latlng, true));
+attachSearch('searchInput', 'searchResults', 'searchStatus', latlng => setPoint(latlng, true));
+attachSearch('searchInput2', 'searchResults2', 'searchStatus2', latlng => setPoint2(latlng, true));
 
 $('locateBtn').addEventListener('click', () => {
   if (!navigator.geolocation) {
@@ -394,6 +450,18 @@ $('collapseBtn').addEventListener('click', () => {
   $('collapseBtn').textContent = collapsed ? '+' : '−';
   $('collapseBtn').setAttribute('aria-expanded', String(!collapsed));
 });
+
+// wysokość panelu -> --panel-h (offset zoomu i atrybucji na mobile); observer
+// odpala się od razu po observe i łapie zwinięcie, zmianę treści, obrót ekranu
+if (typeof ResizeObserver !== 'undefined') {
+  let lastPanelH = -1;
+  new ResizeObserver(() => {
+    const h = Math.round($('panel').offsetHeight);
+    if (h === lastPanelH) return;
+    lastPanelH = h;
+    document.documentElement.style.setProperty('--panel-h', h + 'px');
+  }).observe($('panel'));
+}
 
 // --- legenda (zawsze widoczna, kompaktowa) -----------------------------------
 
@@ -489,6 +557,7 @@ function createWorkerClient() {
   worker.onmessage = e => {
     const m = e.data;
     if (m.type === 'walknet') { client.onWalkNet?.(m.city); return; }
+    if (m.type === 'diag') { report(m.record); return; } // bez id — przed pending.get
     const p = pending.get(m.id);
     if (!p) return;
     if (m.type === 'result') { p.onPhase(m); return; }
@@ -502,6 +571,7 @@ function createWorkerClient() {
     // worker padł (np. brak pliku, błąd modułu) — wszystkie oczekujące
     // wywołania kończą się błędem, a UI przełącza się na wątek główny
     console.error('Worker:', err.message ?? err);
+    report({ src: 'worker', msg: err.message ?? 'błąd workera', at: locate(err.filename, err.lineno, err.colno) });
     for (const p of pending.values()) p.reject(new Error('Worker: ' + (err.message ?? 'błąd')));
     pending.clear();
     client.broken = true;
@@ -566,7 +636,10 @@ const HHMM = s => {
   const d = ((Math.floor(s) % 86400) + 86400) % 86400;
   return `${String(Math.floor(d / 3600)).padStart(2, '0')}:${String(Math.floor(d / 60) % 60).padStart(2, '0')}`;
 };
-const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+/** Escapuje tekst do HTML (węzeł tekstowy i atrybut). `&` musi być pierwszy. */
+const esc = t => String(t)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
 /**
@@ -637,7 +710,7 @@ function journeyHeader(totalMin) {
 
 /** HTML dymka z wyniku `Engine.journey`. */
 function journeyHtml(j) {
-  const unreach = why => `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${why}</span></div>`;
+  const unreach = why => `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${esc(why)}</span></div>`;
   if (j.kind === 'walkOnly') {
     // tryb „tylko pieszo": brak przystanków i etapów, czas wprost z fali po lądzie
     if (j.sec == null || j.sec / 60 > 90) return unreach(j.why ?? 'Spacer zająłby ponad 90 minut.');
@@ -735,16 +808,63 @@ async function recompute() {
 
 function renderCredits() {
   $('creditsLinks').innerHTML = cityCfg().credits
-    .map(c => `<a href="${c.url}" target="_blank" rel="noopener">${c.label}</a>`)
+    .map(c => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.label)}</a>`)
     .join(' · ');
 }
 
 const fmtDate = d => (d && /^\d{8}$/.test(d) ? `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}` : null);
 
-/** Dzisiejsza data lokalna jako yyyymmdd — do porównania z datami z meta.json. */
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+/** Dzisiejsza data (Europa/Warszawa) jako yyyymmdd — do porównania z datami z meta.json. */
+const todayKey = () => warsawNow().ymd;
+
+let cityMeta = null;       // meta bieżącego miasta (null: brak albo jeszcze się wczytuje)
+let cityMetaReady = false; // applyMeta już zadziałało dla bieżącego miasta
+
+/**
+ * Stopka (data wybranego typu dnia, dopisek o reżimie) i komunikat #dayNote.
+ * Wołana z applyMeta i przy zmianie typu dnia — bez ponownego pobierania meta.
+ * Domyślny typ dnia zostaje po dniu tygodnia; w święto tylko proponujemy
+ * przełączenie na niedzielę (nie przy ?day= w adresie).
+ */
+function renderDayInfo() {
+  if (!cityMetaReady) return;
+  const today = warsawNow();
+  const n = dayDataNotice(cityMeta, state.day, today.ymd);
+  $('feedDate').textContent = fmtDate(n.date) ?? '—';
+  $('feedDateNote').textContent = n.regime === 'summer' ? ' (rozkład wakacyjny)' : '';
+
+  const parts = [];
+  let offerSunday = false;
+  if (n.todayHoliday && !dayFromUrl && state.day === 'workday' && todayDay === 'workday') {
+    if (n.todayShortened) {
+      parts.push(`Dziś ${n.todayHoliday} — komunikacja jedzie rozkładem skróconym, wyniki dla dnia roboczego mogą odbiegać.`);
+    } else {
+      parts.push(`Dziś święto (${n.todayHoliday}) — komunikacja jedzie zwykle rozkładem niedzielnym.`);
+      offerSunday = true;
+    }
+  }
+  if (n.regimeMismatch) {
+    const d = fmtDate(n.date)?.slice(0, 5);
+    parts.push(n.regime === 'summer'
+      ? `Rozkład pochodzi z okresu wakacyjnego${d ? ` (${d})` : ''} — w ciągu roku szkolnego kursów jest więcej.`
+      : `Rozkład pochodzi z roku szkolnego${d ? ` (${d})` : ''} — w wakacje kursów jest mniej.`);
+  }
+  if (n.holiday) parts.push(`Rozkład z dnia świątecznego (${n.holiday}) — może odbiegać od zwykłego.`);
+
+  const note = $('dayNote');
+  note.textContent = parts.join(' ');
+  if (offerSunday) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Pokaż niedzielę';
+    btn.addEventListener('click', () => {
+      state.day = 'sunday';
+      $('daySelect').value = 'sunday';
+      renderDayInfo();
+      recompute();
+    });
+    note.append(' ', btn);
+  }
 }
 
 /**
@@ -757,7 +877,6 @@ function todayKey() {
  */
 function applyMeta(meta) {
   const dates = meta?.dates ?? {};
-  $('feedDate').textContent = fmtDate(dates.workday) ?? '—';
   const end = fmtDate(meta?.feedEndDate);
   $('feedEnd').textContent = end ?? '—';
 
@@ -776,6 +895,50 @@ function applyMeta(meta) {
     state.day = available.includes('workday') ? 'workday' : available[0];
     sel.value = state.day;
   }
+  cityMeta = meta;
+  cityMetaReady = true;
+  renderDayInfo();
+  renderDelayCoverage();
+}
+
+/** Stan pokrycia profilami opóźnień bieżącego miasta (kontrakt: delayCoverage w data.js). */
+const coverage = () => delayCoverage(cityMeta, cityCfg());
+
+/**
+ * Stopka: ile linii ma profile opóźnień. Ułamek „N z M", nigdy procent —
+ * przy feedach zbiorczych M obejmuje też koleje. Stan `unknown` (stare meta.json
+ * bez pola): wpis ukryty, stopka wygląda jak dawniej.
+ */
+function renderDelayCoverage() {
+  const c = coverage();
+  const text = {
+    profiles: () => {
+      const n = c.routesTotal == null ? `${c.routes} linii` : `${c.routes} z ${c.routesTotal} linii`;
+      const d = fmtDate(c.updated);
+      return d ? `${n} (pomiary do ${d})` : n;
+    },
+    collecting: () => 'zbieramy pomiary',
+    none: () => 'brak — margines szacunkowy',
+  }[c.state]?.() ?? '';
+  $('delayCoverage').textContent = text;
+  $('delayCoverageRow').hidden = !text;
+  renderSafeNote();
+}
+
+/**
+ * Podpowiedź pod przełącznikiem trybu ostrożnego (tylko gdy włączony). Przy
+ * stanie `unknown` milczy o pokryciu. Kierunek „do miejsca" dostaje zawsze
+ * szacunek — router.js wyłącza profile dla direction === 'to'.
+ */
+function renderSafeNote() {
+  const parts = [];
+  if (state.safe) {
+    const c = coverage();
+    if (c.state === 'profiles') parts.push(`Margines z pomiarów dla ${c.routes} linii; dla pozostałych szacunek.`);
+    else if (c.state !== 'unknown') parts.push('Margines szacunkowy — dla tego miasta nie mamy jeszcze pomiarów.');
+    if (state.direction === 'to') parts.push('W kierunku „do miejsca" zawsze używany jest szacunek.');
+  }
+  $('safeNote').textContent = parts.join(' ');
 }
 
 /**
@@ -789,7 +952,13 @@ async function loadCityAssets() {
   $('areaHead').textContent = cityCfg().areaLabel;
   renderCredits();
   renderVehControls();
+  cityMeta = null;
+  cityMetaReady = false;
   $('feedDate').textContent = '…';
+  $('feedDateNote').textContent = '';
+  $('dayNote').textContent = '';
+  $('delayCoverage').textContent = '';
+  $('delayCoverageRow').hidden = true;
   $('feedEnd').textContent = '…';
   $('status').textContent = 'Wczytuję dane miasta…';
 
@@ -803,6 +972,7 @@ async function loadCityAssets() {
     if (!ok || state.city !== key) return;
   } catch (err) {
     console.error(err);
+    report({ src: 'app', msg: err?.message ?? String(err), ctx: { phase: 'city' } });
     if (state.city === key) $('status').textContent = 'Błąd wczytywania danych miasta.';
     return;
   }
@@ -863,8 +1033,82 @@ $('daySelect').value = state.day;
 $('statsToggle').checked = state.stats;
 $('safeToggle').checked = state.safe;
 syncModeUi();
+renderSafeNote();
 // animate:false — animowany zoom bywa przerywany przez invalidateSize
 // z ResizeObservera przy starcie i widok zostawał na zoomie domyślnym
 if (pointFromUrl) map.setView(state.point, 13, { animate: false });
 
 loadCityAssets(); // samo uruchamia przeliczenie po wczytaniu geometrii
+
+// --- diagnostyka błędów (Z-025) ----------------------------------------------
+
+// ?diag=1 pokazuje blok od razu (pusty); parametr nie trafia do updateUrl
+const diagForced = new URLSearchParams(location.search).get('diag') === '1';
+let diagShown = false;
+
+/** Rysuje blok diagnostyki; odsłania go przy pierwszym rekordzie spoza `data` albo przy ?diag=1. */
+function renderDiag() {
+  const recs = records();
+  if (!diagShown && (diagForced || recs.some(r => r.src !== 'data'))) {
+    diagShown = true;
+    $('diagBox').hidden = false;
+  }
+  if (!diagShown) return;
+  $('diagCount').textContent = recs.length;
+  const list = $('diagList');
+  list.replaceChildren(...recs.reverse().map(r => {
+    const li = document.createElement('li');
+    li.textContent = `${r.src}${r.n > 1 ? ` ×${r.n}` : ''} — ${r.msg}${r.at ? ` (${r.at})` : ''}`;
+    return li;
+  }));
+}
+
+const gaSent = new Set(); // klucze rekordów już wysłanych do GA (max 1 zdarzenie na klucz)
+const GA_MAX_EVENTS = 5;  // limit zdarzeń app_error na sesję
+
+/**
+ * Zanonimizowany rekord → GA. Zgodę sprawdzamy przy KAŻDYM zdarzeniu (bez cache)
+ * i nigdy nie kolejkujemy zdarzenia w gtag przed zgodą: dataLayer zachowuje wpisy i po
+ * późniejszym loadGA() zostałyby wysłane. Rekordy sprzed zgody żyją tylko w buforze.
+ * Do GA nie idą współrzędne, wpisany tekst, pełny URL ani user agent.
+ */
+function sendDiagToGA(rec) {
+  try {
+    if (window.consentGet?.() === 'granted' && typeof window.gtag === 'function') {
+      const key = `${rec.src}|${rec.msg}|${rec.at}`;
+      if (gaSent.has(key) || gaSent.size >= GA_MAX_EVENTS) return;
+      gaSent.add(key);
+      window.gtag('event', 'app_error', {
+        error_source: rec.src,
+        error_message: rec.msg.slice(0, 100),
+        error_where: rec.at,
+        error_phase: rec.ctx?.phase ?? '',
+        app_city: state.city,
+        app_engine: engine.kind,
+      });
+    }
+  } catch { /* diagnostyka nie może psuć strony */ }
+}
+
+setSink(rec => { renderDiag(); sendDiagToGA(rec); });
+renderDiag();
+for (const r of records()) sendDiagToGA(r); // rekordy sprzed startu modułu (zgoda sprawdzana osobno)
+
+$('diagCopy').addEventListener('click', async () => {
+  const btn = $('diagCopy');
+  const text = formatReport({ city: state.city, day: state.day, mode: state.mode, engine: engine.kind });
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = 'Skopiowano ✓';
+  } catch {
+    // ostateczność: pokaż tekst do ręcznego skopiowania
+    const ta = $('diagText');
+    ta.value = text;
+    ta.hidden = false;
+    ta.focus();
+    ta.select();
+  }
+  setTimeout(() => { btn.textContent = 'Kopiuj raport diagnostyczny'; }, 2000);
+});
+
+window.__appReady = true; // skrypt w <head> nie pokaże komunikatu o niedziałającej stronie

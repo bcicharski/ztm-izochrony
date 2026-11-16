@@ -67,7 +67,7 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
   4 min (zamiast 1) i czasy jazdy +15% autobusy/trolejbusy, +5% tramwaje,
   +2% kolej/metro; URL `safe=1`. Docelowo zastąpią go rzeczywiste profile
   opóźnień: workflow `collect-delays.yml` zbiera co ~15 min obserwacje
-  (Trójmiasto: estymacje ZTM Gdańsk; Kraków: GTFS-RT TripUpdates autobusów)
+  (Trójmiasto: estymacje ZTM Gdańsk; Kraków i Poznań: GTFS-RT TripUpdates)
   i agreguje je per linia × typ dnia × godzina (n, suma, histogram 6 kubełków)
   na gałęzi `delays` — po kilku tygodniach dane wepniemy w silnik.
 

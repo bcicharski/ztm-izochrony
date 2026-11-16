@@ -46,6 +46,7 @@ export const GATE = {
   outsideShareWarn: 0.02,       // udział przystanków poza siatką pieszą
   outsideShareRiseWarn: 0.005,  // albo wzrost o ≥0,5 pp
   valveDays: WARN_DAYS,         // zawór: stary rozkład wygasa w ≤ tylu dniach
+  delaysParseMaxBytes: 256,     // delays.json do tylu bajtów parsujemy (odróżnienie `{}`); większy = są profile
 };
 
 const DAYS = ['workday', 'saturday', 'sunday'];
@@ -58,22 +59,46 @@ const pct = x => `${Math.round(x * 1000) / 10}%`;
 const num = n => String(n);
 
 /**
+ * Czy `delays.json` zawiera profile opóźnień. Tanio: puste pliki (`{}`) są małe,
+ * więc tylko plik ≤ GATE.delaysParseMaxBytes jest parsowany; większy zawiera
+ * profile na pewno, bez wczytywania go do pamięci. Brak/uszkodzony plik = false.
+ */
+export function hasDelayProfiles(file) {
+  try {
+    const size = fs.statSync(file).size;
+    if (size > GATE.delaysParseMaxBytes) return true;
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Boolean(data) && typeof data === 'object' && Object.keys(data).length > 0;
+  } catch { return false; }
+}
+
+/**
  * Decyzja bramki dla jednego miasta.
  * @param {string} key  klucz miasta
  * @param {object} cfg  wpis z cities.json (obecnie nieużywany, zostawiony na progi per miasto)
  * @param {object|null} fresh     świeże meta.json
  * @param {object|null} baseline  meta.json z HEAD (null = brak odniesienia)
- * @param {{today?: Date, force?: boolean}} opts
+ * @param {{today?: Date, force?: boolean, delaysProfiles?: boolean}} opts  delaysProfiles: `delays.json` ma profile (stan bieżący, niezależny od baseline)
  * @returns {{level: 'ok'|'warn'|'block', findings: string[], emergency: boolean, noBaseline: boolean, rows: object[]}}
  */
-export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force = false } = {}) {
+export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force = false, delaysProfiles = false } = {}) {
   const res = { level: 'ok', findings: [], emergency: false, noBaseline: false, rows: [] };
+  // stan bieżący (bez baseline): profile opóźnień są, ale meta.json zgubiło pole `delays`
+  // (np. po samodzielnej przebudowie miasta) — front milczałby mimo posiadanych danych; nigdy blokada
+  const delaysNote = fresh && delaysProfiles && !fresh.delays
+    ? `${key}: są profile opóźnień (delays.json), ale w meta.json zniknęły metadane pokrycia (pole delays) — front nie pokaże informacji o opóźnieniach; napraw ponownym uruchomieniem tools/build-delays.mjs`
+    : null;
   // brak odniesienia albo brak metryk po którejś stronie (stary format) = przejście
-  if (!fresh?.counts || !baseline?.counts) { res.noBaseline = true; return res; }
+  if (!fresh?.counts || !baseline?.counts) {
+    res.noBaseline = true;
+    if (delaysNote) { res.findings.push(`OSTRZEŻENIE: ${delaysNote}`); res.level = 'warn'; }
+    return res;
+  }
 
   const found = []; // { sev: 'block'|'warn', hard: bool, text }
   const bc = baseline.counts, fc = fresh.counts;
   const add = (sev, text, hard = false) => found.push({ sev, hard, text });
+  if (delaysNote) add('warn', delaysNote);
 
   const compare = (label, rule, was, now) => {
     res.rows.push({ label, was, now });
@@ -95,6 +120,11 @@ export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force 
     if (!f) { add('block', `znikł typ dnia: ${DAY_PL[day]} (był w poprzednich danych)`, true); continue; }
     for (const m of ['trips', 'patterns', 'bytes']) {
       compare(`${DAY_PL[day]} — ${METRIC_PL[m]}`, GATE[m], b[m], f[m]);
+    }
+    // wyprzedzanie kursów: build rozbija takie wzorce sam, więc to informacja, nigdy blokada;
+    // brak pola po którejkolwiek stronie (stare meta.json) = pominięcie
+    if (f.overtaking > 0 && b.overtaking != null) {
+      add('warn', `${DAY_PL[day]}: ${f.overtaking} wzorców z wyprzedzaniem kursów (było ${b.overtaking}) — rozbito je automatycznie, wyniki są poprawne`);
     }
   }
   for (const day of DAYS) {
@@ -176,8 +206,10 @@ export function run(argv, { root = path.join(import.meta.dirname, '..'), today =
     }
 
     const baseline = readBaseline(key, { root, baselineDir });
-    const g = gateCity(key, cfg, meta, baseline, { today, force: forceAll || forceList.includes(key) });
-    if (g.noBaseline) gate.noBaseline.push(key);
+    const delaysProfiles = hasDelayProfiles(path.join(root, 'data', key, 'delays.json'));
+    const g = gateCity(key, cfg, meta, baseline, { today, force: forceAll || forceList.includes(key), delaysProfiles });
+    if (g.noBaseline && g.level === 'ok') gate.noBaseline.push(key);
+    else if (g.level === 'warn' && g.noBaseline) gate.warned.push(key);
     else if (g.level === 'block') gate.blocked.push(key);
     else if (g.level === 'warn') gate.warned.push(key);
     else gate.ok.push(key);
@@ -203,6 +235,7 @@ export function run(argv, { root = path.join(import.meta.dirname, '..'), today =
     lines.push(`\n**Cofnięte przed publikacją (bramka jakości): ${gate.blocked.join(', ')}** — na stronie zostają poprzednie dane.`);
   }
   for (const { key, name, g, baseline, meta } of gated) {
+    if (g.noBaseline) continue; // ostrzeżenie bez porównania z baseline — sama treść jest na liście wyżej
     const label = g.level === 'block' ? 'BLOKADA' : g.emergency ? 'PRZEPUSZCZONE AWARYJNIE' : 'OSTRZEŻENIE';
     lines.push(`\n### ${name} (\`${key}\`) — ${label}\n`);
     lines.push(`Poprzednie dane z ${fmt((baseline.generated ?? '').slice(0, 10).replaceAll('-', ''))}, nowe z ${fmt((meta.generated ?? '').slice(0, 10).replaceAll('-', ''))}.\n`);

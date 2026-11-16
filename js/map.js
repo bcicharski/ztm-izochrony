@@ -44,7 +44,7 @@ export function createMap(container, center, zoom) {
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' +
-      ' | Rozkłady: otwarte dane przewoźników (szczegóły w panelu)',
+      '<span class="attr-extra"> | Rozkłady: otwarte dane przewoźników (szczegóły w panelu)</span>',
     maxZoom: 19,
   }).addTo(map);
   return map;
