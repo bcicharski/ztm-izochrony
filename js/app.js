@@ -7,10 +7,12 @@ import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, d
 import { BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateControl } from './map.js';
 import {
-  warsawNow, dayTypeOf, HHMM, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
+  warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
   geoErrorMessage, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
   esc, optionId, delayCoverageText, safeNoteText,
+  RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
+  zonesToGeoJSON, exportFileName, shouldShowIntro,
 } from './uilogic.js';
 import { Engine } from './engine.js';
 import { dayDataNotice } from './calendar.js';
@@ -134,6 +136,7 @@ map.on('click', e => {
 });
 
 function setPoint(latlng, pan = false) {
+  dismissIntro();
   state.point = latlng;
   marker.setLatLng(latlng);
   if (pan) map.setView(latlng, Math.max(map.getZoom(), 13), { animate: !prefersReducedMotion() });
@@ -141,6 +144,7 @@ function setPoint(latlng, pan = false) {
 }
 
 function setPoint2(latlng, pan = false) {
+  dismissIntro();
   state.point2 = latlng;
   marker2.setLatLng(latlng);
   if (pan) map.setView(latlng, Math.max(map.getZoom(), 13), { animate: !prefersReducedMotion() });
@@ -261,6 +265,22 @@ async function searchAddress(query) {
   return r.json();
 }
 
+// Ostatnio wybrane punkty (Z-015): pamięć funkcjonalna w localStorage, wzorzec
+// try/catch jak consentGet — bez pamięci funkcja milczy. Wpis tworzy wyłącznie
+// wybór z listy wyników (klik w mapę, GPS i adres z linku nie mają etykiety).
+function loadRecent() {
+  try { return parseRecentPoints(localStorage.getItem(RECENT_POINTS_KEY)); } catch { return []; }
+}
+function saveRecent(list) {
+  try { localStorage.setItem(RECENT_POINTS_KEY, serializeRecentPoints(list)); } catch { /* brak pamięci = bez historii */ }
+}
+function rememberPoint(label, latlng) {
+  saveRecent(pushRecentPoint(loadRecent(), {
+    label, lat: latlng.lat, lng: latlng.lng, city: state.city, ts: Date.now(),
+  }));
+}
+function clearRecent() { saveRecent([]); }
+
 /**
  * Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników.
  * Klawiatura: Enter szuka (albo wybiera podświetlony wynik), ↑/↓ przesuwają
@@ -268,7 +288,8 @@ async function searchAddress(query) {
  */
 function attachSearch(inputId, listId, statusId, onPick) {
   const input = $(inputId), ul = $(listId);
-  let rows = []; // [{li, latlng}]
+  // czysta etykieta trzymana osobno od tekstu <li> (nagłówek i „Wyczyść" nie wpadną do pola)
+  let rows = []; // [{li, latlng, label, kind}] — kind: 'result' | 'recent' | 'clear'
   let active = -1;
   // komunikat „brak wyników" żyje poza listboxem (li.empty nie byłby poprawnym dzieckiem)
   const status = $(statusId);
@@ -293,8 +314,55 @@ function attachSearch(inputId, listId, statusId, onPick) {
     const r = rows[i];
     if (!r) return;
     hide();
-    input.value = r.li.textContent;
+    if (r.kind === 'clear') {
+      clearRecent();
+      status.textContent = 'Historia wyczyszczona.';
+      return;
+    }
+    input.value = r.label;
+    status.textContent = `Ustawiono punkt: ${r.label}.`;
+    rememberPoint(r.label, r.latlng);
     onPick(r.latlng);
+  };
+  // historia ostatnich punktów (Z-015): w tym samym listboxie, na pustym polu
+  const showHistory = () => {
+    const items = recentForCity(loadRecent(), state.city);
+    if (!items.length) { hide(); return; }
+    ul.innerHTML = '';
+    rows = [];
+    active = -1;
+    input.removeAttribute('aria-activedescendant');
+    status.textContent = '';
+    const head = document.createElement('li');
+    head.setAttribute('role', 'presentation');
+    head.className = 'recent-head';
+    head.textContent = 'Ostatnie punkty';
+    ul.appendChild(head);
+    const add = (li, extra) => {
+      const i = rows.length;
+      li.id = optionId(listId, i);
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
+      li.addEventListener('click', () => pick(i));
+      ul.appendChild(li);
+      rows.push({ li, ...extra });
+    };
+    for (const e of items) {
+      const li = document.createElement('li');
+      const span = document.createElement('span');
+      span.className = 'recent-label';
+      span.textContent = e.label;
+      span.title = e.label;
+      li.appendChild(span);
+      add(li, { latlng: L.latLng(e.lat, e.lng), label: e.label, kind: 'recent' });
+    }
+    const clear = document.createElement('li');
+    clear.className = 'recent-clear';
+    clear.textContent = 'Wyczyść historię';
+    clear.setAttribute('aria-label', 'Wyczyść historię ostatnich punktów');
+    add(clear, { kind: 'clear' });
+    ul.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
   };
   const showResults = items => {
     ul.innerHTML = '';
@@ -315,10 +383,11 @@ function attachSearch(inputId, listId, statusId, onPick) {
       li.id = optionId(listId, i);
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', 'false');
-      li.textContent = item.display_name.split(', ').slice(0, 4).join(', ');
+      const label = item.display_name.split(', ').slice(0, 4).join(', ');
+      li.textContent = label;
       li.addEventListener('click', () => pick(i));
       ul.appendChild(li);
-      rows.push({ li, latlng: L.latLng(+item.lat, +item.lon) });
+      rows.push({ li, latlng: L.latLng(+item.lat, +item.lon), label, kind: 'result' });
     });
   };
   input.addEventListener('keydown', async e => {
@@ -342,7 +411,10 @@ function attachSearch(inputId, listId, statusId, onPick) {
     }
   });
   input.addEventListener('input', () => {
-    if (!input.value) hide();
+    if (!input.value) { hide(); showHistory(); }
+  });
+  input.addEventListener('focus', () => {
+    if (!input.value && ul.hidden) showHistory();
   });
   document.addEventListener('click', e => {
     if (!ul.hidden && !ul.contains(e.target) && e.target !== input) hide();
@@ -404,6 +476,88 @@ $('shareBtn').addEventListener('click', async () => {
   }
   setTimeout(() => { btn.textContent = 'Kopiuj link do tego widoku'; }, 2000);
 });
+
+// Eksport stref do GeoJSON (Z-008): źródłem są wektorowe obrysy z fazy
+// „contours" — te same, które rysuje mapa. Zero zależności: Blob + <a download>.
+let exportContours = null;
+const EXPORT_LABEL = 'Pobierz strefy (GeoJSON)';
+
+function setExportReady(contours) {
+  exportContours = contours;
+  const btn = $('exportBtn');
+  btn.disabled = !contours;
+  btn.title = contours ? '' : 'Najpierw przelicz zasięg';
+}
+
+$('exportBtn').addEventListener('click', async () => {
+  const btn = $('exportBtn');
+  if (!exportContours || btn.disabled) return;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.textContent = 'Przygotowuję plik…';
+  // oddaj sterowanie, żeby etykieta zdążyła się narysować przed pracą
+  await new Promise(r => setTimeout(r, 0));
+  const status = $('status');
+  try {
+    const now = warsawNow();
+    const dayKey = state.mode === 'time' ? state.day : 'workday';
+    const geo = zonesToGeoJSON(exportContours, {
+      city: state.city,
+      city_name: cityCfg().name,
+      point: [state.point.lat, state.point.lng],
+      point2: state.compare ? [state.point2.lat, state.point2.lng] : undefined,
+      compare: state.compare,
+      direction: state.direction,
+      mode: state.mode,
+      time: state.mode === 'time' ? fmtClock(state.timeMin) : null,
+      day: state.mode === 'time' ? state.day : null,
+      walk: state.walk,
+      access: state.access,
+      vehicles: Object.keys(state.veh).filter(k => state.veh[k]),
+      cautious: state.safe,
+      feed_date: cityMeta?.dates?.[dayKey] ?? null,
+      generated: new Date().toISOString(),
+    });
+    const name = exportFileName(state, now.ymd);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(geo)], { type: 'application/geo+json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = `Zapisano plik ${name}.`;
+    btn.textContent = 'Pobrano ✓';
+    setTimeout(() => { btn.textContent = EXPORT_LABEL; }, 2000);
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Nie udało się przygotować pliku — spróbuj ponownie.';
+    btn.textContent = EXPORT_LABEL;
+  }
+  btn.removeAttribute('aria-busy');
+  btn.disabled = !exportContours;
+});
+
+// Wskazówka pierwszej wizyty (Z-009): niemodalna, bo showModal() robi resztę
+// dokumentu inert i pasek zgody przestałby być klikalny.
+function introSeen() {
+  try { return localStorage.getItem('seen-intro'); } catch { return null; }
+}
+function refreshIntro() {
+  $('intro').hidden = !shouldShowIntro({
+    seen: introSeen(), consentPending: !$('consentBar').hidden, pointFromUrl,
+  });
+}
+function dismissIntro() {
+  $('intro').hidden = true;
+  try { localStorage.setItem('seen-intro', '1'); } catch { /* bez pamięci pokaże się przy kolejnej wizycie */ }
+}
+$('introOk').addEventListener('click', dismissIntro);
+$('introHelp').addEventListener('click', () => $('helpDialog').showModal());
+// pasek zgody znika po decyzji — wtedy wskazówka może wejść (handler paska działa wcześniej)
+for (const id of ['consentYes', 'consentNo']) $(id).addEventListener('click', refreshIntro);
 
 {
   const dialog = $('helpDialog');
@@ -729,6 +883,7 @@ async function recompute() {
   if (!cityReady) return; // loadCityAssets uruchomi przeliczenie, gdy miasto będzie gotowe
   const seq = ++computeSeq;
   const t0 = performance.now();
+  setExportReady(null); // niegotowy do końca fazy „contours"
   updateUrl();
   const status = $('status');
   cancelAnnounce(); // nie ogłaszamy „Obliczam zasięg…" ani wyniku poprzedniego przeliczenia
@@ -778,6 +933,7 @@ async function recompute() {
         })) navigator.vibrate(20);
       } else if (msg.phase === 'contours') {
         zoneLayer.update({ contours: msg.contours });
+        setExportReady(msg.contours);
       }
     });
   } catch (err) {
@@ -951,6 +1107,7 @@ function switchCity(key) {
   cityReady = false;
   computeSeq++; // spóźnione fazy poprzedniego miasta do kosza
   zoneLayer.update({ grid: null, contours: null, zones: null });
+  setExportReady(null);
   dropCityCache(prev);
   loadCityAssets();
 }
@@ -987,6 +1144,7 @@ $('statsToggle').checked = state.stats;
 $('safeToggle').checked = state.safe;
 syncModeUi();
 renderSafeNote();
+refreshIntro();
 // animate:false — animowany zoom bywa przerywany przez invalidateSize
 // z ResizeObservera przy starcie i widok zostawał na zoomie domyślnym
 if (pointFromUrl) map.setView(state.point, 13, { animate: false });

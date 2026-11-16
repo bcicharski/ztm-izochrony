@@ -29,9 +29,58 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: index.html, js/app.js, js/map.js, js/uilogic.js, css/style.css, manifest.json, tools/build-icons.mjs, assets/, tests/pwa-manifest.test.mjs, tests/build-icons.test.mjs. Etap 3: sw.js, js/pwa.js, tools/stamp-sw.mjs, tests/sw.test.mjs.
 - Niezweryfikowane: etap 1 — faktyczna instalowalność na telefonie i na iOS, ścieżki względne pod `github.io/ZTM/`. Etap 2 — prawdziwy prompt o zgodę, kod 3 (timeout), komunikat offline w przeglądarce, pozycjonowanie kontrolki na wąskim ekranie, wibracja na prawdziwym urządzeniu.
 
+### Z-051 [P1] Rozkład Opola kończy się 2026-11-16
+- Status: w toku
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: rozkład Opola kończy się dziś. To nie błąd kodu — feed przewoźnika wymaga odświeżenia albo trzeba znaleźć nowe źródło. Wymaga działania poza repozytorium.
+- Dowód: `node tools/check-data.mjs` (2026-11-16) zgłasza „rozkład kończy się za mniej niż 7 dni (16.11.2026)"; build z 2026-11-02.
+- Wdrożone 2026-11-16 (częściowo): cztery miasta (lodz, opole, olsztyn, gorzow) miały feed na `cdn.zbiorkom.live/gtfs/*.zip`; wszystkie cztery adresy zwracają 404 (strona HTML zamiast ZIP), host odpowiada, padła ścieżka. Cotygodniowe `refresh-data.yml` pomijało te miasta od co najmniej 2026-11-09; ostrzeżenie było tylko `::warning::` i wpisem z etykietą „dane". Zmienione adresy: Łódź (`https://otwarte.miasto.lodz.pl/wp-content/uploads/2025/06/GTFS.zip`, ZDiT Łódź), Olsztyn (`https://zdzit.olsztyn.eu/gtfs/` z `resolve: "html-latest"`, ZDZiT Olsztyn). Gorzów COFNIĘTY, nie podmieniony: `data/gorzow/meta.json` (build 2026-11-02) ma `feedEndDate` 2026-12-30, a feed mkuran.pl kończy się 2026-10-23, więc podmiana zamieniłaby ważne dane na ostrzeżenie. Adres `mzk-gorzow` wraca do `https://cdn.zbiorkom.live/gtfs/gorzow.zip` i jest martwy świadomie — cotygodniowe odświeżenie pomija Gorzów i zostawia dobre dane. `tools/fetch-feeds.mjs`: pętla główna w `main()` za strażnikiem `isMain`, nowa czysta funkcja `pickLatestZip` i tryb `resolve: "html-latest"` (najnowsze `.zip` z listingu po dacie z tekstu linku; wygrywa największa data <= dziś; brak linków = wyjątek z nazwą feedu). Dane w `data/<miasto>/` nietknięte; pobrania tylko do katalogu tymczasowego.
+- Pozostaje: Opole -> Z-054 (format TransXChange, brak źródła GTFS); Gorzów -> Z-055 (termin przeglądu przed 2026-12-30).
+- Ryzyka: Łódź — jeśli przy kolejnym wgraniu powstanie nowa ścieżka zamiast nadpisania, przełączyć na `resolve: "html-latest"` z `https://otwarte.miasto.lodz.pl/transport_komunikacja/`. Olsztyn — okno obowiązywania kończy się 2026-11-30; jeśli ZDZiT nie opublikuje pliku grudniowego na czas, `feedEndDate` w `check-data.mjs` to wyłapie. Pierwsze przeliczenie Łodzi i Gorzowa może obudzić bramkę regresji (inny namespace identyfikatorów); URL-e w stanie strony to współrzędne, więc zapisane linki użytkowników się nie psują.
+- Pliki: data/cities.json, tools/fetch-feeds.mjs, tests/fetch-feeds.test.mjs.
+- Niezweryfikowane: przeliczenie danych z nowych feedów przez `build-data.mjs` (zakaz nadpisania `data/<miasto>/` bez zgody właściciela); bramka jakości na nowych feedach.
+
+### Z-008 [P2] Tryb czystego widoku i eksport
+- Status: w toku
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak trybu bez panelu oraz eksportu wyniku do PNG lub GeoJSON.
+- Dowód: nieznane.
+- Wdrożone 2026-11-16 (część C, eksport GeoJSON): przycisk „Pobierz strefy (GeoJSON)" pod „Kopiuj link do tego widoku" zapisuje aktualne strefy jako `FeatureCollection` z sześcioma `MultiPolygon` (źródło: `contours` z `buildContours`, nie siatka czasów). Właściwości simplestyle plus metadane powielone w `properties`; współrzędne `[lon, lat]` zaokrąglone do 5 miejsc, nawijanie wg RFC 7946. Pobranie przez `Blob` i ukryty `<a download>`, bez zależności. Nazwa `izochrona-<miasto>-<yyyymmdd>-<HHMM>.geojson`. Zmierzone: Trójmiasto, plik 1,93 MB, generowanie ok. 26 ms. Odstępstwo: pominięto zdanie „Plik zawiera osiągnięte przystanki, nie obszary" (przy `walk=false` też powstają wielokąty).
+- Pozostaje: tryb czystego widoku bez panelu; eksport PNG (nie ruszane w tej fali).
+- Pliki: js/walkgrid.js, js/worker.js, js/uilogic.js, js/app.js, index.html, css/style.css.
+- Niezweryfikowane: otwarcie pliku w QGIS, faktyczne pobranie pliku przez przeglądarkę, wygląd stanu `:disabled`.
+
+### Z-009 [P2] Stopka i onboarding
+- Status: w toku
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak kontaktu i social media w stopce, przycisk Suppi za nisko, brak samouczka w 3 krokach.
+- Dowód: nieznane.
+- Wdrożone 2026-11-16 (część D, wskazówka przy pierwszej wizycie): blok z trzema krokami, przyciskiem „Rozumiem" i linkiem „Pełna pomoc" w panelu, wariant niemodalny (`showModal()` odrzucone, bo czyniłoby pasek zgody `#consentBar` nieklikalnym). Znika po „Rozumiem" albo po pierwszym wskazaniu punktu i nie wraca. Warunek `shouldShowIntro({ seen, consentPending, pointFromUrl })` w `js/uilogic.js`; klucz `seen-intro`; brak pamięci = wskazówka wraca przy każdej wizycie, ale znika po pierwszej interakcji. Zmierzone: 155 px wysokości przy 800 px szerokości, 138 px przy 360 px.
+- Pozostaje: kontakt i social media w stopce, przycisk Suppi.
+- Pliki: index.html, css/style.css, js/app.js, js/uilogic.js.
+- Niezweryfikowane: nieznane.
+
+### Z-015 [P2] Udostępnianie i wyszukiwarka
+- Status: w toku
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak krótkich linków, dynamicznego obrazka OG, iframe, wyszukiwania po nazwie przystanku offline i historii adresów.
+- Dowód: nieznane.
+- Wdrożone 2026-11-16 (część A, historia ostatnich punktów): klik w puste pole adresu pokazuje do pięciu ostatnio wybranych punktów bieżącego miasta; jeden klik ustawia punkt; ostatnia pozycja czyści historię. Wpis powstaje tylko przy wyborze z listy wyników (nie przy kliknięciu w mapę, przeciągnięciu znacznika, GPS ani punkcie z URL). 12 wpisów globalnie, 5 pokazywanych po filtrze na miasto, deduplikacja po współrzędnych zaokrąglonych do 5 miejsc, wygasanie po 90 dniach, klucz `recent-points`, kształt `{v:1, items:[...]}`, `localStorage` w `try/catch`. Pamięć funkcjonalna, nie analityczna — zdanie o tym jest w pomocy. ARIA: nagłówek grupy jako `li[role=presentation]` pomijany strzałkami, wiersze `role="option"`.
+- Pozostaje: wyszukiwanie po nazwie przystanku (część B, zaprojektowana jako Z-056); krótkie linki; dynamiczny obrazek OG; iframe.
+- Pliki: js/uilogic.js, js/app.js, index.html, css/style.css.
+- Niezweryfikowane: zachowanie przy niedostępnym `localStorage` (kod w `try/catch`, nie wymuszano); wybór z żywych wyników Nominatim.
+
 ## Zaprojektowane (gotowe do wdrożenia)
 
-_(pusto)_
+### Z-056 [P2] Wyszukiwanie przystanku po nazwie w załadowanych danych
+- Status: zaprojektowane
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: wyszukiwarka adresów nie znajduje przystanków po nazwie; część B Z-015. Historia punktów (część A Z-015) jest na to przygotowana.
+- Dowód: nieznane.
+- Rozwiązanie (z wdrożenia fali 5, bez przeglądu rozwiazywacza; NIEWDROŻONE): wymaga nowego komunikatu workera `stops` — worker buduje kompaktowy indeks z `net` i odsyła go raz na miasto, leniwie przy pierwszym wpisanym znaku. Czyste funkcje w `js/uilogic.js`: `normalizeStopQuery`, `buildStopIndex`, `searchStops`, `mergeSearchResults`. Wyniki lokalne i z geokodera w jednej liście: przystanki na górze, chip tekstowy „przystanek" / „adres", `optionId` numeruje scaloną listę. `rememberPoint(label, latlng)` przyjmie też przystanek. Ocena analityka: średnie zadanie, nie drobne.
+- Pliki: js/worker.js, js/uilogic.js, js/app.js.
+
+## Nowe (bez projektu rozwiązania)
 
 ## Nowe (bez projektu rozwiązania)
 
@@ -62,20 +111,6 @@ _(pusto)_
 - Problem: trzy luki — stacje kolejowe 150-400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru (COMPLEX_MAX_M; Kraków SKA, 17 stacji); dalekie stacje poza gridBbox rysowane kołami bez bariery wody; graf pieszy bez tagów krawędzi (schody, deptaki, foot=no dla roweru).
 - Dowód: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js.
-
-### Z-008 [P2] Tryb czystego widoku i eksport
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak trybu bez panelu oraz eksportu wyniku do PNG lub GeoJSON.
-- Dowód: nieznane.
-- Pliki: js/app.js, js/map.js, css/style.css.
-
-### Z-009 [P2] Stopka i onboarding
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak kontaktu i social media w stopce, przycisk Suppi za nisko, brak samouczka w 3 krokach.
-- Dowód: nieznane.
-- Pliki: index.html, css/style.css.
 
 ### Z-010 [P2] Wizualizacja trasy z dymka na mapie
 - Status: nowe
@@ -111,13 +146,6 @@ _(pusto)_
 - Problem: brak dostępności adresu z POI/GUS, mapy cieplnej, osi czasu z animacją, porównania przed/po oraz kolejnych miast i kolei regionalnych.
 - Dowód: nieznane.
 - Pliki: nieznane.
-
-### Z-015 [P2] Udostępnianie i wyszukiwarka
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak krótkich linków, dynamicznego obrazka OG, iframe, wyszukiwania po nazwie przystanku offline i historii adresów.
-- Dowód: nieznane.
-- Pliki: js/app.js, index.html.
 
 ### Z-016 [P2] Tryb ciemny, i18n i ARIA stref
 - Status: nowe
@@ -192,13 +220,6 @@ _(pusto)_
 - Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): przycisk „Zapisz to miasto offline"; zapis `data/<miasto>/*` do nazwanego cache razem z `meta.generated`; widoczna data pobrania; przycisk „Odśwież"; automatyczne unieważnienie po 7 dniach; przycisk „Usuń dane offline". Koszt: kilka MB na telefonie użytkownika.
 - Pliki: nieznane.
 
-### Z-051 [P1] Rozkład Opola kończy się 2026-11-16
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: rozkład Opola kończy się dziś. To nie błąd kodu — feed przewoźnika wymaga odświeżenia albo trzeba znaleźć nowe źródło. Wymaga działania poza repozytorium.
-- Dowód: `node tools/check-data.mjs` (2026-11-16) zgłasza „rozkład kończy się za mniej niż 7 dni (16.11.2026)"; build z 2026-11-02.
-- Pliki: data/cities.json (ewentualna zmiana adresu feedu).
-
 ### Z-052 [P2] Ostrzeżenie `overtaking` może być kolejnym stałym szumem
 - Status: nowe
 - Zgłoszone: 2026-11-16 (nieznane)
@@ -212,6 +233,23 @@ _(pusto)_
 - Problem: progi z Z-031 dobrano z wartości policzonych z plików rozkładowych, a nie z pól `counts` i `grid` w `meta.json`, bo tych jeszcze nie ma. Po pierwszym odświeżeniu danych trzeba sprawdzić, czy wyliczone udziały zgadzają się z zapisanymi.
 - Dowód: obserwacja 2026-11-16: żaden `meta.json` nie ma pól `counts` ani `grid`.
 - Pliki: tools/check-data.mjs
+
+### Z-054 [P1] Rozkład Opola: MZK publikuje TransXChange, nie GTFS
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: rozkład Opola kończy się 2026-11-16 (Z-051). Feed MZK Opole nie jest GTFS, więc nie da się go wpiąć w `fetch-feeds.mjs` bez konwertera. Do czasu nowego źródła wymaga decyzji właściciela: zostawić stare dane z ostrzeżeniem o nieaktualnym rozkładzie albo czasowo ukryć miasto.
+- Dowód: `https://www.mzkopole.pl/otwarte-dane/lib/getlatestfile.php` zwraca poprawny ZIP (2,8 MB) z `TransXChange.xml`; archiwum per data `https://www.mzkopole.pl/otwarte-dane/data/RRRR.MM.DD.zip`, najnowszy `2026.11.06.zip`. Nie wolno wpiąć tego jako feedu: `downloadZip()` go przepuści, a wywali się dopiero `build-data.mjs` na braku `stop_times.txt`. Sprawdzone i puste: mzkopole.pl, dane.gov.pl, portal miasta, mkuran.pl, mobilitydatabase, transit.land.
+- Kierunek (z diagnozy, bez projektu rozwiązywacza): konwerter `tools/transxchange-to-gtfs.mjs` wołany przez `fetch-feeds.mjs` przy nowym polu feedu `format: "transxchange"`. Node nie ma parsera XML, więc potrzebny własny parser strumieniowy albo devDependency (decyzja w projekcie). Punkt odniesienia: `MKuranowski/RzeszowGTFS` (Rzeszów publikuje TransXChange z tej samej rodziny systemów). Pierwszy krok: rozpakować plik Opola i opisać faktyczną strukturę.
+- Pliki: tools/fetch-feeds.mjs, tools/transxchange-to-gtfs.mjs (nowy), data/cities.json, tests/fetch-feeds.test.mjs (usunąć wyjątek `knownDead` dla `mzk-opole`, gdy miasto dostanie źródło).
+
+### Z-055 [P1] Gorzów: żywe źródło rozkładu po 2026-12-30
+- Status: nowe
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: dane Gorzowa z builda 2026-11-02 (`data/gorzow/meta.json`, `feedEndDate` 20261230) są ważne jeszcze ok. sześć tygodni. Feed mkuran.pl (`gorzow_wlkp.zip`, zakres 20261001-20261023) jest wygasły, więc nie zastępuje danych; adres `mzk-gorzow` jest świadomie martwy, żeby cotygodniowe odświeżenie zostawiało dobre dane. Jedyne żywe i oficjalne źródło (BIP MZK) wystawia rozkład w oknach siedmiodniowych, więc build z niego byłby aktualny najwyżej przez tydzień. Termin przeglądu: przed 2026-12-30.
+- Dowód: pobranie z `https://bip.mzk-gorzow.com.pl/gtfs.html` 2026-11-16: HTTP 200, 1,22 MB, poprawny ZIP z `shapes` i `transfers`; `feed_info.txt` 20261103-20261110; `calendar.txt` i 18122 wiersze `calendar_dates.txt` w tym samym oknie. `cdn.zbiorkom.live` i `api.zbiorkom.live` zwracają 404; strona główna zbiorkom to SPA bez linków do danych. Gorzowa nie ma na dane.gov.pl ani w sekcji dla deweloperów na stronie MZK.
+- Kierunki do rozważenia: częstsze odświeżanie tylko dla Gorzowa; sklejanie kolejnych tygodniowych paczek w dłuższy kalendarz; kontakt z MZK o dłuższy feed.
+- Wymagane rozszerzenie, gdyby wpinać BIP: `pickLatestZip` dziś tam nie trafi (tekst linku „GTFS MZK Gorzów Wlkp." bez daty, data w href w formacie `DD-MM-RRRR`). Potrzebna gałąź: gdy żadna data się nie parsuje, a na stronie jest dokładnie jeden link `.zip`, wziąć ten link; opcjonalnie rozpoznawanie `DD-MM-RRRR`. Bez nowego trybu i bez nowego pola w `cities.json`. Credits, gdyby doszło do wpięcia: `{ "label": "MZK Gorzów Wlkp. (BIP)", "url": "https://bip.mzk-gorzow.com.pl/gtfs.html" }`.
+- Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
 ## Zrobione
 

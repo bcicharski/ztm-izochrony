@@ -52,6 +52,7 @@ const queue = createLatestQueue(async job => {
       for (const band of msg.contours) {
         for (const r of band.rings) buffers.push(r.buffer);
         for (const b of band.bbox) buffers.push(b.buffer);
+        buffers.push(band.poly.buffer);
       }
       postMessage({ type: 'result', id: job.id, ...msg }, buffers);
     }

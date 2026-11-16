@@ -92,3 +92,32 @@ test('buildContours: blok komórek daje jeden pierścień o poprawnym bboxie i k
   g.time.fill(UNREACH);
   assert.ok(buildContours(g, g.time).every(b => b.rings.length === 0), 'pusta siatka = brak obrysów');
 });
+
+test('buildContours: poly[] numeruje wielokąty, pierwszy pierścień wielokąta jest zewnętrzny (Z-008)', async () => {
+  const { buildContours } = await import('../js/walkgrid.js');
+  const g = grid({ W: 50, H: 30 });
+  Object.assign(g, { latN: 50.01, lonW: 20, mPerDegLon: 111320 * Math.cos(50 * Math.PI / 180) });
+  g.time.fill(UNREACH);
+  // pierścień z dziurą (x 5..24, y 5..24, dziura 12..17) + osobna wyspa (x 35..42)
+  for (let y = 5; y < 25; y++) for (let x = 5; x < 25; x++) g.time[idx(g, x, y)] = 400;
+  for (let y = 12; y < 18; y++) for (let x = 12; x < 18; x++) g.time[idx(g, x, y)] = UNREACH;
+  for (let y = 8; y < 14; y++) for (let x = 35; x < 43; x++) g.time[idx(g, x, y)] = 400;
+  const bands = buildContours(g, g.time);
+  for (const b of bands) {
+    assert.ok(b.poly instanceof Int32Array);
+    assert.equal(b.poly.length, b.rings.length, 'poly[] równoległe do rings[]');
+  }
+  const b = bands[0];
+  assert.equal(b.rings.length, 3, 'zewnętrzny + dziura + wyspa');
+  assert.deepEqual([...new Set(b.poly)].sort(), [0, 1], 'dwa wielokąty, numery spójne od 0');
+  // pierwszy pierścień każdego wielokąta zawiera bbox pozostałych (jest zewnętrzny)
+  for (const id of [0, 1]) {
+    const idxs = [...b.poly].flatMap((p, i) => (p === id ? [i] : []));
+    const outer = b.bbox[idxs[0]];
+    for (const i of idxs.slice(1)) {
+      const h = b.bbox[i];
+      assert.ok(h[0] >= outer[0] && h[1] >= outer[1] && h[2] <= outer[2] && h[3] <= outer[3], 'dziura wewnątrz zewnętrznego');
+    }
+  }
+  assert.ok([0, 1].some(id => [...b.poly].filter(p => p === id).length === 2), 'jeden wielokąt ma dziurę');
+});

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Pobiera i rozpakowuje wszystkie feedy GTFS miasta do <katalog>/<nazwa-feedu>/.
- * Obsługuje feedy o stałym URL oraz zbiór z API Wrocławia (resolve: "wroclaw-od2",
+ * Obsługuje feedy o stałym URL, listingi HTML (resolve: "html-latest") oraz zbiór z API Wrocławia (resolve: "wroclaw-od2",
  * gdzie URL wskazuje dataset, a właściwy plik trzeba znaleźć przez od2-files).
  *
  * Użycie: node tools/fetch-feeds.mjs <miasto> <katalog-roboczy>
@@ -10,14 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-
-const cityKey = process.argv[2];
-const workDir = process.argv[3];
-const cities = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'data', 'cities.json'), 'utf8'));
-if (!cities[cityKey] || !workDir) {
-  console.error('Użycie: node tools/fetch-feeds.mjs <miasto> <katalog-roboczy>');
-  process.exit(1);
-}
+import { fileURLToPath } from 'node:url';
 
 const UA = { 'User-Agent': 'ztm-izochrony-build/1.0' };
 
@@ -39,7 +32,44 @@ async function resolveUrl(feed) {
     console.log(`  Wrocław: plik ${file.nazwa_pliku_bez_rozszerzenia} (id ${newest})`);
     return file.download_url;
   }
+  if (feed.resolve === 'html-latest') {
+    // feed.url = strona-listing (np. WordPress) z linkami do archiwów .zip
+    const html = await (await fetch(feed.url, { headers: UA })).text();
+    const url = pickLatestZip(html, feed.url, new Date(), feed.name);
+    console.log(`  HTML: najnowsze archiwum ${url.split('/').pop()}`);
+    return url;
+  }
   return feed.url;
+}
+
+/**
+ * Z listingu HTML wybiera URL najnowszego archiwum .zip.
+ * Dla każdego <a href="...zip"> bierze pierwszą datę RRRR[_-.]MM[_-.]DD
+ * z TEKSTU linku (href bywa niezgodny z okresem obowiązywania); gdy w tekście
+ * daty nie ma — z href. Wygrywa największa data <= today; gdy żadna nie pasuje,
+ * największa w ogóle. Zwraca URL bezwzględny (new URL(href, baseUrl)).
+ * Brak linków .zip = wyjątek z nazwą feedu, nigdy losowy plik.
+ */
+export function pickLatestZip(html, baseUrl, today = new Date(), name = baseUrl) {
+  const dateRe = /(\d{4})[_.-](\d{2})[_.-](\d{2})/;
+  const toKey = (str) => {
+    const m = dateRe.exec(str);
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  };
+  const links = [];
+  const aRe = /<a\b[^>]*?href\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
+  for (const m of html.matchAll(aRe)) {
+    const href = m[2].trim();
+    if (!/\.zip(?:[?#].*)?$/i.test(href)) continue;
+    const text = m[3].replace(/<[^>]*>/g, ' ');
+    links.push({ href, date: toKey(text) ?? toKey(href) ?? '' });
+  }
+  if (!links.length) throw new Error(`${name}: brak linków .zip w listingu HTML`);
+  const todayKey = today.toISOString().slice(0, 10);
+  const byDate = (a, b) => b.date.localeCompare(a.date);
+  const pool = links.filter(l => l.date && l.date <= todayKey);
+  const best = (pool.length ? pool : links).sort(byDate)[0];
+  return new URL(best.href, baseUrl).href;
 }
 
 /** Pobiera plik z timeoutem, ponawia i sprawdza, że to faktycznie ZIP. */
@@ -63,23 +93,35 @@ async function downloadZip(url, headers, tries = 3) {
   }
 }
 
-for (const feed of cities[cityKey].feeds) {
-  const dir = path.join(workDir, feed.name);
-  fs.mkdirSync(dir, { recursive: true });
-  const url = await resolveUrl(feed);
-  console.log(`Pobieram ${feed.name}: ${url}`);
-  const headers = feed.accept ? { ...UA, Accept: feed.accept } : UA;
-  const buf = await downloadZip(url, headers);
-  const zipPath = path.join(workDir, `${feed.name}.zip`);
-  fs.writeFileSync(zipPath, buf);
-  // Windows: systemowy bsdtar rozpakowuje zip (GNU tar z Git Basha
-  // potraktowałby "C:\..." jako host zdalny); Linux/Actions: unzip
-  if (process.platform === 'win32') {
-    const bsdtar = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
-    execFileSync(bsdtar, ['-xf', zipPath, '-C', dir]);
-  } else {
-    execFileSync('unzip', ['-oq', zipPath, '-d', dir]);
+async function main() {
+  const cityKey = process.argv[2];
+  const workDir = process.argv[3];
+  const cities = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'data', 'cities.json'), 'utf8'));
+  if (!cities[cityKey] || !workDir) {
+    console.error('Użycie: node tools/fetch-feeds.mjs <miasto> <katalog-roboczy>');
+    process.exit(1);
   }
-  console.log(`  -> ${dir} (${(fs.statSync(zipPath).size / 1e6).toFixed(1)} MB)`);
+  for (const feed of cities[cityKey].feeds) {
+    const dir = path.join(workDir, feed.name);
+    fs.mkdirSync(dir, { recursive: true });
+    const url = await resolveUrl(feed);
+    console.log(`Pobieram ${feed.name}: ${url}`);
+    const headers = feed.accept ? { ...UA, Accept: feed.accept } : UA;
+    const buf = await downloadZip(url, headers);
+    const zipPath = path.join(workDir, `${feed.name}.zip`);
+    fs.writeFileSync(zipPath, buf);
+    // Windows: systemowy bsdtar rozpakowuje zip (GNU tar z Git Basha
+    // potraktowałby "C:\..." jako host zdalny); Linux/Actions: unzip
+    if (process.platform === 'win32') {
+      const bsdtar = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+      execFileSync(bsdtar, ['-xf', zipPath, '-C', dir]);
+    } else {
+      execFileSync('unzip', ['-oq', zipPath, '-d', dir]);
+    }
+    console.log(`  -> ${dir} (${(fs.statSync(zipPath).size / 1e6).toFixed(1)} MB)`);
+  }
+  console.log('Feedy gotowe.');
 }
-console.log('Feedy gotowe.');
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) await main();

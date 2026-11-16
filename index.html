@@ -158,6 +158,17 @@
       <p class="hint" id="searchStatus2" role="status"></p>
 
       <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
+      <section class="intro" id="intro" aria-label="Jak zacząć" hidden>
+        <ol>
+          <li>Wybierz miasto.</li>
+          <li>Kliknij punkt na mapie albo wpisz adres.</li>
+          <li>Ustaw godzinę i typ dnia — kolory pokażą, dokąd dojedziesz.</li>
+        </ol>
+        <div class="intro-actions">
+          <button type="button" id="introOk">Rozumiem</button>
+          <button type="button" class="intro-link" id="introHelp">Pełna pomoc</button>
+        </div>
+      </section>
       <p class="warn" id="dataWarn" role="alert" hidden></p>
 
       <fieldset class="control">
@@ -261,6 +272,7 @@
                   aria-label="Raport diagnostyczny do skopiowania"></textarea>
       </section>
       <button class="share-btn" id="shareBtn">Kopiuj link do tego widoku</button>
+      <button class="share-btn" id="exportBtn" type="button" disabled title="Najpierw przelicz zasięg">Pobierz strefy (GeoJSON)</button>
       <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
         ☕ Podoba się? Postaw kawę
       </a>
@@ -393,6 +405,11 @@
         objętej strefą — tylko przy włączonym spacerze,
         bo wtedy strefy tworzą ciągły obszar.</p>
 
+      <h3>Zabierz wynik</h3>
+      <p>Przycisk <strong>„Pobierz strefy (GeoJSON)”</strong> na dole panelu zapisuje
+        aktualne strefy jako plik, który otworzysz w QGIS, geojson.io albo wczytasz
+        do własnej mapy. Każda strefa niesie czas i kolor z legendy.</p>
+
       <h3>Dane</h3>
       <p>Rozkłady jazdy pochodzą z otwartych danych przewoźników i miast —
         źródła dla wybranego miasta wymienia stopka panelu, razem z datą
@@ -404,7 +421,8 @@
         target="_blank" rel="noopener">GoatCounter</a> (bez plików cookie
         i bez profilowania), a Google Analytics oraz reklamy Google działają
         wyłącznie po wyrażeniu zgody; zgodę można cofnąć czyszcząc dane strony
-        w przeglądarce.</p>
+        w przeglądarce. Ostatnio wybrane punkty zapisujemy tylko w Twojej
+        przeglądarce; wyczyścisz je opcją „Wyczyść historię” na liście pod polem adresu.</p>
     </div>
   </dialog>
 

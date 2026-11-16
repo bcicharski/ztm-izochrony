@@ -364,3 +364,137 @@ export function safeNoteText({ safe, coverage: c, direction }) {
   if (direction === 'to') parts.push('W kierunku „do miejsca" zawsze używany jest szacunek.');
   return parts.join(' ');
 }
+
+// --- ostatnie punkty (Z-015) ---------------------------------------------------------
+
+/** Klucz w localStorage; ksztalt `{v:1, items:[{label, lat, lng, city, ts}]}`. */
+export const RECENT_POINTS_KEY = 'recent-points';
+
+const DAY_MS = 86400000;
+/** Klucz deduplikacji: te same współrzędne do 5 miejsc (jak w buildQuery, ~1 m). */
+const pointKey = p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+
+/**
+ * Odczyt historii z surowego tekstu localStorage. Odporny na wszystko:
+ * pusty tekst, zły JSON, inna wersja `v`, wpisy bez pól, starsze niż
+ * `maxAgeDays` albo z przyszłości (zegar cofnięty) — takie wpisy odpadają.
+ */
+export function parseRecentPoints(raw, { nowMs = Date.now(), maxAgeDays = 90 } = {}) {
+  let data;
+  try { data = JSON.parse(raw); } catch { return []; }
+  if (data?.v !== 1 || !Array.isArray(data.items)) return [];
+  const oldest = nowMs - maxAgeDays * DAY_MS;
+  return data.items
+    .filter(e => e && typeof e.label === 'string' && e.label && typeof e.city === 'string'
+      && Number.isFinite(e.lat) && Number.isFinite(e.lng) && Number.isFinite(e.ts)
+      && e.ts >= oldest && e.ts <= nowMs)
+    .map(e => ({ label: e.label, lat: e.lat, lng: e.lng, city: e.city, ts: e.ts }));
+}
+
+/** Nowy wpis na górze; dublet (te same współrzędne do 5 miejsc) wędruje na górę; ucina do `max`. Nie mutuje wejścia. */
+export function pushRecentPoint(list, entry, { max = 12 } = {}) {
+  const k = pointKey(entry);
+  return [entry, ...list.filter(e => pointKey(e) !== k)].slice(0, max);
+}
+
+/** Wpisy danego miasta w kolejności listy (najnowsze pierwsze), najwyżej `limit`. */
+export const recentForCity = (list, city, { limit = 5 } = {}) =>
+  list.filter(e => e.city === city).slice(0, limit);
+
+export const serializeRecentPoints = list => JSON.stringify({ v: 1, items: list });
+
+// --- eksport stref do GeoJSON (Z-008) ------------------------------------------------
+
+export const EXPORT_SOURCE = 'Dokąd dojadę? — transport.excelninja.pro';
+
+const round5 = x => Math.round(x * 1e5) / 1e5;
+
+/** Pole ze znakiem (wzór sznurowadłowy) na płaszczyźnie [lon, lat]: >0 = przeciwnie do ruchu wskazówek. */
+function signedArea(ring) {
+  let a = 0;
+  for (let i = 0, n = ring.length - 1; i < n; i++) {
+    a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  }
+  return a / 2;
+}
+
+/**
+ * Płaska lista [lat, lon, …] → pierścień GeoJSON [[lon, lat], …]: kolejność
+ * lon/lat, zaokrąglenie do 5 miejsc (~1 m, poniżej rozdzielczości siatki;
+ * bez tego plik rośnie ok. 3 razy), bez powtórzeń z zaokrąglenia, domknięty
+ * i nawinięty wg RFC 7946 (zewnętrzny CCW, dziura CW). null, gdy zostało < 3 punktów.
+ */
+function toGeoRing(flat, outer) {
+  const pts = [];
+  for (let i = 0; i < flat.length; i += 2) {
+    const p = [round5(flat[i + 1]), round5(flat[i])];
+    const prev = pts[pts.length - 1];
+    if (!prev || prev[0] !== p[0] || prev[1] !== p[1]) pts.push(p);
+  }
+  if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
+  if (pts.length < 3) return null;
+  pts.push(pts[0]);
+  // oś Y siatki jest odwrócona względem lat — kierunek liczymy z pola, nie zakładamy
+  if ((signedArea(pts) > 0) !== outer) pts.reverse();
+  return pts;
+}
+
+/**
+ * Obrysy pasm (wynik `buildContours`) → FeatureCollection GeoJSON: jeden
+ * MultiPolygon na pasmo, od najchłodniejszego (największego) do najcieplejszego,
+ * czyli w kolejności rysowania. Pasma są KUMULATYWNE: „20–30 min" obejmuje też
+ * obszar „do 10 min" i „10–20 min" — nakładają się, a nie sąsiadują.
+ * Zagnieżdżenie bierzemy z `band.poly` (numer wielokąta każdego pierścienia),
+ * nie z testów zawierania punktu — d3 już je policzył.
+ * `meta` trafia jako `metadata` kolekcji i do `properties` każdego Feature
+ * (QGIS pokazuje tylko atrybuty); `source` ma wartość domyślną.
+ */
+export function zonesToGeoJSON(contours, meta = {}) {
+  const info = { ...meta, source: meta.source ?? EXPORT_SOURCE };
+  for (const k of Object.keys(info)) if (info[k] === undefined) delete info[k];
+  const features = [];
+  contours.forEach((band, bi) => {
+    const polys = new Map(); // numer wielokąta → pierścienie (pierwszy = zewnętrzny)
+    band.rings.forEach((flat, i) => {
+      const id = band.poly[i];
+      const ring = toGeoRing(flat, !polys.has(id));
+      if (!ring) {
+        if (!polys.has(id)) polys.set(id, null); // zewnętrzny odpadł → cały wielokąt pomijamy
+        return;
+      }
+      if (polys.get(id) === null) return;
+      if (!polys.has(id)) polys.set(id, [ring]); else polys.get(id).push(ring);
+    });
+    const coordinates = [...polys.values()].filter(Boolean);
+    if (!coordinates.length) return;
+    const min = bi > 0 ? contours[bi - 1].limit : 0;
+    features.push({
+      type: 'Feature',
+      properties: {
+        minutes_max: band.limit,
+        minutes_min: min,
+        label: min === 0 ? `do ${band.limit} min` : `${min}–${band.limit} min`,
+        color: band.color,
+        fill: band.color,
+        'fill-opacity': 0.55, // jak ZONE_ALPHA na mapie
+        ...info,
+      },
+      geometry: { type: 'MultiPolygon', coordinates },
+    });
+  });
+  features.reverse();
+  return { type: 'FeatureCollection', metadata: info, features };
+}
+
+/** Nazwa pliku eksportu: `izochrona-<miasto>[-2pkt]-<yyyymmdd>-<HHMM>.geojson`. */
+export function exportFileName(state, ymd) {
+  const city = String(state.city).replace(/[^A-Za-z0-9_-]/g, '');
+  const hhmm = fmtClock(state.timeMin).replace(':', '');
+  return `izochrona-${city}${state.compare ? '-2pkt' : ''}-${ymd}-${hhmm}.geojson`;
+}
+
+// --- wskazówka pierwszej wizyty (Z-009) ---------------------------------------------
+
+/** Wskazówka tylko gdy: nie widziana (`seen` = '1' z localStorage albo true; śmieci to „nie widziana"), pasek zgody nie czeka na decyzję i adres nie niesie punktu. */
+export const shouldShowIntro = ({ seen, consentPending, pointFromUrl }) =>
+  !(seen === '1' || seen === true) && !consentPending && !pointFromUrl;

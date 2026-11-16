@@ -166,7 +166,12 @@ Dokładne szablony obu plików: `.claude/agents/kronikarz.md`.
 
 ## 7. Git
 
-- **Nie commitować i nie pushować, dopóki właściciel o to nie poprosi.**
+- **Commit i push po wdrożeniu są autonomiczne** — bez pytania właściciela
+  (decyzja właściciela z 2026-11-16). Warunki: `npm run check` przechodzi,
+  wpisy w `CHANGELOG.md` i `ZADANIA-DO-ZROBIENIA.md` są zrobione.
+- Autonomia nie obejmuje rzeczy nieodwracalnych poza kodem: nadpisania
+  `data/<miasto>/`, usuwania plików danych, `git push --force`, zmian historii.
+  To nadal wymaga zgody właściciela.
 - Praca na `main`, chyba że właściciel powie inaczej.
 - Commit message: zwięźle, po polsku, w trybie orzekającym („Dodano…",
   „Poprawiono…"), z identyfikatorem `Z-NNN`, jeśli dotyczy.

@@ -6,10 +6,17 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 ## W toku
 - Z-019 Brakujące profile opóźnień dla GZM i Szczecina — etap: weryfikacja (oczekiwanie na pierwszy przebieg kolektora z nową diagnostyką).
 - Z-002 Mobile i PWA — etap: wdrożenie (etapy 1 i 2 wdrożone; etap 3, service worker, czeka na decyzję właściciela).
+- Z-051 Rozkład Opola kończy się 2026-11-16; Łódź i Olsztyn mają nowe adresy źródeł — etap: wdrożenie (częściowo; Opole -> Z-054, Gorzów -> Z-055, przegląd przed 2026-12-30).
+- Z-008 Tryb czystego widoku i eksport — etap: wdrożenie (część eksportu GeoJSON zrobiona; tryb czystego widoku i PNG otwarte).
+- Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
+- Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów zrobiona; wyszukiwanie po przystanku zaprojektowane jako Z-056).
 
 ## 2026-11-16
 
 ### Dodane
+- Z-008 Przycisk „Pobierz strefy (GeoJSON)" pod „Kopiuj link do tego widoku" zapisuje aktualne strefy izochron jako plik do QGIS, geojson.io albo własnej mapy; nazwa pliku zawiera miasto i datę. (pliki: js/walkgrid.js, js/worker.js, js/uilogic.js, js/app.js, index.html, css/style.css; testy: tests/walkgrid.test.mjs — 1 nowy; npm run check: lint czysty, 259 testów, 258 pass, 0 fail, 1 skipped (pełny wynik w sekcji Wewnętrzne); nie sprawdzone: otwarcie w QGIS, faktyczne pobranie pliku przez przeglądarkę, wygląd stanu wyłączonego)
+- Z-009 Przy pierwszej wizycie strona pokazuje trzy kroki pierwszego użycia z przyciskiem „Rozumiem" i linkiem „Pełna pomoc"; blok znika po „Rozumiem" albo po wskazaniu pierwszego punktu i nie wraca. Nie zasłania paska zgody. (pliki: index.html, css/style.css, js/app.js, js/uilogic.js; testy: tests/uilogic.test.mjs; npm run check: lint czysty, 259 testów, 258 pass, 0 fail, 1 skipped (pełny wynik w sekcji Wewnętrzne); sprawdzone w przeglądarce w czystym profilu, widok 360 px; nie sprawdzone: stopka i przycisk Suppi — poza zakresem tej fali)
+- Z-015 Wyszukiwarka adresów pamięta ostatnie punkty: klik w puste pole pokazuje do pięciu ostatnio wybranych punktów bieżącego miasta, a jeden klik ustawia punkt; historię można wyczyścić. Punkt trafia do historii tylko przy wyborze z listy wyników, nie przy kliknięciu w mapę ani przy lokalizacji. (pliki: js/uilogic.js, js/app.js, index.html, css/style.css; testy: tests/uilogic.test.mjs; npm run check: lint czysty, 259 testów, 258 pass, 0 fail, 1 skipped (pełny wynik w sekcji Wewnętrzne); sprawdzone w przeglądarce; nie sprawdzone: zachowanie przy niedostępnym localStorage, wybór z żywych wyników Nominatim)
 - Z-022 Strona rozpoznaje polskie święta: w stopce widać datę rozkładu dla wybranego typu dnia, a gdy dziś jest święto albo rozkład pochodzi z innego okresu (np. wakacyjnego), pojawia się wyjaśnienie z możliwością przełączenia na rozkład niedzielny jednym kliknięciem. Domyślna godzina i dzień liczone są w czasie polskim, a nie w strefie przeglądarki. (pliki: js/calendar.js, tools/build-data.mjs, js/app.js, index.html, css/style.css; testy: tests/calendar.test.mjs; nowe pola w meta.json pojawią się po najbliższym odświeżeniu danych)
 - Z-017 Widać, skąd bierze się margines w trybie ostrożnym: stopka pokazuje, dla ilu linii są pomiary opóźnień, a przy przełączniku jest wyjaśnienie, czy margines pochodzi z pomiarów, czy z szacunku. (pliki: tools/build-delays.mjs, js/data.js, index.html, js/app.js; testy: tests/build-delays.test.mjs, tests/front-diag.test.mjs; informacja pojawi się po przebiegu kompilacji profili)
 - Z-025 Diagnostyka błędów: po awarii panel pokazuje blok „Coś nie zadziałało" z przyciskiem kopiowania raportu, a raport nie zawiera lokalizacji użytkownika ani pełnego adresu. (pliki: js/diag.js, js/data.js, js/worker.js, index.html, js/app.js, css/style.css; testy: tests/diag.test.mjs, tests/front-diag.test.mjs)
@@ -21,6 +28,7 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-045 Czytnik ekranu ogłasza wynik przeliczenia słowami: miasto, zasięg w kilometrach i procentach miasta dla każdego pasma oraz liczbę przystanków; legenda czytana jest pełnymi etykietami („do 10 min", „ponad 60 min"). Dla wzroku nic się nie zmienia. Pięć szybkich zmian godziny daje jeden komunikat. (pliki: index.html, css/style.css, js/app.js, js/uilogic.js; testy: tests/uilogic.test.mjs — 7 nowych; npm run check: lint czysty, 228 testów, 227 pass, 0 fail, 1 skipped; potwierdzone w przeglądarce dla Krakowa; nie sprawdzone: NVDA, VoiceOver, tryb porównania, tryb tylko pieszo, ścieżki błędu w przeglądarce)
 
 ### Zmienione
+- Z-051 Łódź i Olsztyn pobierają rozkład z działających adresów (stare zwracały 404, przez co cotygodniowe odświeżenie pomijało te miasta od co najmniej 2026-11-09). Gorzów nie zmieniony — jego dane są ważne do 2026-12-30. Opole bez zmian: rozkład kończy się 2026-11-16 (Z-054). Strona nadal pokazuje dane z poprzedniego przeliczenia; nowe pliki pobrano tylko do katalogu tymczasowego. (pliki: data/cities.json, tools/fetch-feeds.mjs; testy: tests/fetch-feeds.test.mjs — 7 nowych; npm run check: lint czysty, 259 testów, 258 pass, 0 fail, 1 skipped; nie sprawdzone: przeliczenie danych z nowych feedów, bramka jakości na nowych feedach)
 - Z-030 (wariant A) Panel na telefonie ma gęstsze odstępy — ok. 70 px mniej przewijania, pola dotykowe nadal 44 px. (pliki: css/style.css)
 - Z-027 Wyszukiwarki adresów mają pełną semantykę listy podpowiedzi, więc czytnik ekranu ogłasza podświetlony wynik. (pliki: index.html, js/app.js; testy: tests/search-aria.test.mjs)
 - Z-042 Komunikat „nie znaleziono" jest pewniej ogłaszany przez czytniki ekranu. (pliki: css/style.css, index.html, js/app.js)
@@ -35,6 +43,7 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-050 Stopka znów pokazuje pokrycie profilami opóźnień dla Trójmiasta, Krakowa i Poznania. Ponowne składanie `meta.json` nie kasuje już pola `delays`, a pole znika dopiero wtedy, gdy `delays.json` przestaje istnieć. (pliki: tools/build-lib.mjs, tools/build-data.mjs; testy: tests/build-lib.test.mjs — 3 nowe; npm run check: lint czysty, 228 testów, 227 pass, 0 fail, 1 skipped; nie sprawdzone na prawdziwym buildzie — trzy miasta mają odzyskać pole przy najbliższym odświeżeniu danych)
 
 ### Wewnętrzne
+- Właściciel zdecydował 2026-11-16, że commit i push po wdrożeniu są autonomiczne, bez pytania (CLAUDE.md §7). Nieodwracalne rzeczy poza kodem (nadpisanie `data/<miasto>/`, usuwanie plików danych, `push --force`, zmiany historii) nadal wymagają zgody. (bez zmian w kodzie)
 - Wprowadzono stały zespół agentów (`analityk`, `rozwiazywacz`, `esteta`,
   `wdrozeniowiec`, `kronikarz`, `sekretarz`) w `.claude/agents/`.
 - Dodano `CLAUDE.md` z zasadami pracy w projekcie oraz pliki pamięci projektu
@@ -54,3 +63,14 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-048 Konsola nie zbiera już ostrzeżenia Chrome „Blocked call to navigator.vibrate", gdy pierwsze przeliczenie po wczytaniu strony trwa ponad 1,5 s; brak API `userActivation` nie blokuje wibracji. (pliki: js/uilogic.js, js/app.js; testy: tests/uilogic.test.mjs; npm run check: lint czysty, 228 testów, 227 pass, 0 fail, 1 skipped; nie sprawdzone: czysty dowód z konsoli, wibracja na urządzeniu dotykowym)
 - Łącznie po trzeciej fali (2026-11-16): `npm run check`: lint czysty, 202 testy, 201 pass, 0 fail, 1 skipped (test skanujący `data/` tylko z `ZTM_SCAN_DATA=1`).
 - Łącznie po czwartej fali (2026-11-16): `npm run check`: lint czysty, 228 testów, 227 pass, 0 fail, 1 skipped (test skanujący `data/` tylko z `ZTM_SCAN_DATA=1`).
+- Łącznie po piątej fali (2026-11-16): lint czysty; dosłowny wynik `npm run check` po połączeniu wdrożeń (po cofnięciu zmiany adresu Gorzowa):
+```
+ℹ tests 259
+ℹ suites 0
+ℹ pass 258
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 527.329
+```

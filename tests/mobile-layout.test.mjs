@@ -14,7 +14,7 @@ const mapJs = read('js/map.js');
 // lokalizacji z Z-002 (.locate-btn min-width/min-height, .locate-set). Zabezpiecza pola
 // dotykowe 44 px: zagęszczanie marginesów ani porządki w CSS nie mogą usunąć
 // żadnej deklaracji wysokości. Podnoś tę stałą, gdy dochodzi kolejna kontrolka.
-const TAP_USES_MIN = 21;
+const TAP_USES_MIN = 22; // 22 po .intro-actions button (Z-009)
 
 test('offset kontrolek mapy podąża za --panel-h, bez reguły zerującej', () => {
   assert.ok(css.includes('bottom: calc(var(--panel-h, 62vh) + 8px)'));

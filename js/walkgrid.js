@@ -392,10 +392,13 @@ const CONTOUR_SIMPLIFY = 0.15;
  *
  * @param {object} grid       siatka z `buildWalkGrid` (W, H, res, latN, lonW, mPerDegLon)
  * @param {Uint16Array} time  czasy (sekundy, UNREACH = poza zasięgiem)
- * @returns {Array<{limit:number, color:string, rings:Float64Array[], bbox:Float64Array[]}>}
+ * @returns {Array<{limit:number, color:string, rings:Float64Array[], bbox:Float64Array[], poly:Int32Array}>}
  *   w kolejności BANDS; `rings[i]` = [lat0, lon0, lat1, lon1, …] (pierścienie
  *   zewnętrzne i dziury razem — wypełniać regułą evenodd), `bbox[i]` =
- *   [latS, lonW, latN, lonE] pierścienia (do pomijania poza widokiem).
+ *   [latS, lonW, latN, lonE] pierścienia (do pomijania poza widokiem),
+ *   `poly[i]` = numer wielokąta pierścienia `i` (pierwszy pierścień każdego
+ *   wielokąta jest zewnętrzny, kolejne to jego dziury) — z tego eksport
+ *   GeoJSON odtwarza zagnieżdżenie; render pole ignoruje.
  */
 export function buildContours(grid, time) {
   const { W, H, res, latN, lonW, mPerDegLon } = grid;
@@ -403,16 +406,22 @@ export function buildContours(grid, time) {
   for (let i = 0; i < W * H; i++) v[i] = time[i] >= UNREACH ? CONTOUR_UNREACH : -time[i];
   const byValue = new Map(BANDS.map(b => [-b.limit * 60, b]));
   const polys = d3Contours().size([W, H]).smooth(true).thresholds([...byValue.keys()])(v);
-  const out = BANDS.map(b => ({ limit: b.limit, color: b.color, rings: [], bbox: [] }));
+  const out = BANDS.map(b => ({ limit: b.limit, color: b.color, rings: [], bbox: [], poly: [], polyCount: 0 }));
   const kx = res / mPerDegLon, ky = res / M_PER_DEG_LAT;
   for (const mp of polys) {
     const band = byValue.get(mp.value);
     const slot = out[BANDS.indexOf(band)];
     for (const poly of mp.coordinates) {
+      let kept = 0; // pierścienie tego wielokąta, które przeżyły filtry
+      let outerDropped = false;
       for (const ring of poly) {
-        if (isTinyRing(ring)) continue; // pojedyncza komórka: szum rastra, nie strefa
-        const pts = simplifyRing(ring, CONTOUR_SIMPLIFY);
-        if (pts.length < 3) continue;
+        if (outerDropped) break; // zewnętrzny odpadł → jego dziury nie mają rodzica
+        // pojedyncza komórka: szum rastra, nie strefa
+        const pts = isTinyRing(ring) ? null : simplifyRing(ring, CONTOUR_SIMPLIFY);
+        if (!pts || pts.length < 3) {
+          if (kept === 0) outerDropped = true;
+          continue;
+        }
         const flat = new Float64Array(pts.length * 2);
         let s = 90, n = -90, w = 180, e = -180;
         for (let i = 0; i < pts.length; i++) {
@@ -422,9 +431,13 @@ export function buildContours(grid, time) {
         }
         slot.rings.push(flat);
         slot.bbox.push(Float64Array.from([s, w, n, e]));
+        slot.poly.push(slot.polyCount);
+        kept++;
       }
+      if (kept) slot.polyCount++;
     }
   }
+  for (const slot of out) { slot.poly = Int32Array.from(slot.poly); delete slot.polyCount; }
   return out;
 }
 

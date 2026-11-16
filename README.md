@@ -76,6 +76,14 @@ do `bbox` wybranego miasta) albo przyciskiem geolokalizacji. Bieżący widok
 (punkt i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj
 link" pozwala go udostępnić.
 
+Przycisk „Pobierz strefy (GeoJSON)" zapisuje aktualne strefy jako plik
+`izochrona-<miasto>-<yyyymmdd>-<HHMM>.geojson` (MultiPolygon na pasmo, pasma
+kumulatywne, współrzędne [lon, lat] z dokładnością do 5 miejsc, metadane widoku
+w `properties`). Źródłem są wektorowe obrysy z `buildContours`. Wyszukiwarka
+adresów pamięta 5 ostatnio wybranych punktów miasta (localStorage, 90 dni,
+opcja „Wyczyść historię"), a pierwsza wizyta pokazuje niemodalną wskazówkę
+z trzema krokami.
+
 Panel pokazuje też tabelę statystyk dla wybranego punktu: maksymalną
 odległość w linii prostej osiągalną w każdym paśmie czasu oraz — w trybie
 ze spacerem — odsetek powierzchni lądowej miasta objętej strefą (liczony na

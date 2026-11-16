@@ -40,7 +40,7 @@
   "olsztyn": {
     "name": "Olsztyn",
     "feeds": [
-      { "name": "zdzit-olsztyn", "url": "https://cdn.zbiorkom.live/gtfs/olsztyn.zip" }
+      { "name": "zdzit-olsztyn", "url": "https://zdzit.olsztyn.eu/gtfs/", "resolve": "html-latest" }
     ],
     "bbox": [53.68, 20.3, 53.86, 20.6],
     "gridBbox": [53.62, 20.22, 53.92, 20.69],
@@ -55,7 +55,7 @@
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
     "credits": [
-      { "label": "ZDZiT Olsztyn (via zbiorkom.live)", "url": "https://otwartedane.olsztyn.eu/index.php/gtfs-zdzit" }
+      { "label": "ZDZiT Olsztyn", "url": "https://zdzit.olsztyn.eu/gtfs/" }
     ]
   },
   "torun": {
@@ -388,7 +388,7 @@
   "lodz": {
     "name": "Łódź",
     "feeds": [
-      { "name": "zdit-lodz", "url": "https://cdn.zbiorkom.live/gtfs/lodz.zip" }
+      { "name": "zdit-lodz", "url": "https://otwarte.miasto.lodz.pl/wp-content/uploads/2025/06/GTFS.zip" }
     ],
     "bbox": [51.68, 19.28, 51.87, 19.68],
     "gridBbox": [51.63, 19.19, 51.93, 19.77],
@@ -403,7 +403,7 @@
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
     "credits": [
-      { "label": "ZDiT Łódź (via zbiorkom.live)", "url": "https://otwarte.miasto.lodz.pl/transport_komunikacja/" }
+      { "label": "ZDiT Łódź (otwarte dane UMŁ)", "url": "https://otwarte.miasto.lodz.pl/transport_komunikacja/" }
     ]
   }
 }

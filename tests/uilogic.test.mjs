@@ -465,3 +465,250 @@ test('index.html i css: region #zoneSummary, legenda z rolami, .sr-only (Z-045)'
   assert.match(app, /setAttribute\('aria-label', band\.label\)/);
   assert.equal((app.match(/sw\.setAttribute\('aria-hidden', 'true'\)/g) || []).length, 2);
 });
+
+// --- ostatnie punkty (Z-015) ------------------------------------------------------
+
+import {
+  parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
+  zonesToGeoJSON, exportFileName, shouldShowIntro, EXPORT_SOURCE,
+} from '../js/uilogic.js';
+
+const NOW = Date.parse('2026-11-16T12:00:00Z');
+const DAYMS = 86400000;
+const pt = (label, lat, lng, city = 'trojmiasto', ts = NOW - 1000) => ({ label, lat, lng, city, ts });
+const raw = items => JSON.stringify({ v: 1, items });
+
+test('parseRecentPoints: pusty tekst, zły JSON, zła wersja, brak items -> []', () => {
+  assert.deepEqual(parseRecentPoints('', { nowMs: NOW }), []);
+  assert.deepEqual(parseRecentPoints(null, { nowMs: NOW }), []);
+  assert.deepEqual(parseRecentPoints('{nie json', { nowMs: NOW }), []);
+  assert.deepEqual(parseRecentPoints(JSON.stringify({ v: 2, items: [pt('A', 1, 2)] }), { nowMs: NOW }), []);
+  assert.deepEqual(parseRecentPoints(JSON.stringify({ v: 1 }), { nowMs: NOW }), []);
+  assert.deepEqual(parseRecentPoints('[]', { nowMs: NOW }), []);
+});
+
+test('parseRecentPoints: odrzuca wpisy z brakującymi polami', () => {
+  const items = [
+    pt('ok', 54.35, 18.64),
+    { label: 'bez lat', lng: 1, city: 'x', ts: NOW - 5 },
+    { label: '', lat: 1, lng: 2, city: 'x', ts: NOW - 5 },
+    { lat: 1, lng: 2, city: 'x', ts: NOW - 5 },
+    { label: 'bez miasta', lat: 1, lng: 2, ts: NOW - 5 },
+    { label: 'tekst zamiast liczby', lat: '1', lng: 2, city: 'x', ts: NOW - 5 },
+    null,
+  ];
+  const out = parseRecentPoints(raw(items), { nowMs: NOW });
+  assert.deepEqual(out.map(e => e.label), ['ok']);
+});
+
+test('parseRecentPoints: 90 dni — granica włącznie, starszy odpada; ts z przyszłości odpada', () => {
+  const items = [
+    pt('świeży', 1, 2, 'c', NOW - 10),
+    pt('równo 90 dni', 3, 4, 'c', NOW - 90 * DAYMS),
+    pt('91 dni', 5, 6, 'c', NOW - 91 * DAYMS),
+    pt('z przyszłości', 7, 8, 'c', NOW + DAYMS),
+  ];
+  assert.deepEqual(parseRecentPoints(raw(items), { nowMs: NOW }).map(e => e.label), ['świeży', 'równo 90 dni']);
+  assert.deepEqual(parseRecentPoints(raw(items), { nowMs: NOW, maxAgeDays: 30 }).map(e => e.label), ['świeży']);
+});
+
+test('pushRecentPoint: nowy na górze, nie mutuje wejścia', () => {
+  const list = Object.freeze([pt('A', 54.1, 18.1)]);
+  const out = pushRecentPoint(list, pt('B', 54.2, 18.2));
+  assert.deepEqual(out.map(e => e.label), ['B', 'A']);
+  assert.equal(list.length, 1);
+});
+
+test('pushRecentPoint: dublet po zaokrągleniu do 5 miejsc wędruje na górę i nie zwiększa długości', () => {
+  const list = [pt('B', 54.2, 18.2), pt('A', 54.123456, 18.654321)];
+  const out = pushRecentPoint(list, pt('A nowa nazwa', 54.1234561, 18.6543209));
+  assert.equal(out.length, 2);
+  assert.equal(out[0].label, 'A nowa nazwa');
+  // różnica w 5. miejscu to już inny punkt
+  assert.equal(pushRecentPoint(list, pt('X', 54.12347, 18.654321)).length, 3);
+});
+
+test('pushRecentPoint: przekroczenie limitu obcina najstarszy', () => {
+  let list = [];
+  for (let i = 0; i < 14; i++) list = pushRecentPoint(list, pt(`P${i}`, 50 + i * 0.01, 20));
+  assert.equal(list.length, 12);
+  assert.equal(list[0].label, 'P13');
+  assert.equal(list[11].label, 'P2');
+  assert.equal(pushRecentPoint(list, pt('Z', 1, 1), { max: 3 }).length, 3);
+});
+
+test('recentForCity: filtr po mieście, kolejność listy, limit 5', () => {
+  const list = [
+    pt('g1', 1, 1, 'gzm'), pt('t1', 2, 2), pt('t2', 3, 3), pt('g2', 4, 4, 'gzm'),
+    pt('t3', 5, 5), pt('t4', 6, 6), pt('t5', 7, 7), pt('t6', 8, 8),
+  ];
+  assert.deepEqual(recentForCity(list, 'trojmiasto').map(e => e.label), ['t1', 't2', 't3', 't4', 't5']);
+  assert.deepEqual(recentForCity(list, 'gzm', { limit: 1 }).map(e => e.label), ['g1']);
+  assert.deepEqual(recentForCity(list, 'brak'), []);
+});
+
+test('serializeRecentPoints -> parseRecentPoints: round-trip', () => {
+  const list = [pt('Gdańsk, Długa 1', 54.35, 18.65), pt('B', 54.4, 18.5, 'gzm')];
+  assert.deepEqual(parseRecentPoints(serializeRecentPoints(list), { nowMs: NOW }), list);
+  assert.deepEqual(parseRecentPoints(serializeRecentPoints([]), { nowMs: NOW }), []);
+});
+
+// --- GeoJSON (Z-008) ----------------------------------------------------------------
+
+/** Pierścień [lat, lon, …] z listy [lon, lat]. */
+const flatRing = lonlat => Float64Array.from(lonlat.flatMap(([lon, lat]) => [lat, lon]));
+const area = ring => {
+  let a = 0;
+  for (let i = 0; i < ring.length - 1; i++) a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  return a / 2;
+};
+// zewnętrzny: CW w (lon, lat); dziura: CCW — odwrotnie niż wymaga RFC 7946
+const OUTER_CW = [[20, 50], [20, 50.1], [20.1, 50.1], [20.1, 50]];
+const HOLE_CCW = [[20.04, 50.04], [20.06, 50.04], [20.06, 50.06], [20.04, 50.06]];
+const band = (limit, color, rings, poly) => ({ limit, color, rings, bbox: rings.map(() => new Float64Array(4)), poly: Int32Array.from(poly) });
+const META = { city: 'trojmiasto', city_name: 'Trójmiasto', point: [50.05, 20.05], compare: false, walk: true };
+
+test('zonesToGeoJSON: puste contours -> FeatureCollection bez Feature', () => {
+  const g = zonesToGeoJSON([], META);
+  assert.equal(g.type, 'FeatureCollection');
+  assert.deepEqual(g.features, []);
+  assert.equal(g.metadata.city, 'trojmiasto');
+  assert.equal(g.metadata.source, EXPORT_SOURCE);
+});
+
+test('zonesToGeoJSON: pasmo bez pierścieni jest pomijane', () => {
+  const g = zonesToGeoJSON([band(10, '#fff', [], []), band(20, '#000', [flatRing(OUTER_CW)], [0])], META);
+  assert.equal(g.features.length, 1);
+  assert.equal(g.features[0].properties.minutes_max, 20);
+  assert.equal(g.features[0].properties.minutes_min, 10);
+});
+
+test('zonesToGeoJSON: pasmo z dziurą -> jeden MultiPolygon, jeden wielokąt z dwoma pierścieniami', () => {
+  const g = zonesToGeoJSON([band(10, '#fdc527', [flatRing(OUTER_CW), flatRing(HOLE_CCW)], [0, 0])], META);
+  const geom = g.features[0].geometry;
+  assert.equal(geom.type, 'MultiPolygon');
+  assert.equal(geom.coordinates.length, 1);
+  assert.equal(geom.coordinates[0].length, 2);
+});
+
+test('zonesToGeoJSON: osobne wielokąty wg poly[]', () => {
+  const far = [[21, 51], [21, 51.1], [21.1, 51.1], [21.1, 51]];
+  const g = zonesToGeoJSON([band(10, '#fdc527', [flatRing(OUTER_CW), flatRing(HOLE_CCW), flatRing(far)], [0, 0, 1])], META);
+  assert.deepEqual(g.features[0].geometry.coordinates.map(p => p.length), [2, 1]);
+});
+
+test('zonesToGeoJSON: kolejność współrzędnych to [lon, lat]', () => {
+  const g = zonesToGeoJSON([band(10, '#fdc527', [flatRing(OUTER_CW)], [0])], META);
+  for (const [lon, lat] of g.features[0].geometry.coordinates[0][0]) {
+    assert.ok(lon >= 20 && lon <= 20.1, `lon ${lon}`);
+    assert.ok(lat >= 50 && lat <= 50.1, `lat ${lat}`);
+  }
+});
+
+test('zonesToGeoJSON: zaokrąglenie do 5 miejsc', () => {
+  const ring = flatRing([[20.123456789, 50.987654321], [20.2, 50.987654321], [20.2, 51.1], [20.123456789, 51.1]]);
+  const g = zonesToGeoJSON([band(10, '#fdc527', [ring], [0])], META);
+  const pts = g.features[0].geometry.coordinates[0][0];
+  for (const v of pts.flat()) assert.equal(v, Math.round(v * 1e5) / 1e5);
+  assert.ok(pts.some(([lon, lat]) => lon === 20.12346 && lat === 50.98765));
+});
+
+test('zonesToGeoJSON: RFC 7946 — zewnętrzny CCW, dziura CW, niezależnie od wejścia', () => {
+  for (const [outer, hole] of [[OUTER_CW, HOLE_CCW], [[...OUTER_CW].reverse(), [...HOLE_CCW].reverse()]]) {
+    const g = zonesToGeoJSON([band(10, '#fdc527', [flatRing(outer), flatRing(hole)], [0, 0])], META);
+    const [o, h] = g.features[0].geometry.coordinates[0];
+    assert.ok(area(o) > 0, 'zewnętrzny CCW');
+    assert.ok(area(h) < 0, 'dziura CW');
+  }
+});
+
+test('zonesToGeoJSON: każdy pierścień domknięty i ma >= 4 pozycje', () => {
+  const g = zonesToGeoJSON([band(10, '#fdc527', [flatRing(OUTER_CW), flatRing(HOLE_CCW)], [0, 0])], META);
+  for (const poly of g.features[0].geometry.coordinates) {
+    for (const ring of poly) {
+      assert.ok(ring.length >= 4);
+      assert.deepEqual(ring[0], ring[ring.length - 1]);
+    }
+  }
+});
+
+test('zonesToGeoJSON: kolejność od najchłodniejszego, kumulatywne min/max, etykieta i kolor', () => {
+  const g = zonesToGeoJSON([
+    band(10, '#aa0000', [flatRing(OUTER_CW)], [0]),
+    band(20, '#00aa00', [flatRing(OUTER_CW)], [0]),
+    band(30, '#0000aa', [flatRing(OUTER_CW)], [0]),
+  ], META);
+  assert.deepEqual(g.features.map(f => f.properties.minutes_max), [30, 20, 10]);
+  const p10 = g.features[2].properties, p20 = g.features[1].properties;
+  assert.equal(p10.label, 'do 10 min');
+  assert.equal(p20.label, '10–20 min');
+  assert.equal(p20.minutes_min, 10);
+  assert.equal(p20.color, '#00aa00');
+  assert.equal(p20.fill, '#00aa00');
+  assert.equal(typeof p20['fill-opacity'], 'number');
+});
+
+test('zonesToGeoJSON: metadane w metadata i w properties każdego Feature; undefined znika', () => {
+  const g = zonesToGeoJSON([band(10, '#fdc527', [flatRing(OUTER_CW)], [0])], { ...META, point2: undefined });
+  assert.deepEqual(g.metadata.point, [50.05, 20.05]);
+  assert.ok(!('point2' in g.metadata));
+  for (const f of g.features) {
+    assert.equal(f.properties.city_name, 'Trójmiasto');
+    assert.equal(f.properties.walk, true);
+    assert.equal(f.properties.source, EXPORT_SOURCE);
+  }
+  const cmp = zonesToGeoJSON([band(10, '#fdc527', [flatRing(OUTER_CW)], [0])], { ...META, compare: true, point2: [51, 21] });
+  assert.deepEqual(cmp.features[0].properties.point2, [51, 21]);
+  assert.doesNotThrow(() => JSON.stringify(g));
+});
+
+test('exportFileName: pojedynczy i porównanie, zero-padding, bezpieczne znaki', () => {
+  assert.equal(exportFileName({ city: 'trojmiasto', compare: false, timeMin: 8 * 60 + 5 }, '20261116'),
+    'izochrona-trojmiasto-20261116-0805.geojson');
+  assert.equal(exportFileName({ city: 'gzm', compare: true, timeMin: 0 }, '20261116'),
+    'izochrona-gzm-2pkt-20261116-0000.geojson');
+  const odd = exportFileName({ city: 'a/b:c*?"<>| ..\\x', compare: false, timeMin: 23 * 60 + 59 }, '20261116');
+  assert.match(odd, /^[A-Za-z0-9_.-]+$/);
+  assert.ok(odd.endsWith('-2359.geojson'));
+});
+
+// --- wskazówka pierwszej wizyty (Z-009) ----------------------------------------------
+
+test('shouldShowIntro: tablica prawdy 2x2x2 — tylko !seen && !consentPending && !pointFromUrl', () => {
+  for (const seen of [null, '1']) {
+    for (const consentPending of [false, true]) {
+      for (const pointFromUrl of [false, true]) {
+        const want = seen === null && !consentPending && !pointFromUrl;
+        assert.equal(shouldShowIntro({ seen, consentPending, pointFromUrl }), want,
+          `seen=${seen} consent=${consentPending} url=${pointFromUrl}`);
+      }
+    }
+  }
+});
+
+test('shouldShowIntro: seen — null, "1", true i śmieci', () => {
+  const base = { consentPending: false, pointFromUrl: false };
+  assert.equal(shouldShowIntro({ ...base, seen: null }), true);
+  assert.equal(shouldShowIntro({ ...base, seen: '1' }), false);
+  assert.equal(shouldShowIntro({ ...base, seen: true }), false);
+  assert.equal(shouldShowIntro({ ...base, seen: 'śmieci' }), true);
+  assert.equal(shouldShowIntro({ ...base, seen: undefined }), true);
+});
+
+// --- znaczniki HTML (Z-008, Z-009, Z-015) --------------------------------------------
+
+const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+test('index.html: #intro ukryty w znaczniku, przyciski type=button', () => {
+  assert.match(indexHtml, /<section class="intro" id="intro"[^>]*\shidden>/);
+  assert.match(indexHtml, /<button type="button" id="introOk">/);
+  assert.match(indexHtml, /<button type="button" class="intro-link" id="introHelp">/);
+  assert.ok(indexHtml.indexOf('id="hint"') < indexHtml.indexOf('id="intro"'));
+  assert.ok(indexHtml.indexOf('id="intro"') < indexHtml.indexOf('<fieldset class="control">'));
+});
+
+test('index.html: #exportBtn stoi między #shareBtn a .coffee-btn i startuje wyłączony', () => {
+  const a = indexHtml.indexOf('id="shareBtn"'), b = indexHtml.indexOf('id="exportBtn"'), c = indexHtml.indexOf('class="coffee-btn"');
+  assert.ok(a > 0 && a < b && b < c);
+  assert.match(indexHtml, /id="exportBtn" type="button" disabled/);
+});

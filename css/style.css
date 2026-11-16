@@ -264,6 +264,60 @@ html, body {
    --line na bieli ma kontrast ok. 1,2:1 */
 .search-results li.active { box-shadow: inset 0 0 0 2px var(--accent); }
 
+/* historia ostatnich punktów (Z-015) w tym samym listboxie */
+.search-results li.recent-head {
+  min-height: 0;
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  cursor: default;
+}
+.search-results li.recent-head:hover { background: none; }
+.recent-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-results li.recent-clear { color: var(--muted); }
+
+/* wskazówka pierwszej wizyty (Z-009) */
+.intro {
+  margin: -6px 0 14px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+}
+.intro[hidden] { display: none; }
+.intro ol { margin: 0 0 6px; padding-left: 18px; }
+.intro-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.intro-actions button {
+  min-height: var(--tap);
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.intro-actions button:hover { border-color: var(--accent); }
+.intro-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.intro-actions .intro-link { border-color: transparent; text-decoration: underline; }
+
 /* ostrzeżenie o nieaktualnym rozkładzie */
 .warn {
   margin: -6px 0 14px;
@@ -607,6 +661,13 @@ html, body {
   touch-action: manipulation;
 }
 .share-btn:hover { border-color: var(--accent); }
+/* bez opacity: opacity zbiłaby kontrast poniżej 4,5:1 (--muted na bieli ma ok. 4,8:1) */
+.share-btn:disabled,
+.share-btn:disabled:hover {
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
 .share-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
