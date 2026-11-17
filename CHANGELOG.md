@@ -36,6 +36,17 @@ Dosłowny wynik `npm run check` po Z-067 (2026-11-17):
 ℹ duration_ms 826.4285
 ```
   Lint czysty.
+- Z-068 Strona ma osobne okno „Polityka prywatności" z linkiem w stopce sekcji „Dane i kontakt". Opisuje administratora (Bartosz Cicharski, osoba prywatna), dane przetwarzane przez hosting, Google Analytics 4 (cookies `_ga` i `_ga_9L3F11T91B`), GoatCounter, cztery klucze pamięci przeglądarki i OpenStreetMap, z prawami osoby i skargą do Prezesa UODO. Akapit w oknie pomocy odsyła do tej polityki. Komunikat po wycofaniu zgody mówi teraz to samo co polityka: pomiar wyłącza się od razu, bez odświeżenia strony. Treść zatwierdzona przez właściciela 2026-11-17 i przepisana dosłownie. (pliki: index.html, css/style.css, tests/support-ui.test.mjs; testy: tests/support-ui.test.mjs — 3 nowe, `TAP_USES_MIN` bez zmian; npm run check: wynik dosłowny poniżej, lint czysty; nie sprawdzone: zachowanie na produkcji; zamykanie Escape sprawdzone symulowanym zdarzeniem, nie przy dwóch oknach naraz; zrzut ekranu nie wykonany, tylko pomiary wymiarów okna (desktop 480x566 px; 360 px: 322x576 px); działanie nakładki pola dotykowego przycisku zamknięcia nie mierzone). Otwarte pytania do prawnika, nierozstrzygalne w kodzie: (1) czy okno „Polityka prywatności" spełnia obowiązek z art. 13 RODO; (2) czy wymóg rejestru zgód jest wykonalny dla strony bez backendu; (3) polityka nie wskazuje podstaw prawnych z art. 6 RODO ani okresu przechowywania danych po stronie Google — świadomie, bo to wymaga oceny prawnika.
+Dosłowny wynik `npm run check` po Z-068 (2026-11-17):
+```
+ℹ pass 320
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 611.9491
+```
+  Lint czysty. Łącznie 321 testów.
 
 ### Zmienione
 - Z-051 Dane rozkładowe Łodzi i Olsztyna odświeżone z nowych źródeł (ręczne przeliczenie za zgodą właściciela; pierwsze nadpisanie `data/<miasto>/` od podmiany źródeł). Łódź: feed UMŁ, zakres 2026-11-16–2026-12-31, dni 2026-11-17 (roboczy), 2026-11-21 (sobota), 2026-11-22 (niedziela); 24161 kursów, 2390 przystanków w 1336 zespołach, 674361 wierszy `stop_times`, 10350 przesiadek pieszych; jeden wzorzec rozbity przez wyprzedzanie w niedzielę. Olsztyn: feed ZDZiT (tryb `html-latest`), zakres 2026-10-26–2026-11-30, te same dni; 5570 kursów, 842 przystanki (603 po usunięciu bez kursów), 2036 przesiadek pieszych. Nic się nie zgubiło: lodz/workday 591578 → 597587 B, lodz/saturday 494458 → 499447, lodz/sunday 482585 → 488111; olsztyn/workday 137585 → 147801, olsztyn/saturday 103303 → 113587, olsztyn/sunday 87083 → 97415. Bramka jakości (`node tools/check-data.mjs`) nie zgłasza problemów dla Łodzi ani Olsztyna. Sprawdzone w przeglądarce (`?city=lodz`, `?city=olsztyn`, punkt w centrum): izochrona się liczy, sześć pasm w legendzie, status „Zasięg z punktu · dzień roboczy, 08:00.", brak ostrzeżenia o nieaktualnym rozkładzie; stopka: Łódź rozkład z 17.11.2026 ważny do 31.12.2026, Olsztyn rozkład z 17.11.2026 ważny do 30.11.2026. (pliki: data/lodz/meta.json, data/lodz/workday.json, data/lodz/saturday.json, data/lodz/sunday.json, data/olsztyn/meta.json, data/olsztyn/workday.json, data/olsztyn/saturday.json, data/olsztyn/sunday.json; testy: bez nowych; npm run check: 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty — wynik podany w zleceniu, nie wklejony dosłownie z terminala; nie sprawdzone: poprawność rozkładów względem terenu, przełączniki środków transportu, tryb porównania i tryb ostrożny na nowych danych, zachowanie przy następnym automatycznym odświeżeniu; Opole nadal otwarte w Z-051 i Z-054)

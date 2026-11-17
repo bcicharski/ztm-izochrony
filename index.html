@@ -364,6 +364,7 @@
           · ważny do <span id="feedEnd">…</span>
           <span id="delayCoverageRow" hidden>· profile opóźnień: <span id="delayCoverage"></span></span>
           · kontakt: <a href="mailto:Bartosz@excelninja.pro">Bartosz@excelninja.pro</a>
+          · <button type="button" class="link-btn" id="privacyOpen">Polityka prywatności</button>
         </footer>
         <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener"
            aria-label="Podoba się? Postaw kawę — otwiera zewnętrzny serwis suppi.pl w nowej karcie">
@@ -497,7 +498,36 @@
         target="_blank" rel="noopener">GoatCounter</a> (bez plików cookie
         i bez profilowania), a Google Analytics (statystyki) działa
         wyłącznie po wyrażeniu zgody; możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń). Ostatnio wybrane punkty zapisujemy tylko w Twojej
-        przeglądarce; wyczyścisz je opcją „Wyczyść historię” na liście pod polem adresu.</p>
+        przeglądarce; wyczyścisz je opcją „Wyczyść historię” na liście pod polem adresu.
+        Pełne informacje o danych znajdziesz w polityce prywatności, pod stopką panelu.</p>
+    </div>
+  </dialog>
+
+  <dialog id="privacyDialog" aria-labelledby="privacyTitle">
+    <div class="help-head">
+      <h2 id="privacyTitle">Polityka prywatności</h2>
+      <button class="collapse-btn" id="privacyClose" aria-label="Zamknij politykę prywatności">×</button>
+    </div>
+    <div class="help-body">
+      <p><strong>Kto odpowiada za te dane.</strong> Administratorem jest Bartosz Cicharski (osoba prywatna), kontakt: Bartosz@excelninja.pro.</p>
+
+      <p><strong>Strona nie ma serwera aplikacji.</strong> Wszystkie obliczenia — wyszukiwanie połączeń, rysowanie stref, statystyki — wykonują się w Twojej przeglądarce. Nie zakładamy kont, nie prowadzimy bazy użytkowników i nie wysyłamy Twojego punktu startowego ani wyników na żaden nasz serwer, bo takiego serwera nie ma.</p>
+
+      <p><strong>Hosting.</strong> Strona stoi na GitHub Pages (GitHub, Inc.). Dostawca hostingu, wydając pliki strony, przetwarza standardowe dane techniczne połączenia, w tym adres IP. Nie mamy dostępu do tych logów ani wpływu na ich zakres.</p>
+
+      <p><strong>Statystyki odwiedzin — tylko po Twojej zgodzie.</strong> Po kliknięciu „Zgoda” w banerze uruchamiamy Google Analytics 4 (identyfikator pomiaru G-9L3F11T91B). Zapisuje on w Twojej przeglądarce pliki cookie <code>_ga</code> i <code>_ga_9L3F11T91B</code>, służące odróżnieniu kolejnych wizyt. Odbiorcą tych danych jest Google. Adres strony przekazywany do Analytics jest celowo obcinany do samego adresu domeny — nie trafiają tam współrzędne punktu, który wybrałeś na mapie. Jak Google przetwarza dane z witryn korzystających z jego usług, opisuje osobna strona Google. <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">informacja Google o danych z witryn partnerskich</a></p>
+
+      <p><strong>Zgodę możesz wycofać w każdej chwili.</strong> Służy do tego przycisk w sekcji „Dane i kontakt” na dole panelu. Wycofanie usuwa pliki cookie Analytics i wyłącza pomiar od razu, bez przeładowania strony. Tym samym przyciskiem możesz zgody udzielić ponownie.</p>
+
+      <p><strong>Licznik odwiedzin bez zgody.</strong> Niezależnie od powyższego liczymy odwiedziny narzędziem GoatCounter. Nie ustawia ono plików cookie, nie profiluje i nie śledzi Cię między stronami. Przekazujemy mu wyłącznie ścieżkę adresu, bez parametrów — współrzędne Twojego punktu nie są do niego wysyłane.</p>
+
+      <p><strong>Co zostaje w Twojej przeglądarce.</strong> W pamięci lokalnej przeglądarki zapisujemy cztery rzeczy: decyzję o zgodzie (<code>ga-consent</code>), ostatnio wybrane punkty startowe (<code>recent-points</code>), informację o obejrzeniu wskazówki pierwszej wizyty (<code>seen-intro</code>) i stan zwinięcia sekcji panelu (<code>panel-sections</code>). Te dane nie opuszczają Twojego urządzenia — nie wysyłamy ich nigdzie i nie mamy do nich dostępu. Historię ostatnich punktów skasujesz opcją „Wyczyść historię” pod polem adresu; resztę — czyszcząc dane strony w przeglądarce.</p>
+
+      <p><strong>Mapa.</strong> Podkład pochodzi z OpenStreetMap. Pobierając kafelki mapy, Twoja przeglądarka łączy się bezpośrednio z serwerami OpenStreetMap, które widzą przy tym Twój adres IP i oglądany fragment mapy.</p>
+
+      <p><strong>Linki na zewnątrz.</strong> Przycisk wsparcia prowadzi do serwisu suppi.pl, który ma własną politykę prywatności.</p>
+
+      <p><strong>Twoje prawa.</strong> Przysługuje Ci dostęp do danych, ich sprostowanie, usunięcie, ograniczenie przetwarzania i sprzeciw, a także skarga do Prezesa Urzędu Ochrony Danych Osobowych. Po naszej stronie nie przechowujemy żadnych danych o Tobie, więc w praktyce żądanie usunięcia realizujesz sam — wycofując zgodę i czyszcząc dane strony w przeglądarce. W sprawie danych zebranych przez Google kieruj żądania do Google albo napisz na adres kontaktowy powyżej.</p>
     </div>
   </dialog>
 
@@ -530,7 +560,7 @@
           consentSet('denied');
           gaRevoke(); // cookies i wyciszenie działają nawet przy błędzie zapisu
           render(consentGet() === 'denied'
-            ? 'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics. Pełne wyłączenie nastąpi po odświeżeniu strony — wynik na mapie możesz wcześniej zachować przyciskiem „Kopiuj link”.'
+            ? 'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics i wyłączyliśmy pomiar — nic więcej nie jest wysyłane.'
             : 'Nie udało się zapisać wyboru w tej przeglądarce. Statystyki Google pozostają wyłączone.');
         } else {
           consentSet('granted');
@@ -547,6 +577,21 @@
       bar.hidden = false;
       document.getElementById('consentYes').addEventListener('click', () => choose('granted'));
       document.getElementById('consentNo').addEventListener('click', () => choose('denied'));
+    })();
+  </script>
+
+  <script>
+    // Okno polityki prywatności — ten sam wzorzec co #helpDialog w js/app.js
+    // (przycisk otwiera showModal, × i klik w tło zamykają; Escape jest natywny).
+    (() => {
+      const dialog = document.getElementById('privacyDialog');
+      const close = document.getElementById('privacyClose');
+      document.getElementById('privacyOpen').addEventListener('click', () => {
+        dialog.showModal();
+        close.focus();
+      });
+      close.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
     })();
   </script>
 

@@ -214,20 +214,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Uwaga: po Z-008 zrzut ekranu zwiniętego panelu daje mapę z legendą bez osobnego trybu, więc wartość eksportu PNG jest mniejsza niż przed tą zmianą. Warto to rozważyć przed wdrożeniem.
 - Pliki: nieznane — wymaga projektu.
 
-### Z-068 [P2] Brak polityki prywatności
-- Status: nowe
-- Zgłoszone: 2026-11-17 (przegląd Z-001)
-- Problem: repozytorium ma tylko jeden plik HTML i nie ma strony ani sekcji nazwanej polityką prywatności. Rolę informacji pełni akapit w dialogu pomocy.
-- Dowód: Google Analytics Terms of Service, sekcja 7 „Privacy" (aktualizacja 2023-05-15, https://marketingplatform.google.com/about/analytics/terms/us/): „You must post a Privacy Policy and that Privacy Policy must provide notice of Your use of cookies", „You must disclose the use of Google Analytics, and how it collects and processes data." Akapit w oknie pomocy, nienazwany polityką prywatności i bez linku do https://policies.google.com/technologies/partner-sites, tego wprost nie spełnia.
-- Uwaga: zobowiązanie jest zaległe wobec Analytics i NIE powstało przez usunięcie reklam. Sprawdzono 2026-11-17: po Z-064 w `index.html` nie ma już żadnej nieprawdziwej wzmianki o reklamach.
-- Zakres: krótka, nazwana sekcja polityki prywatności — dopuszczalna jako nowa sekcja w panelu albo rozwinięcie dialogu pomocy, bez nowego pliku HTML. Ma wymieniać: nazwy cookies Analytics; cel; odbiorcę; link https://policies.google.com/technologies/partner-sites; GoatCounter; dane trzymane w `localStorage` (historia ostatnich punktów, decyzja o zgodzie `ga-consent`, stan sekcji panelu); sposób wycofania zgody (Z-067).
-- Powiązanie (2026-11-17): sposób wycofania zgody, który ten wpis ma wymieniać, już istnieje i jest opisany w Z-067 (zrobione).
-- Pytania do prawnika (nierozstrzygalne bez prawnika; właściciel powinien o nich wiedzieć):
-  1. Czy akapit w oknie pomocy, nienazwany „Polityką prywatności", spełnia obowiązek informacyjny z art. 13 RODO i wymóg „post a Privacy Policy" z regulaminu Analytics, czy potrzebna jest osobno zatytułowana sekcja.
-  2. Czy wymóg „retain records of consent" (rejestr zgód) jest wykonalny dla strony bez backendu, która zapisuje decyzję wyłącznie w przeglądarce użytkownika i nie przechowuje po swojej stronie żadnego dowodu. To jedyny punkt, w którym nienegocjowalna zasada „zero backendu" strukturalnie nie daje się pogodzić z literalnym brzmieniem polityki Google.
-- Pliki: index.html, css/style.css.
-- Jak sprawdzić: nieznane — do ustalenia w projekcie.
-
 ## Zrobione
 
 ### Z-020 [P1] Dostępność: prefers-reduced-motion i pola dotykowe
@@ -669,6 +655,29 @@ Pułapki do wdrożenia:
 - Pliki: index.html, css/style.css, tests/support-ui.test.mjs, tests/mobile-layout.test.mjs, CURRENT_STATE.md.
 - Jak sprawdzić: `npm run check` (wynik wyżej); w przeglądarce scenariusz z sekcji „Dowód wdrożenia" powyżej (wątek główny).
 - Niezweryfikowane: zachowanie fokusu po prawdziwym kliknięciu myszą (kod go nie przenosi, ale panel podglądu nie miał fokusu okna); kontrast `--muted` przy rozmiarze `.hint` nie zmierzony; ścieżka błędu zapisu w prywatnym oknie Safari sprawdzona tylko w kodzie i testach tekstowych; nie sprawdzono, czy Analytics po wycofaniu przestaje wysyłać żądania sieciowe (sprawdzono cookies i stan zapisu); ładowanie Analytics na produkcji nie było sprawdzane, tylko lokalnie.
+
+### Z-068 [P2] Brak polityki prywatności
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (przegląd Z-001)
+- Problem: repozytorium ma tylko jeden plik HTML i nie ma strony ani sekcji nazwanej polityką prywatności. Rolę informacji pełni akapit w dialogu pomocy.
+- Dowód: Google Analytics Terms of Service, sekcja 7 „Privacy" (aktualizacja 2023-05-15, https://marketingplatform.google.com/about/analytics/terms/us/): „You must post a Privacy Policy and that Privacy Policy must provide notice of Your use of cookies", „You must disclose the use of Google Analytics, and how it collects and processes data." Akapit w oknie pomocy, nienazwany polityką prywatności i bez linku do https://policies.google.com/technologies/partner-sites, tego wprost nie spełnia.
+- Uwaga: zobowiązanie jest zaległe wobec Analytics i NIE powstało przez usunięcie reklam. Sprawdzono 2026-11-17: po Z-064 w `index.html` nie ma już żadnej nieprawdziwej wzmianki o reklamach.
+- Zakres: krótka, nazwana sekcja polityki prywatności — dopuszczalna jako nowa sekcja w panelu albo rozwinięcie dialogu pomocy, bez nowego pliku HTML. Ma wymieniać: nazwy cookies Analytics; cel; odbiorcę; link https://policies.google.com/technologies/partner-sites; GoatCounter; dane trzymane w `localStorage` (historia ostatnich punktów, decyzja o zgodzie `ga-consent`, stan sekcji panelu); sposób wycofania zgody (Z-067).
+- Powiązanie (2026-11-17): sposób wycofania zgody, który ten wpis ma wymieniać, już istnieje i jest opisany w Z-067 (zrobione).
+- Pytania do prawnika (nierozstrzygalne bez prawnika; właściciel powinien o nich wiedzieć; zostają otwarte po wdrożeniu):
+  1. Czy okno „Polityka prywatności" spełnia obowiązek informacyjny z art. 13 RODO i wymóg „post a Privacy Policy" z regulaminu Analytics, czy potrzebna jest osobno zatytułowana sekcja.
+  2. Czy wymóg „retain records of consent" (rejestr zgód) jest wykonalny dla strony bez backendu, która zapisuje decyzję wyłącznie w przeglądarce użytkownika i nie przechowuje po swojej stronie żadnego dowodu. To jedyny punkt, w którym nienegocjowalna zasada „zero backendu" strukturalnie nie daje się pogodzić z literalnym brzmieniem polityki Google.
+  3. Polityka nie wskazuje podstaw prawnych przetwarzania w rozumieniu art. 6 RODO ani okresu przechowywania danych po stronie Google. Świadomie: to wymaga oceny prawnika, nie modelu.
+- Wdrożone 2026-11-17: nowy `<dialog id="privacyDialog" aria-labelledby="privacyTitle">` zbudowany na wzór `#helpDialog` (klasy `.help-head` i `.help-body`, ten sam przycisk zamknięcia, `showModal()`, fokus na przycisku zamknięcia, zamykanie przez × i klik w tło, Escape natywnie). Link „Polityka prywatności" to `<button type="button" class="link-btn" id="privacyOpen">` w `footer.credits`, po kontakcie mailowym. `#privacyDialog` dzieli reguły z `#helpDialog`; doszły `.credits .link-btn` (wygląd linku) i `.help-body code`; zero nowych tokenów. Akapit w oknie pomocy dostał na końcu zdanie „Pełne informacje o danych znajdziesz w polityce prywatności, pod stopką panelu."; zdanie o wycofaniu zgody z Z-067 bez zmian. Koszt wysokości panelu: zero (stopka już istniała, okno żyje poza układem).
+- Treść: zatwierdzona przez właściciela 2026-11-17 przed wdrożeniem i przepisana dosłownie, bez redagowania. Właściciel potwierdził, że prowadzi serwis jako osoba prywatna; administrator: „Bartosz Cicharski (osoba prywatna)". Polityka zawiera: administratora i kontakt; stwierdzenie, że strona nie ma serwera aplikacji i obliczenia dzieją się w przeglądarce; hosting GitHub Pages i przetwarzanie danych technicznych połączenia przez dostawcę hostingu; Google Analytics 4 z identyfikatorem pomiaru G-9L3F11T91B, cookies `_ga` i `_ga_9L3F11T91B`, Google jako odbiorca, adres obcinany (współrzędne punktu nie trafiają do Analytics); link do informacji Google o witrynach partnerskich; sposób wycofania zgody; GoatCounter bez cookies, z samą ścieżką bez parametrów; cztery klucze `localStorage` (`ga-consent`, `recent-points`, `seen-intro`, `panel-sections`), które nie opuszczają urządzenia; OpenStreetMap (pobieranie kafelków ujawnia IP i oglądany fragment mapy); link do serwisu wsparcia; prawa osoby, której dane dotyczą, i skargę do Prezesa Urzędu Ochrony Danych Osobowych.
+- Rozbieżności zgłoszone przez wdrożeniowca, rozstrzygnięte przez wątek główny (2026-11-17):
+  1. Wycofanie zgody: polityka mówi, że wyłącza pomiar od razu, bez przeładowania, a komunikat mówił „Pełne wyłączenie nastąpi po odświeżeniu strony". Sprawdzone w przeglądarce: po wycofaniu wymuszone `gtag('event')` i `gtag('config')` nie wysyłają żadnego żądania, flaga `ga-disable` jest ustawiona, pliki cookie są puste, zapis to `denied`. Prawdziwa jest polityka; komunikat był nadmiernie ostrożny i w kontekście prawnym wprowadzał w błąd. Zmiana kodu: komunikat poprawiono na „Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics i wyłączyliśmy pomiar — nic więcej nie jest wysyłane." (`index.html`, asercja w `tests/support-ui.test.mjs`).
+  2. Cztery klucze pamięci: przeszukanie kodu pod kątem `localStorage`, `sessionStorage` i `indexedDB` potwierdziło dokładnie cztery klucze i żaden inny magazyn. Stwierdzenie w polityce prawdziwe; bez zmian.
+- Testy: 3 nowe w `tests/support-ui.test.mjs` — struktura dialogu i przycisk w stopce; dosłowne fragmenty treści (administrator, identyfikator pomiaru, nazwy cookies, cztery klucze pamięci, adres informacji Google, GoatCounter, OpenStreetMap, Prezes Urzędu Ochrony Danych Osobowych); zdanie odsyłające w pomocy i brak słowa „reklam". Istniejący test dialogu pomocy zawężony do `#helpDialog`, bo wcześniej zabraniał frazy „czyszcząc dane strony" w całym pliku, a ta fraza występuje w zatwierdzonej treści polityki. `TAP_USES_MIN` bez zmian. `npm run check`: lint czysty, 321 testów, 320 pass, 0 fail, 1 skipped (dosłowny wynik w CHANGELOG.md, sekcja 2026-11-17).
+- Wymiary okna (pomiar): desktop 480x566 px przy treści 1192 px, przewijanej, bez poziomego paska; przy szerokości 360 px: 322x576 px, bez poziomego paska, przewija się do końca.
+- Pliki: index.html, css/style.css, tests/support-ui.test.mjs.
+- Jak sprawdzić: `npm run check` (wynik w CHANGELOG.md, sekcja 2026-11-17); w przeglądarce: link w stopce otwiera okno, zamknięcie przez × i klik w tło, Escape; wymiary okna jak wyżej.
+- Niezweryfikowane: zamykanie Escape sprawdzone tylko symulowanym zdarzeniem, nie przy dwóch oknach naraz; nie zrobiono zrzutu ekranu, tylko pomiary; działanie nakładki pola dotykowego przycisku zamknięcia nie było mierzone; zachowanie na produkcji nie było sprawdzane.
 
 ## Odrzucone
 

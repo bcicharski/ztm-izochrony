@@ -90,7 +90,7 @@ test('wycofanie zgody: teksty trzech stanów i trzech komunikatów są dosłowne
     "'Statystyki Google Analytics: ' + (granted ? 'włączone.' : 'wyłączone.')",
     "const GRANT = 'Wyraź zgodę na statystyki'",
     "const REVOKE = 'Wycofaj zgodę na statystyki'",
-    'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics. Pełne wyłączenie nastąpi po odświeżeniu strony — wynik na mapie możesz wcześniej zachować przyciskiem „Kopiuj link”.',
+    'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics i wyłączyliśmy pomiar — nic więcej nie jest wysyłane.',
     'Dziękujemy. Statystyki Google Analytics są włączone.',
     'Nie udało się zapisać wyboru w tej przeglądarce. Statystyki Google pozostają wyłączone.',
   ]) assert.ok(src.includes(t), t);
@@ -108,11 +108,41 @@ test('wycofanie zgody: kasuje cookies _ga* i wycisza Analytics w bieżącej sesj
 });
 
 test('wycofanie zgody: dialog pomocy ma nowe zdanie, a stare o czyszczeniu danych zniknęło', () => {
-  const src = flat(html);
+  const src = flat(html.match(/<dialog id="helpDialog"[\s\S]*?<\/dialog>/)[0]); // polityka prywatności ma własne zdanie o czyszczeniu
   assert.ok(src.includes('Google Analytics (statystyki) działa wyłącznie po wyrażeniu zgody; możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń).'));
   assert.ok(!src.includes('czyszcząc dane strony'));
 });
 
 test('wycofanie zgody: nowe teksty nie zawierają słowa „reklam"', () => {
   assert.ok(!/reklam/i.test(html + css));
+});
+
+test('Z-068: #privacyDialog — struktura jak #helpDialog, otwierany przyciskiem ze stopki', () => {
+  const m = html.match(/<dialog id="privacyDialog" aria-labelledby="privacyTitle">[\s\S]*?<\/dialog>/);
+  assert.ok(m, 'brak #privacyDialog z aria-labelledby');
+  assert.ok(m[0].includes('id="privacyTitle"') && m[0].includes('>Polityka prywatności</h2>'));
+  assert.match(m[0], /<button class="collapse-btn" id="privacyClose" aria-label="[^"]+">/);
+  const footer = html.match(/<footer class="credits">[\s\S]*?<\/footer>/)[0];
+  assert.match(footer, /<button type="button" class="link-btn" id="privacyOpen">Polityka prywatności<\/button>/);
+  assert.ok(footer.indexOf('mailto:') < footer.indexOf('privacyOpen'), 'przycisk po kontakcie mailowym');
+  assert.ok(html.includes("getElementById('privacyDialog')") && html.includes('dialog.showModal()'));
+});
+
+test('Z-068: treść polityki zawiera zatwierdzone, dosłowne fragmenty', () => {
+  const text = html.match(/<dialog id="privacyDialog"[\s\S]*?<\/dialog>/)[0].replace(/\s+/g, ' ');
+  for (const s of [
+    'Administratorem jest Bartosz Cicharski (osoba prywatna), kontakt: Bartosz@excelninja.pro.',
+    'G-9L3F11T91B', '<code>_ga</code>', '<code>_ga_9L3F11T91B</code>',
+    '<code>ga-consent</code>', '<code>recent-points</code>', '<code>seen-intro</code>', '<code>panel-sections</code>',
+    'href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">informacja Google o danych z witryn partnerskich</a>',
+    'GoatCounter', 'OpenStreetMap', 'GitHub Pages (GitHub, Inc.)', 'suppi.pl',
+    'Prezesa Urzędu Ochrony Danych Osobowych',
+  ]) assert.ok(text.includes(s), s);
+});
+
+test('Z-068: okno pomocy odsyła do polityki, a zdanie o wycofaniu zgody zostaje', () => {
+  const t = html.replace(/\s+/g, ' ');
+  assert.ok(t.includes('Pełne informacje o danych znajdziesz w polityce prywatności, pod stopką panelu.</p>'));
+  assert.ok(t.includes('możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń).'));
+  assert.ok(!/reklam/i.test(html));
 });

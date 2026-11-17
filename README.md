@@ -107,6 +107,8 @@ z `data/<miasto>/meta.json`). Po tym terminie panel wyświetla ostrzeżenie,
 a typy dnia, których build nie wygenerował (`meta.dates`), są wyłączone
 w selektorze.
 
+**Polityka prywatności (Z-068).** Link „Polityka prywatności” w stopce sekcji „Dane i kontakt” otwiera okno `#privacyDialog` (administrator danych, Google Analytics po zgodzie, GoatCounter, pamięć lokalna, OpenStreetMap, prawa użytkownika). Okno pomocy odsyła do niego zdaniem na końcu akapitu o danych.
+
 ## Testy i lint
 
 ```
