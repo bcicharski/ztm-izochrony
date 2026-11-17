@@ -1,14 +1,34 @@
 {
   "city": "lodz",
-  "generated": "2026-11-02T11:34:40.832Z",
+  "generated": "2026-11-17T00:11:03.988Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20261103",
-    "saturday": "20261107",
-    "sunday": "20261108"
+    "workday": "20261117",
+    "saturday": "20261121",
+    "sunday": "20261122"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261117",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261121",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261122",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
-    "ZDiT Łódź (via zbiorkom.live) — https://otwarte.miasto.lodz.pl/transport_komunikacja/"
+    "ZDiT Łódź (otwarte dane UMŁ) — https://otwarte.miasto.lodz.pl/transport_komunikacja/"
   ],
   "routeNames": {
     "1": "1",
@@ -110,13 +130,6 @@
     "92B": "92B",
     "97A": "97A",
     "97B": "97B",
-    "C2": "C2",
-    "C3": "C3",
-    "C4": "C4",
-    "C5": "C5",
-    "C6": "C6",
-    "C7": "C7",
-    "C8": "C8",
     "F1": "F1",
     "G1": "G1",
     "G2": "G2",
@@ -152,5 +165,35 @@
     "Z13": "Z13",
     "Z3": "Z3",
     "Z6": "Z6"
+  },
+  "counts": {
+    "stops": 2390,
+    "routes": 134,
+    "transfers": 10350,
+    "days": {
+      "workday": {
+        "patterns": 750,
+        "trips": 10228,
+        "bytes": 597587,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 633,
+        "trips": 7330,
+        "bytes": 499447,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 640,
+        "trips": 6603,
+        "bytes": 488111,
+        "overtaking": 1
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 0,
+    "outsideShare": 0,
+    "maxOutsideKm": 0
   }
 }
