@@ -24,6 +24,18 @@ Dosłowny wynik `npm run check` po Z-064 i Z-065 (2026-11-17):
 ℹ duration_ms 576.7339
 ```
   Lint czysty.
+- Z-067 Wycofanie zgody na statystyki z poziomu strony: w sekcji „Dane i kontakt" na dole panelu jest przycisk, którym można wycofać zgodę na statystyki Google Analytics albo udzielić jej ponownie. Wycofanie usuwa pliki cookie i wyłącza Analytics od razu, bez przeładowania strony, więc wynik na mapie nie znika. Dialog pomocy wskazuje tę kontrolkę zamiast czyszczenia danych przeglądarki. (pliki: index.html, css/style.css, tests/support-ui.test.mjs, tests/mobile-layout.test.mjs, CURRENT_STATE.md; testy: tests/support-ui.test.mjs — 6 nowych, tests/mobile-layout.test.mjs — `TAP_USES_MIN` 23 -> 24; npm run check: lint czysty, 318 testów, 317 pass, 0 fail, 1 skipped (dosłowny wynik poniżej); odstępstwo: typograficzny cudzysłów zamykający w zdaniu pomocy, zgodnie z resztą pliku; nie sprawdzone: fokus po prawdziwym kliknięciu myszą, kontrast `--muted` przy `.hint`, ścieżka błędu zapisu w prywatnym oknie Safari (tylko kod i testy tekstowe), zatrzymanie żądań sieciowych Analytics po wycofaniu (sprawdzono cookies i stan zapisu), ładowanie Analytics na produkcji)
+Dosłowny wynik `npm run check` po Z-067 (2026-11-17):
+```
+ℹ tests 318
+ℹ pass 317
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 826.4285
+```
+  Lint czysty.
 
 ### Zmienione
 - Z-051 Dane rozkładowe Łodzi i Olsztyna odświeżone z nowych źródeł (ręczne przeliczenie za zgodą właściciela; pierwsze nadpisanie `data/<miasto>/` od podmiany źródeł). Łódź: feed UMŁ, zakres 2026-11-16–2026-12-31, dni 2026-11-17 (roboczy), 2026-11-21 (sobota), 2026-11-22 (niedziela); 24161 kursów, 2390 przystanków w 1336 zespołach, 674361 wierszy `stop_times`, 10350 przesiadek pieszych; jeden wzorzec rozbity przez wyprzedzanie w niedzielę. Olsztyn: feed ZDZiT (tryb `html-latest`), zakres 2026-10-26–2026-11-30, te same dni; 5570 kursów, 842 przystanki (603 po usunięciu bez kursów), 2036 przesiadek pieszych. Nic się nie zgubiło: lodz/workday 591578 → 597587 B, lodz/saturday 494458 → 499447, lodz/sunday 482585 → 488111; olsztyn/workday 137585 → 147801, olsztyn/saturday 103303 → 113587, olsztyn/sunday 87083 → 97415. Bramka jakości (`node tools/check-data.mjs`) nie zgłasza problemów dla Łodzi ani Olsztyna. Sprawdzone w przeglądarce (`?city=lodz`, `?city=olsztyn`, punkt w centrum): izochrona się liczy, sześć pasm w legendzie, status „Zasięg z punktu · dzień roboczy, 08:00.", brak ostrzeżenia o nieaktualnym rozkładzie; stopka: Łódź rozkład z 17.11.2026 ważny do 31.12.2026, Olsztyn rozkład z 17.11.2026 ważny do 30.11.2026. (pliki: data/lodz/meta.json, data/lodz/workday.json, data/lodz/saturday.json, data/lodz/sunday.json, data/olsztyn/meta.json, data/olsztyn/workday.json, data/olsztyn/saturday.json, data/olsztyn/sunday.json; testy: bez nowych; npm run check: 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty — wynik podany w zleceniu, nie wklejony dosłownie z terminala; nie sprawdzone: poprawność rozkładów względem terenu, przełączniki środków transportu, tryb porównania i tryb ostrożny na nowych danych, zachowanie przy następnym automatycznym odświeżeniu; Opole nadal otwarte w Z-051 i Z-054)
@@ -40,12 +52,14 @@ Dosłowny wynik `npm run check` po Z-059:
 ```
 
 ### Naprawione
+- Z-066 Licznik GoatCounter nie dostaje już lokalizacji użytkownika: raportuje samą ścieżkę `/`, bez parametru `p=` z adresu. To ten sam wyciek co Z-040, tylko innym kanałem (licznik nie działa lokalnie, więc wyciek był niewidoczny). Pomoc i zgoda bez zmian. (pliki: index.html, tests/support-ui.test.mjs; testy: tests/support-ui.test.mjs — nowy przypadek: nadpisanie `path` istnieje, stoi przed skryptem licznika i ma właściwą postać; npm run check: lint czysty, 312 testów, 311 pass, 0 fail, 1 skipped (dosłowny wynik w sekcji Wewnętrzne); potwierdzone w przeglądarce: przy `?city=trojmiasto&p=54.35540,18.64450&...` licznik raportuje `/`; nie sprawdzone: nieznane)
 - Z-052 Ostrzeżenie o wyprzedzaniu kursów w bramce jakości danych nie zapala się już przy niezmienionej liczbie wzorców — alarmuje tylko wzrost. Po przeliczeniu Łodzi fałszywy alarm dotyczył wartości, która się nie zmieniła. Ostrzeżenie nigdy nie blokuje publikacji. Dane na stronie bez zmian. (pliki: tools/check-data.mjs; testy: tests/check-data.test.mjs — 1 nowy przypadek „niezmieniona liczba nie ostrzega (Z-052)"; npm run check: lint czysty, 270 testów, 269 pass, 0 fail, 1 skipped — dosłowny wynik w sekcji Wewnętrzne; nie sprawdzone: zachowanie bramki przy następnym automatycznym odświeżeniu)
 - Z-060 Pięć drobnych usterek: komunikaty lokalizacji i eksportu docierają do czytnika ekranu; Enter przy jednym lub dwóch znakach pokazuje komunikat, że trzeba wpisać co najmniej 3 znaki (próg dla adresów bez zmian); awaryjne kopiowanie linku zostawia adres do zaznaczenia w polu; wyłączony przycisk lokalizacji ma trwały opis powodu zamiast `title`; kolory w CSS wyłącznie z tokenów w `:root` (wartości bez zmian, zero różnicy wizualnej). (pliki: js/app.js, js/uilogic.js, css/style.css; testy: tests/a11y-css.test.mjs (1 nowy); wdrożenie w commicie 29b0d6b; npm run check: 278 testów, 277 pass, 0 fail, 1 skipped, lint czysty (wynik podany w zleceniu, nie wklejony dosłownie z terminala); nie sprawdzone: weryfikacja ręczna każdego punktu)
 
 ### Usunięte
 - Z-064 Usunięto blok reklamowy Google AdSense razem ze skryptem: serwis nie wyświetla już reklam i nie ładuje skryptu AdSense. Baner zgody mówi wyłącznie o statystykach: „Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie." (treść wg decyzji właściciela „Skróć do samych statystyk"); dialog pomocy: „Google Analytics (statystyki) działa wyłącznie po wyrażeniu zgody". Zgoda na cookies zostaje: baner, `consentGet`/`consentSet` i warunkowe ładowanie GA bez zmian. Wysokość panelu bez zmian (548 px na desktopie). (pliki: index.html — meta `google-adsense-account`, blok `ad-box`, `window.loadAds` i dwa wywołania; css/style.css — `.ad-box`, `.ad-box[hidden]`, `.ad-label` i reguła `:has(unfilled)` z Z-059; tests/support-ui.test.mjs (nowy), tests/uilogic.test.mjs (usunięty test reguły `:has(unfilled)`), README.md, CURRENT_STATE.md; testy: wynik wspólny z Z-065, zob. sekcję Dodane; npm run check: lint czysty, 311 testów, 310 pass, 0 fail, 1 skipped; weryfikacja wątku głównego: `grep` po `index.html`, `css/style.css`, `js/*.js` bez trafień `adsbygoogle`, `googlesyndication`, `ad-box`, `adBox`, `loadAds`, `google-adsense`; w przeglądarce baner z nową treścią, brak skryptu reklamowego, „Zgoda" zapisuje zgodę i ładuje GA bez błędu w konsoli; Z-032, Z-001 i Z-038 do przeglądu, nie zamknięte)
 ### Wewnętrzne
+- Przegląd 2026-11-17 (werdykt): Z-001 (certyfikowany CMP) i Z-032 (wyciek do AdSense) przeniesione do „Odrzucone", bo AdSense usunięto (Z-064); wymóg certyfikowanego CMP dotyczy wyłącznie produktów reklamowych, a GA4 dopuszcza własny baner (źródła Google sprawdzone 2026-11-17). Dopisano Z-066 (zrobione, patrz Naprawione), Z-067 (P1, wycofanie zgody, nowe) i Z-068 (P2, polityka prywatności, nowe) z dwoma pytaniami do prawnika; Z-067 i Z-068 czekają na projekt. (pliki: ZADANIA-DO-ZROBIENIA.md, CHANGELOG.md; bez zmian w kodzie poza Z-066; npm run check: nie dotyczy)
 - Z-051 i Z-054 Decyzja właściciela: rozkład Opola zostaje widoczny ze starymi danymi i z ostrzeżeniem o nieaktualnym rozkładzie; wariant „czasowo ukryć miasto" odrzucony. Ostrzeżenie potwierdzone w przeglądarce dla `?city=opole`; Z-054 (konwerter TransXChange na GTFS) pozostaje otwarte jako jedyna droga do naprawy Opola. (bez zmian w kodzie; npm run check: nie dotyczy, brak zmian w kodzie)
 - Z-050 Domknięcie obserwacji z 2026-11-17: za zgodą właściciela uruchomiono `node tools/build-delays.mjs`. Pole `delays` wróciło do `meta.json` wszystkich 18 miast; Trójmiasto 170 z 187 linii, Poznań 155 z 213, Kraków 87 z 215; pozostałe 15 miast bez pokrycia (GZM i Szczecin — Z-019). Bramka jakości nie zgłasza już zgubionych metadanych. Pliki `delays.json` i rozkłady bez zmian. (pliki: data/<miasto>/meta.json dla 18 miast; testy: bez nowych; npm run check: patrz wynik poniżej; sprawdzone w przeglądarce: stopka Trójmiasta „170 z 187 linii (pomiary do 17.11.2026)"; nie sprawdzone: odczyt stopki przez czytnik ekranu)
 - Z-058 Domknięcie: konwersja CRLF na LF objęła pliki z raportu i `tools/check-data.mjs`, który też miał CRLF (pliki: .github/workflows/refresh-data.yml, CLAUDE.md, CURRENT_STATE.md, README.md, tools/build-bridges.mjs, tools/check-data.mjs, tools/geo.mjs, vendor/leaflet/leaflet.css; treść bez zmian). Otwarte: `.claude/agents/*.md` (sześć plików) nadal z CRLF, zostawione, bo zmiany w agentach wymagają wyraźnej prośby właściciela. Wynik `npm run check` poniżej.
@@ -84,6 +98,15 @@ Dosłowny wynik `npm run check` po Z-059:
 ℹ skipped 1
 ℹ todo 0
 ℹ duration_ms 648.9991
+```
+  Lint czysty.
+- Dosłowny wynik `npm run check` po poprawce Z-066 (2026-11-17), uzupełniony w tym wpisie:
+```
+ℹ tests 312
+ℹ pass 311
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
 ```
   Lint czysty.
 

@@ -718,6 +718,16 @@ html, body {
   outline-offset: 1px;
 }
 
+/* wycofanie zgody na statystyki (sekcja „Dane i kontakt"): wygląd .share-btn,
+   ale tekst w --ink — to nie jest główne wezwanie do działania, więc bez --accent */
+.consent-row .hint { margin-bottom: 6px; }
+.consent-row .consent-toggle {
+  height: auto;
+  min-height: var(--tap);
+  margin-bottom: 10px;
+  color: var(--ink);
+}
+
 /* przycisk „Pokaż niedzielę" w #dayNote i „Kopiuj raport diagnostyczny" (Z-022, Z-025) */
 #dayNote button,
 #diagCopy {

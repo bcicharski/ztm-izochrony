@@ -66,15 +66,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## Nowe (bez projektu rozwiązania)
 
-### Z-001 [P1] Certyfikowany CMP (Consent Mode v2)
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: własny baner zgody nie spełnia wymogu Google dla EOG — potrzebny certyfikowany CMP. Uwaga: ryzyko prawne.
-- Dowód: index.html:321-359.
-- Przegląd (2026-11-17): usunięcie AdSense (Z-064) może w całości lub w części odebrać rację bytu temu wpisowi; wymaga przeglądu, nie zamknięty.
-- Z-064 (2026-11-17): reklamy usunięte; wymóg certyfikowanego CMP dotyczył reklam, a zgoda zostaje dla samych statystyk (Google Analytics). Wymaga ponownej oceny; nie zamknięty.
-- Pliki: index.html oraz ustawienie w panelu AdSense (poza kodem).
-
 ### Z-003 [P1] Mniejsze dane
 - Status: nowe
 - Zgłoszone: 2026-11-16 (analityk)
@@ -152,16 +143,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: żaden workflow nie wywołuje build-walknet, build-water ani build-bridges; pliki mają datę 2026-09-18.
 - Pliki: .github/workflows/, tools/build-walknet.mjs, tools/build-water.mjs, tools/build-bridges.mjs.
 
-### Z-032 [P1] Wyciek współrzędnych do AdSense
-- Status: nowe
-- Zgłoszone: nieznane
-- Problem: po zgodzie żądania reklamowe (`pagead2.googlesyndication.com/.../ads?...url=`) niosą pełny adres strony razem z parametrem `p=lat,lon`, czyli lokalizacją użytkownika. Naprawa `page_location` z Z-040 dotyczyła wyłącznie Analytics.
-- Dowód: obserwacja listy żądań w przeglądarce podczas wdrożenia Z-025. Potwierdzone 2026-11-16 w przeglądarce: żądania `https://pagead2.googlesyndication.com/pagead/ads?...` niosą pełny adres ze współrzędnymi w parametrach `url=` i `ref=`, dwa razy na odsłonę (jednostka 0x0 i 249x600). Przyczyna: AdSense czyta adres wprost z `location`, więc nadpisanie `page_location` w gtag go nie obejmuje. Zadanie nadal czeka na decyzję właściciela.
-- Uwaga: przeniesienie współrzędnych z query do fragmentu adresu zatrzymałoby wyciek, ale zmienia format linków — wymaga zgodności wstecznej ze starymi linkami i decyzji właściciela.
-- Przegląd (2026-11-17): usunięcie AdSense (Z-064) może w całości lub w części odebrać rację bytu temu wpisowi; wymaga przeglądu, nie zamknięty.
-- Z-064 (2026-11-17): reklam nie ma, żądania reklamowe nie występują, więc zadanie traci przedmiot. Nie zamknięte; do przeglądu.
-- Pliki: index.html, js/app.js.
-
 ### Z-037 [P2] Automatyczne ustawianie niedzieli w święto (decyzja właściciela)
 - Status: nowe
 - Zgłoszone: nieznane
@@ -232,6 +213,20 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: linia z historii Z-008 z 2026-11-16 („Pozostaje: tryb czystego widoku bez panelu; eksport PNG (nie ruszane w tej fali)."), zastąpiona przy domknięciu Z-008 odesłaniem do tego zadania.
 - Uwaga: po Z-008 zrzut ekranu zwiniętego panelu daje mapę z legendą bez osobnego trybu, więc wartość eksportu PNG jest mniejsza niż przed tą zmianą. Warto to rozważyć przed wdrożeniem.
 - Pliki: nieznane — wymaga projektu.
+
+### Z-068 [P2] Brak polityki prywatności
+- Status: nowe
+- Zgłoszone: 2026-11-17 (przegląd Z-001)
+- Problem: repozytorium ma tylko jeden plik HTML i nie ma strony ani sekcji nazwanej polityką prywatności. Rolę informacji pełni akapit w dialogu pomocy.
+- Dowód: Google Analytics Terms of Service, sekcja 7 „Privacy" (aktualizacja 2023-05-15, https://marketingplatform.google.com/about/analytics/terms/us/): „You must post a Privacy Policy and that Privacy Policy must provide notice of Your use of cookies", „You must disclose the use of Google Analytics, and how it collects and processes data." Akapit w oknie pomocy, nienazwany polityką prywatności i bez linku do https://policies.google.com/technologies/partner-sites, tego wprost nie spełnia.
+- Uwaga: zobowiązanie jest zaległe wobec Analytics i NIE powstało przez usunięcie reklam. Sprawdzono 2026-11-17: po Z-064 w `index.html` nie ma już żadnej nieprawdziwej wzmianki o reklamach.
+- Zakres: krótka, nazwana sekcja polityki prywatności — dopuszczalna jako nowa sekcja w panelu albo rozwinięcie dialogu pomocy, bez nowego pliku HTML. Ma wymieniać: nazwy cookies Analytics; cel; odbiorcę; link https://policies.google.com/technologies/partner-sites; GoatCounter; dane trzymane w `localStorage` (historia ostatnich punktów, decyzja o zgodzie `ga-consent`, stan sekcji panelu); sposób wycofania zgody (Z-067).
+- Powiązanie (2026-11-17): sposób wycofania zgody, który ten wpis ma wymieniać, już istnieje i jest opisany w Z-067 (zrobione).
+- Pytania do prawnika (nierozstrzygalne bez prawnika; właściciel powinien o nich wiedzieć):
+  1. Czy akapit w oknie pomocy, nienazwany „Polityką prywatności", spełnia obowiązek informacyjny z art. 13 RODO i wymóg „post a Privacy Policy" z regulaminu Analytics, czy potrzebna jest osobno zatytułowana sekcja.
+  2. Czy wymóg „retain records of consent" (rejestr zgód) jest wykonalny dla strony bez backendu, która zapisuje decyzję wyłącznie w przeglądarce użytkownika i nie przechowuje po swojej stronie żadnego dowodu. To jedyny punkt, w którym nienegocjowalna zasada „zero backendu" strukturalnie nie daje się pogodzić z literalnym brzmieniem polityki Google.
+- Pliki: index.html, css/style.css.
+- Jak sprawdzić: nieznane — do ustalenia w projekcie.
 
 ## Zrobione
 
@@ -647,7 +642,58 @@ Pułapki do wdrożenia:
 - Jak sprawdzić: `npm run check`: 311 testów, 310 pass, 0 fail, 1 skipped, lint czysty (wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17). Wątek główny: w dokumencie dwa linki `.coffee-btn` o różnych `aria-label`; ikona na (184, 28, 216, 60); link prowadzi na `https://suppi.pl/bcicharski` z `target="_blank"` i `rel="noopener"`; brak skryptu reklamowego na stronie.
 - Niezweryfikowane: kliknięcie w ikonę i faktyczne otwarcie suppi.pl; czytnik ekranu; prawdziwe urządzenie dotykowe. Podgląd przy 300 px to szerokość panelu na desktopie, nie osobny widok telefonu.
 
+### Z-066 [P2] Wyciek współrzędnych do GoatCountera
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (przegląd Z-032)
+- Problem: serwis ma drugi licznik odwiedzin, GoatCounter (`gc.zgo.at/count.js`, cel `ztm-izochrony.goatcounter.com`). Domyślnie raportuje ścieżkę razem z zapytaniem, a adres strony niesie `p=szerokość,długość`, czyli lokalizację użytkownika. To ten sam wyciek, który Z-040 naprawiło dla Google Analytics, tylko innym kanałem.
+- Dowód: domyślne zachowanie skryptu `count.js` (odczyt wątku głównego, 2026-11-17). Lokalnie niewidoczny, bo GoatCounter nie liczy `localhost` i żądanie nigdy nie wychodzi. Numer linii w `index.html` nieznany.
+- Wdrożone 2026-11-17: w `index.html`, przed wczytaniem `count.js`, dodano `window.goatcounter = { path: () => location.pathname }`. Komentarz w kodzie wyjaśnia powód i wskazuje Z-040 jako ten sam wzorzec. Zweryfikowane w przeglądarce: przy `?city=trojmiasto&p=54.35540,18.64450&...` licznik raportuje `/`.
+- Ustalenie: GoatCounter ładuje się przed decyzją o cookies, ale nie ustawia plików cookie i nie profiluje, a dialog pomocy wymienia go wprost. Uznano za zgodne z zasadami; zmiany nie wymaga.
+- Pliki: index.html, tests/support-ui.test.mjs.
+- Testy: `tests/support-ui.test.mjs` — nowy przypadek sprawdza, że nadpisanie `path` istnieje, stoi przed skryptem licznika i ma właściwą postać. `npm run check`: 312 testów, 311 pass, 0 fail, 1 skipped, lint czysty (dosłowny wynik w CHANGELOG.md, sekcja Wewnętrzne, 2026-11-17).
+- Niezweryfikowane: nieznane.
+
+### Z-067 [P1] Brak wycofania zgody z poziomu strony
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (przegląd Z-001)
+- Problem: po jakiejkolwiek decyzji w banerze baner nie pojawia się nigdy więcej, a w całym dokumencie nie ma przycisku ani linku zmieniającego `ga-consent`. Jedyna oferowana droga to zdanie w dialogu pomocy: „zgodę można cofnąć czyszcząc dane strony w przeglądarce". Ryzyko prawne.
+- Dowód: `index.html`, `const decision = consentGet(); if (decision) return;` (numer linii nieznany); zdanie w dialogu pomocy o czyszczeniu danych strony.
+- Dlaczego to za mało: RODO art. 7 ust. 3 wymaga, żeby wycofanie zgody było tak łatwe jak jej udzielenie. Zgoda jest udzielana jednym kliknięciem, wycofanie wymaga grzebania w ustawieniach przeglądarki. Tego samego żąda „EU user consent policy" Google: „provide end users with clear instructions for revocation of consent".
+- Dodatkowy fakt techniczny: po udzieleniu zgody Google Analytics ustawia w domenie strony cookies `_ga` i `_ga_<id>`. Skasowanie klucza w `localStorage` ich nie usunie, więc wycofanie musi też wyłączyć Analytics w bieżącej sesji i w miarę możliwości usunąć te cookies.
+- Zakres: trwała kontrolka przełączająca `ga-consent`, bez nowych zależności, w czystym JavaScripcie.
+- Wygląd i UX (esteta): do dopisania, gdy wątek główny prześle projekt wyglądu.
+- Pułapka dla wdrożenia: `tests/support-ui.test.mjs` sprawdza dosłowną treść banera zgody i twardo zabrania słowa „reklam" w całym `index.html`. Każdy nowy tekst musi to respektować, a zmiana treści banera wymaga aktualizacji tego testu.
+- Wdrożone 2026-11-17: w sekcji „Dane i kontakt" na dole panelu wiersz `#consentRow` (domyślnie ukryty) jako pierwszy element treści, przed `.credits`; zawiera `#consentState` (`role="status"`, `aria-live="polite"`) i przycisk `.consent-toggle`. Trzy stany: zgoda udzielona („Statystyki Google Analytics: włączone." z przyciskiem „Wycofaj zgodę na statystyki"), odmowa („Statystyki Google Analytics: wyłączone." z przyciskiem „Wyraź zgodę na statystyki"), brak decyzji (wiersz ukryty, bo baner jest wtedy jedyną kontrolką). Funkcje `gaClearCookies`, `gaRevoke` i `gaGrant` w skrypcie w `<head>`; wycofanie wyłącza Analytics w bieżącej sesji (`window['ga-disable-G-9L3F11T91B'] = true` oraz `gtag('consent','update',{analytics_storage:'denied'})`) i kasuje `_ga`, `_ga_*`, `_gid` i `_gat*` na hoście i na domenach nadrzędnych; ponowna zgoda ustawia flagę z powrotem, wysyła `consent update granted` i woła `loadGA()`. Bez timerów i bez przeładowania strony; błąd zapisu do `localStorage` obsłużony. Teksty `#consentYes`, `#consentNo` i baner bez zmian. Styl w `css/style.css`: `.consent-row .hint` (margines dolny 6 px) i `.consent-row .consent-toggle` (`min-height: var(--tap)`, margines dolny 10 px, `color: var(--ink)`, bez `--accent`, żeby przycisk wycofania nie wyglądał jak główne wezwanie do działania). Dialog pomocy: zdanie o czyszczeniu danych przeglądarki zastąpione odsyłaczem do nowej kontrolki, z zastrzeżeniem o rozwinięciu zwiniętego panelu; zdanie używa typograficznego cudzysłowu zamykającego zgodnie z resztą pliku.
+- Dowód wdrożenia (przeglądarka, wątek główny potwierdził niezależnie): przed decyzją baner widoczny, wiersz ukryty, `document.cookie` puste. Po „Zgoda" pojawiają się `_ga` i `_ga_9L3F11T91B`, wiersz pokazuje „włączone". Po „Wycofaj zgodę na statystyki" `document.cookie` puste i zostaje puste także po wymuszonym `gtag('event')` i `gtag('config')`; w `localStorage` zapisuje się `denied`. Po odświeżeniu przy `denied` skrypt Analytics nie jest ładowany. Wynik na mapie nie znika przy żadnej z tych operacji. „Kopiuj link": adres aktualizowany przez `history.replaceState`, wczytanie linku odtwarza punkt, godzinę, typ dnia i strefy; obietnica w komunikacie o wycofaniu jest prawdziwa.
+- Testy: 6 nowych w `tests/support-ui.test.mjs` (dosłowne teksty trzech stanów i trzech komunikatów; położenie wiersza przed `.credits`; `role` i `aria-live`; `<button type="button">` z `min-height: var(--tap)` i bez `--accent`; kasowanie cookies i wyciszenie; brak przeładowania i brak przenoszenia fokusu; nowy tekst pomocy wraz ze zniknięciem starego; brak słowa „reklam"). `tests/mobile-layout.test.mjs`: `TAP_USES_MIN` 23 -> 24. `npm run check`: 318 testów, 317 pass, 0 fail, 1 skipped, lint czysty (dosłowny wynik w CHANGELOG.md, sekcja 2026-11-17).
+- Pliki: index.html, css/style.css, tests/support-ui.test.mjs, tests/mobile-layout.test.mjs, CURRENT_STATE.md.
+- Jak sprawdzić: `npm run check` (wynik wyżej); w przeglądarce scenariusz z sekcji „Dowód wdrożenia" powyżej (wątek główny).
+- Niezweryfikowane: zachowanie fokusu po prawdziwym kliknięciu myszą (kod go nie przenosi, ale panel podglądu nie miał fokusu okna); kontrast `--muted` przy rozmiarze `.hint` nie zmierzony; ścieżka błędu zapisu w prywatnym oknie Safari sprawdzona tylko w kodzie i testach tekstowych; nie sprawdzono, czy Analytics po wycofaniu przestaje wysyłać żądania sieciowe (sprawdzono cookies i stan zapisu); ładowanie Analytics na produkcji nie było sprawdzane, tylko lokalnie.
+
 ## Odrzucone
+
+### Z-001 [P1] Certyfikowany CMP (Consent Mode v2)
+- Status: odrzucone
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: własny baner zgody nie spełnia wymogu Google dla EOG — potrzebny certyfikowany CMP. Uwaga: ryzyko prawne.
+- Dowód: index.html:321-359.
+- Przegląd (2026-11-17): usunięcie AdSense (Z-064) może w całości lub w części odebrać rację bytu temu wpisowi; wymaga przeglądu, nie zamknięty.
+- Z-064 (2026-11-17): reklamy usunięte; wymóg certyfikowanego CMP dotyczył reklam, a zgoda zostaje dla samych statystyk (Google Analytics). Wymaga ponownej oceny; nie zamknięty.
+- Powód odrzucenia (2026-11-17, werdykt przeglądu): nieaktualne. Wymóg certyfikowanego CMP dotyczy wyłącznie produktów reklamowych wydawcy: AdSense, Ad Manager, AdMob, AdSense for Search, AdSense for Shopping i Programmable Search Engine, przy serwowaniu reklam użytkownikom w EOG i Wielkiej Brytanii; obowiązuje od 2024-01-16. Google Analytics nie jest w tym wykazie (https://support.google.com/adsense/answer/13866773). Dla Google Analytics 4 Google sam dopuszcza własny baner: „If you maintain your own consent banner, upgrade to consent mode v2." (https://support.google.com/analytics/answer/14275483). Wszystkie produkty reklamowe usunięto 2026-11-17 w commicie b6aa595 (Z-064). Źródła pierwotne Google sprawdzone 2026-11-17.
+- Niejednoznaczność, nierozstrzygalna z dostępnych źródeł: Google nigdzie nie mówi wprost, czy „EU user consent policy" wiąże użytkownika GA4 BEZ Advertising Features, Google Signals i eksportu do Google Ads. Dokumentacja konsekwentnie wiąże ją z reklamą, ale brzmienie samej polityki („use a Google product that incorporates this policy") jest szersze. Nie zmienia werdyktu: nawet przy najszerszym czytaniu polityka nie żąda certyfikowanego CMP, żąda rejestru zgód i jasnej instrukcji wycofania. Te obowiązki są śledzone w Z-067 (wycofanie) i w pytaniu do prawnika w Z-068 (rejestr zgód).
+- Pliki: index.html oraz ustawienie w panelu AdSense (poza kodem) — nieaktualne.
+
+### Z-032 [P1] Wyciek współrzędnych do AdSense
+- Status: odrzucone
+- Zgłoszone: nieznane
+- Problem: po zgodzie żądania reklamowe (`pagead2.googlesyndication.com/.../ads?...url=`) niosą pełny adres strony razem z parametrem `p=lat,lon`, czyli lokalizacją użytkownika. Naprawa `page_location` z Z-040 dotyczyła wyłącznie Analytics.
+- Dowód: obserwacja listy żądań w przeglądarce podczas wdrożenia Z-025. Potwierdzone 2026-11-16 w przeglądarce: żądania `https://pagead2.googlesyndication.com/pagead/ads?...` niosą pełny adres ze współrzędnymi w parametrach `url=` i `ref=`, dwa razy na odsłonę (jednostka 0x0 i 249x600). Przyczyna: AdSense czyta adres wprost z `location`, więc nadpisanie `page_location` w gtag go nie obejmuje.
+- Uwaga (z czasu zgłoszenia): przeniesienie współrzędnych z query do fragmentu adresu zatrzymałoby wyciek, ale zmieniłoby format linków — wymagałoby zgodności wstecznej i decyzji właściciela. Nieaktualne po usunięciu AdSense.
+- Przegląd (2026-11-17): usunięcie AdSense (Z-064) odebrało temu wpisowi przedmiot.
+- Z-064 (2026-11-17): reklam nie ma, żądania reklamowe nie występują.
+- Powód odrzucenia (2026-11-17, werdykt przeglądu): żądania reklamowe niosące pełny adres z parametrem `p=szerokość,długość` nie powstają — AdSense usunięto w całości (Z-064, commit b6aa595).
+- Wynik niezależnego sprawdzenia w przeglądarce (wątek główny, 2026-11-17): po wyrażeniu zgody Google Analytics wysyła żądanie `collect` z `dl=http://localhost:8123/`, czyli samym adresem bez parametrów. Poprawka `page_location` z Z-040 działa. Na stronie nie ma żadnego skryptu reklamowego.
+- Pliki: index.html, js/app.js.
 
 ### Z-043 [P2] Szerokość korytarza mostu
 - Status: odrzucone

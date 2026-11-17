@@ -50,3 +50,69 @@ test('Z-065: ikonowy .coffee-btn ma pole dotykowe var(--tap) przez ::before i ni
   assert.ok(!/\.panel\.collapsed[^{]*coffee/.test(css));
   assert.ok(!/\.collapsed[^{]*\.panel-header/.test(css));
 });
+
+test('GoatCounter nie dostaje współrzędnych w ścieżce (Z-066)', () => {
+  // Domyślnie GoatCounter raportuje pathname razem z query, a nasz adres niesie
+  // `p=szerokość,długość`. Nadpisanie `path` musi stać PRZED wczytaniem count.js.
+  const i = html.indexOf('window.goatcounter');
+  const j = html.indexOf('gc.zgo.at/count.js');
+  assert.ok(i > -1, 'brak nadpisania window.goatcounter');
+  assert.ok(j > -1, 'brak skryptu GoatCountera');
+  assert.ok(i < j, 'nadpisanie path musi poprzedzać wczytanie count.js');
+  assert.match(html.slice(i, j), /path:\s*\(\)\s*=>\s*location\.pathname/);
+});
+
+// Wycofanie zgody na statystyki (RODO art. 7 ust. 3) — kontrolka w „Dane i kontakt".
+const flat = s => s.replace(/\s+/g, ' ');
+const consentScript = html.slice(html.indexOf('const GRANT ='), html.indexOf('const choose'));
+const clickScript = html.slice(html.indexOf("toggle.addEventListener('click'"), html.indexOf('if (consentGet()) { render()'));
+
+test('wycofanie zgody: wiersz stoi w „Dane i kontakt" przed .credits, a linia stanu to role=status aria-live=polite', () => {
+  const row = html.indexOf('id="consentRow"');
+  assert.ok(row > html.indexOf('id="secData"'));
+  assert.ok(row < html.indexOf('<footer class="credits">'));
+  assert.match(html, /<div class="consent-row" id="consentRow" hidden>/);
+  assert.match(html, /<p class="hint" id="consentState" role="status" aria-live="polite">/);
+});
+
+test('wycofanie zgody: przycisk to <button type="button"> z .share-btn, min-height var(--tap), bez --accent', () => {
+  assert.match(html, /<button type="button" class="share-btn consent-toggle" id="consentToggle">/);
+  const rule = css.match(/\.consent-row \.consent-toggle \{[^}]*\}/)[0];
+  assert.match(rule, /min-height: var\(--tap\)/);
+  assert.ok(!rule.includes('--accent'));
+  const hint = css.match(/\.consent-row \.hint \{[^}]*\}/)[0];
+  assert.match(hint, /margin-bottom: 6px/);
+});
+
+test('wycofanie zgody: teksty trzech stanów i trzech komunikatów są dosłowne', () => {
+  const src = flat(html);
+  for (const t of [
+    "'Statystyki Google Analytics: ' + (granted ? 'włączone.' : 'wyłączone.')",
+    "const GRANT = 'Wyraź zgodę na statystyki'",
+    "const REVOKE = 'Wycofaj zgodę na statystyki'",
+    'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics. Pełne wyłączenie nastąpi po odświeżeniu strony — wynik na mapie możesz wcześniej zachować przyciskiem „Kopiuj link”.',
+    'Dziękujemy. Statystyki Google Analytics są włączone.',
+    'Nie udało się zapisać wyboru w tej przeglądarce. Statystyki Google pozostają wyłączone.',
+  ]) assert.ok(src.includes(t), t);
+  assert.match(consentScript, /row\.hidden = !decision && !msg/);
+});
+
+test('wycofanie zgody: kasuje cookies _ga* i wycisza Analytics w bieżącej sesji, bez przeładowania', () => {
+  assert.match(html, /window\.gaClearCookies/);
+  assert.match(html, /\^\(_ga\|_ga_\.\+\|_gid\|_gat\.\*\)\$/);
+  assert.match(html, /window\['ga-disable-G-9L3F11T91B'\] = true/);
+  assert.match(html, /gtag\('consent', 'update', \{ analytics_storage: 'denied' \}\)/);
+  assert.match(clickScript, /gaRevoke\(\)/);
+  assert.match(clickScript, /gaGrant\(\)/);
+  assert.ok(!/location\.reload|\.focus\(/.test(consentScript + clickScript));
+});
+
+test('wycofanie zgody: dialog pomocy ma nowe zdanie, a stare o czyszczeniu danych zniknęło', () => {
+  const src = flat(html);
+  assert.ok(src.includes('Google Analytics (statystyki) działa wyłącznie po wyrażeniu zgody; możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń).'));
+  assert.ok(!src.includes('czyszcząc dane strony'));
+});
+
+test('wycofanie zgody: nowe teksty nie zawierają słowa „reklam"', () => {
+  assert.ok(!/reklam/i.test(html + css));
+});

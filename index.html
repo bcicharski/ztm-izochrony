@@ -84,6 +84,33 @@
     window.consentGet = () => { try { return localStorage.getItem('ga-consent'); } catch { return null; } };
     window.consentSet = v => { try { localStorage.setItem('ga-consent', v); } catch { /* brak pamięci = pytaj ponownie */ } };
 
+    // Wycofanie zgody (RODO art. 7 ust. 3): usuwamy cookies Google Analytics
+    // (_ga, _ga_*, _gid, _gat*) na hoście i na domenach nadrzędnych, a już
+    // załadowany gtag.js wyciszamy w bieżącej sesji — flagą ga-disable-<ID>
+    // oraz Consent Mode — żeby do odświeżenia nie założył ich ponownie.
+    window.gaClearCookies = () => {
+      const names = document.cookie.split(';').map(c => c.split('=')[0].trim())
+        .filter(n => /^(_ga|_ga_.+|_gid|_gat.*)$/.test(n));
+      const parts = location.hostname.split('.');
+      const domains = [undefined];
+      for (let i = 0; i < parts.length - 1; i++) domains.push('.' + parts.slice(i).join('.'));
+      for (const n of names) {
+        for (const d of domains) {
+          document.cookie = n + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/' + (d ? '; domain=' + d : '');
+        }
+      }
+    };
+    window.gaRevoke = () => {
+      window['ga-disable-G-9L3F11T91B'] = true;
+      gtag('consent', 'update', { analytics_storage: 'denied' });
+      gaClearCookies();
+    };
+    window.gaGrant = () => {
+      window['ga-disable-G-9L3F11T91B'] = false;
+      gtag('consent', 'update', { analytics_storage: 'granted' });
+      loadGA();
+    };
+
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
@@ -327,6 +354,10 @@
         <span class="sr-only" id="secDataFlag" hidden>— zmienione ustawienia</span>
       </summary>
       <div class="sec-body">
+        <div class="consent-row" id="consentRow" hidden>
+          <p class="hint" id="consentState" role="status" aria-live="polite"></p>
+          <button type="button" class="share-btn consent-toggle" id="consentToggle"></button>
+        </div>
         <footer class="credits">
           Dane: <span id="creditsLinks">…</span>
           · rozkład z dnia <span id="feedDate">…</span><span id="feedDateNote"></span>
@@ -465,29 +496,65 @@
         Odwiedziny zlicza anonimowo <a href="https://www.goatcounter.com"
         target="_blank" rel="noopener">GoatCounter</a> (bez plików cookie
         i bez profilowania), a Google Analytics (statystyki) działa
-        wyłącznie po wyrażeniu zgody; zgodę można cofnąć czyszcząc dane strony
-        w przeglądarce. Ostatnio wybrane punkty zapisujemy tylko w Twojej
+        wyłącznie po wyrażeniu zgody; możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń). Ostatnio wybrane punkty zapisujemy tylko w Twojej
         przeglądarce; wyczyścisz je opcją „Wyczyść historię” na liście pod polem adresu.</p>
     </div>
   </dialog>
 
   <script>
     (() => {
-      const decision = consentGet();
-      if (decision) return; // decyzja już zapadła
       const bar = document.getElementById('consentBar');
-      bar.hidden = false;
+      const row = document.getElementById('consentRow');
+      const line = document.getElementById('consentState');
+      const toggle = document.getElementById('consentToggle');
+      const GRANT = 'Wyraź zgodę na statystyki';
+      const REVOKE = 'Wycofaj zgodę na statystyki';
+      // Kontrolka wycofania zgody (RODO art. 7 ust. 3) w sekcji „Dane i kontakt”;
+      // przy braku decyzji ukryta w całości — wtedy jedyną kontrolką jest baner.
+      const render = msg => {
+        const decision = consentGet();
+        row.hidden = !decision && !msg;
+        if (row.hidden) return;
+        const granted = decision === 'granted';
+        line.textContent = msg || ('Statystyki Google Analytics: ' + (granted ? 'włączone.' : 'wyłączone.'));
+        toggle.textContent = granted ? REVOKE : GRANT;
+      };
       const choose = value => {
         consentSet(value);
         if (value === 'granted') { loadGA(); }
         bar.hidden = true;
+        render();
       };
+      toggle.addEventListener('click', () => {
+        if (consentGet() === 'granted') {
+          consentSet('denied');
+          gaRevoke(); // cookies i wyciszenie działają nawet przy błędzie zapisu
+          render(consentGet() === 'denied'
+            ? 'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics. Pełne wyłączenie nastąpi po odświeżeniu strony — wynik na mapie możesz wcześniej zachować przyciskiem „Kopiuj link”.'
+            : 'Nie udało się zapisać wyboru w tej przeglądarce. Statystyki Google pozostają wyłączone.');
+        } else {
+          consentSet('granted');
+          if (consentGet() === 'granted') {
+            gaGrant();
+            render('Dziękujemy. Statystyki Google Analytics są włączone.');
+          } else {
+            render('Nie udało się zapisać wyboru w tej przeglądarce. Statystyki Google pozostają wyłączone.');
+            toggle.textContent = GRANT;
+          }
+        }
+      });
+      if (consentGet()) { render(); return; } // decyzja już zapadła
+      bar.hidden = false;
       document.getElementById('consentYes').addEventListener('click', () => choose('granted'));
       document.getElementById('consentNo').addEventListener('click', () => choose('denied'));
     })();
   </script>
 
-  <!-- GoatCounter: anonimowy licznik odwiedzin bez cookies — nie wymaga zgody -->
+  <!-- GoatCounter: anonimowy licznik odwiedzin bez cookies — nie wymaga zgody.
+       `path` nadpisane celowo: domyślnie GoatCounter raportuje pathname RAZEM
+       z query, a nasz adres niesie `p=szerokość,długość` — czyli lokalizację
+       użytkownika. Ta sama zasada co przy `page_location` w GA (Z-040). -->
+  <script>window.goatcounter = { path: () => location.pathname };</script>
   <script data-goatcounter="https://ztm-izochrony.goatcounter.com/count"
           async src="https://gc.zgo.at/count.js"></script>
 
