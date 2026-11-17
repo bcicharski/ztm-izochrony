@@ -21,9 +21,11 @@ test('offset kontrolek mapy podąża za --panel-h, bez reguły zerującej', () =
   assert.ok(!/body\.panel-collapsed\s+\.leaflet-bottom/.test(css));
 });
 
-test('atrybucja: doklejka w span.attr-extra ukrytym na mobile, OSM zostaje', () => {
+test('atrybucja: doklejka ukryta na mobile tylko przy rozwiniętym panelu, OSM zostaje', () => {
   const media = css.slice(css.indexOf('/* ---------- mobile ---------- */'));
-  assert.ok(/\.attr-extra\s*\{\s*display:\s*none/.test(media));
+  assert.ok(/body:not\(\.panel-collapsed\)\s+\.attr-extra\s*\{\s*display:\s*none/.test(media));
+  // żadnej bezwarunkowej reguły ukrywającej
+  assert.ok(!/^\s*\.attr-extra\s*\{\s*display:\s*none/m.test(css));
   assert.ok(/<span class="attr-extra">[^']*Rozkłady/.test(mapJs));
   assert.ok(mapJs.includes('OpenStreetMap'));
 });
@@ -60,4 +62,21 @@ test('kontrolka lokalizacji: pole dotykowe var(--tap), focus, pozycja przez --pa
   assert.ok(mapJs.includes("position: 'bottomright'"));
   assert.ok(!mapJs.includes('watchPosition') && !app.includes('watchPosition'));
   assert.ok(app.includes('addLocateControl') && app.includes('isSecureContext'));
+});
+
+test('legenda: jedna w DOM, zostaje widoczna przy zwiniętym panelu', () => {
+  assert.equal((html.match(/class="legend"/g) || []).length, 1);
+  assert.equal((html.match(/id="legendBar"/g) || []).length, 1);
+  assert.ok(/role="group" aria-labelledby="legendTitle"/.test(html));
+  assert.ok(/\.panel\.collapsed \.panel-body > :not\(\.legend\)\s*\{\s*display:\s*none/.test(css));
+  // kontener nie jest już chowany razem z zawartością
+  assert.ok(!/\.panel\.collapsed \.panel-body\s*\{\s*display:\s*none/.test(css));
+  assert.ok(/\.panel\.collapsed \.panel-body > \.legend\s*\{[^}]*padding:\s*8px 18px 12px/.test(css));
+});
+
+test('przycisk zwijania: aria-label i komunikat dla czytnika w obu stanach', () => {
+  assert.ok(/aria-label="Zwiń panel" aria-expanded="true"/.test(html));
+  assert.ok(app.includes("collapsed ? 'Rozwiń panel' : 'Zwiń panel'"));
+  assert.ok(app.includes('Panel zwinięty. Widać samą mapę i legendę.'));
+  assert.ok(app.includes("'Panel rozwinięty.'"));
 });

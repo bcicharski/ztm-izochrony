@@ -736,7 +736,7 @@ test('buildStopIndex: 6 słupków zespołu = 1 wpis, ta sama nazwa 20 km dalej =
   const net = mkNet([0, 1, 2, 3, 4, 5].map(pole).concat([['Dworzec Główny', 54.5360, 18.6430]]));
   const ix = buildStopIndex(net);
   assert.equal(ix.names.length, 2);
-  assert.ok(ix.lat instanceof Float32Array && ix.lon instanceof Float32Array);
+  assert.ok(ix.lat instanceof Float64Array && ix.lon instanceof Float64Array);
   assert.equal(ix.lat.length, 2);
 });
 

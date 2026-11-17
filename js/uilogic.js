@@ -539,7 +539,8 @@ export const STOP_CLUSTER_KM = 1;
  * Kompaktowy indeks nazw przystanków z sieci `{nStops, stopName, lat, lon}`.
  * Jeden reprezentant (pierwszy) na zespół: kilka słupków tej samej nazwy bliżej
  * niż `STOP_CLUSTER_KM` daje jeden wpis, ta sama nazwa kilometry dalej osobny.
- * `lat`/`lon` jako Float32Array, żeby bufory dało się przenieść z workera.
+ * `lat`/`lon` jako Float64Array (bez utraty dokładności współrzędnych; bufory
+ * i tak da się przenieść z workera transferem — koszt to ok. 28 KB dla GZM).
  */
 export function buildStopIndex(net) {
   const names = [], la = [], lo = [];
@@ -570,7 +571,42 @@ export function buildStopIndex(net) {
     la.push(lat);
     lo.push(lon);
   }
-  return { names, lat: Float32Array.from(la), lon: Float32Array.from(lo) };
+  return { names, lat: Float64Array.from(la), lon: Float64Array.from(lo) };
+}
+
+/**
+ * Mały cache asynchronicznych wyników po kluczu (Z-057): leniwie, z limitem
+ * wpisów (najstarszy wypada) — przełączanie typu dnia tam i z powrotem nie
+ * przelicza indeksu przystanków. Błąd i wynik `null` (miasto się zmieniło
+ * w trakcie) nie zostają w cache; błąd kończy się `null`, nie wyjątkiem.
+ * @param {number} [limit]
+ */
+export function createAsyncCache(limit = 3) {
+  const map = new Map(); // klucz -> {index, promise}
+  return {
+    /** Wynik już policzony (bez czekania) albo null. */
+    peek: key => map.get(key)?.index ?? null,
+    /** Wynik z cache albo `load()` (jedno wywołanie na klucz naraz). */
+    async get(key, load) {
+      let entry = map.get(key);
+      if (!entry) {
+        entry = { index: null, promise: null };
+        const mine = entry;
+        entry.promise = Promise.resolve().then(load).then(ix => {
+          if (ix == null) { if (map.get(key) === mine) map.delete(key); return null; }
+          mine.index = ix;
+          return ix;
+        }, err => {
+          console.error(err);
+          if (map.get(key) === mine) map.delete(key);
+          return null;
+        });
+        map.set(key, entry);
+        while (map.size > limit) map.delete(map.keys().next().value);
+      }
+      return entry.index ?? entry.promise;
+    },
+  };
 }
 
 /**

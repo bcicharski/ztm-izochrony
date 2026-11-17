@@ -136,7 +136,14 @@ html, body {
   padding: 14px 18px 16px;
   overflow-y: auto;
 }
-.panel.collapsed .panel-body { display: none; }
+/* Zwinięty panel: ukryte wszystko poza legendą (jedna legenda w DOM, bez duplikatu).
+   Selektor ogólny, więc nowe elementy w .panel-body nie wymagają zmian tutaj. */
+.panel.collapsed .panel-body {
+  padding: 0;
+  overflow: visible;
+}
+.panel.collapsed .panel-body > :not(.legend) { display: none; }
+.panel.collapsed .panel-body > .legend { margin: 0; padding: 8px 18px 12px; }
 
 .hint {
   margin: 0 0 14px;
@@ -1087,8 +1094,9 @@ html, body {
   /* zoom i atrybucja nad panelem; --panel-h ustawia ResizeObserver w app.js
      (offsetHeight panelu), 62vh = max-height panelu do pierwszego odczytu */
   .leaflet-bottom.leaflet-right { bottom: calc(var(--panel-h, 62vh) + 8px); }
-  /* atrybucja w jednej linii: doklejka o rozkładach tylko na desktopie */
-  .attr-extra { display: none; }
+  /* atrybucja w jednej linii: doklejka o rozkładach tylko na desktopie; przy
+     zwiniętym panelu zostaje, bo #creditsLinks jest wtedy ukryty */
+  body:not(.panel-collapsed) .attr-extra { display: none; }
 
   /* kompensata wysokości po powiększeniu pól dotykowych */
   .panel-body { padding: 12px 16px 14px; }

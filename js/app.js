@@ -10,7 +10,7 @@ import {
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
   geoErrorMessage, locateUnavailableReason, ADDRESS_QUERY_MIN, ADDRESS_QUERY_HINT, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
-  esc, optionId, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
+  esc, optionId, createAsyncCache, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
   zonesToGeoJSON, exportFileName, shouldShowIntro,
   PANEL_SECTIONS_KEY, PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
@@ -286,26 +286,17 @@ function clearRecent() { saveRecent([]); }
 // Indeks nazw przystanków (Z-056): buduje go silnik (worker trzyma sieć), tu tylko
 // leniwie, raz na miasto+dzień. Przed gotowością miasta albo przy błędzie: null
 // (wyszukiwarka działa wtedy jak dotąd — samym geokoderem).
-let stopIdx = null; // {key, index} albo {key, promise}
+const stopIdx = createAsyncCache(3); // klucz miasto/dzień; trzy typy dnia mieszczą się w limicie
+const stopKey = () => `${state.city}/${state.mode === 'time' ? state.day : 'workday'}`;
 async function getStopIndex() {
   if (!cityReady) return null;
   const city = state.city;
   const dayKey = state.mode === 'time' ? state.day : 'workday';
-  const key = `${city}/${dayKey}`;
-  if (stopIdx?.key !== key) {
-    const entry = { key, index: null, promise: null };
-    entry.promise = engine.stopIndex(dayKey).then(ix => { entry.index = ix; return ix; }, err => {
-      console.error(err);
-      if (stopIdx === entry) stopIdx = null; // błąd nie zostaje w cache
-      return null;
-    });
-    stopIdx = entry;
-  }
-  const ix = stopIdx.index ?? await stopIdx.promise;
+  const ix = await stopIdx.get(`${city}/${dayKey}`, () => engine.stopIndex(dayKey));
   return state.city === city ? ix : null;
 }
 /** Przystanki z już zbudowanego indeksu (bez czekania) — pusto, gdy go jeszcze nie ma. */
-const cachedStops = query => searchStops(stopIdx?.index ?? null, query);
+const cachedStops = query => searchStops(stopIdx.peek(stopKey()), query);
 
 /**
  * Podpina wyszukiwarkę adresu pod pole tekstowe i listę wyników.
@@ -680,7 +671,15 @@ $('collapseBtn').addEventListener('click', () => {
   const collapsed = panel.classList.contains('collapsed');
   document.body.classList.toggle('panel-collapsed', collapsed);
   $('collapseBtn').textContent = collapsed ? '+' : '−';
+  $('collapseBtn').setAttribute('aria-label', collapsed ? 'Rozwiń panel' : 'Zwiń panel');
   $('collapseBtn').setAttribute('aria-expanded', String(!collapsed));
+  // od razu, bez announce(): jego debounce 1 s dzieli licznik z podsumowaniem stref
+  // i zgubiłby je; region czyszczony przed wstawieniem, żeby powtórka też była czytana
+  const live = $('zoneSummary');
+  live.textContent = '';
+  setTimeout(() => {
+    live.textContent = collapsed ? 'Panel zwinięty. Widać samą mapę i legendę.' : 'Panel rozwinięty.';
+  }, 50);
 });
 
 // wysokość panelu -> --panel-h (offset zoomu i atrybucji na mobile); observer

@@ -42,16 +42,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs, tests/fetch-feeds.test.mjs.
 - Niezweryfikowane: poprawność rozkładów Łodzi i Olsztyna względem terenu; przełączniki środków transportu w obu miastach; tryb porównania i tryb ostrożny na nowych danych; zachowanie przy następnym automatycznym odświeżeniu.
 
-### Z-008 [P2] Tryb czystego widoku i eksport
-- Status: w toku
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak trybu bez panelu oraz eksportu wyniku do PNG lub GeoJSON.
-- Dowód: nieznane.
-- Wdrożone 2026-11-16 (część C, eksport GeoJSON): przycisk „Pobierz strefy (GeoJSON)" pod „Kopiuj link do tego widoku" zapisuje aktualne strefy jako `FeatureCollection` z sześcioma `MultiPolygon` (źródło: `contours` z `buildContours`, nie siatka czasów). Właściwości simplestyle plus metadane powielone w `properties`; współrzędne `[lon, lat]` zaokrąglone do 5 miejsc, nawijanie wg RFC 7946. Pobranie przez `Blob` i ukryty `<a download>`, bez zależności. Nazwa `izochrona-<miasto>-<yyyymmdd>-<HHMM>.geojson`. Zmierzone: Trójmiasto, plik 1,93 MB, generowanie ok. 26 ms. Odstępstwo: pominięto zdanie „Plik zawiera osiągnięte przystanki, nie obszary" (przy `walk=false` też powstają wielokąty).
-- Pozostaje: tryb czystego widoku bez panelu; eksport PNG (nie ruszane w tej fali).
-- Pliki: js/walkgrid.js, js/worker.js, js/uilogic.js, js/app.js, index.html, css/style.css.
-- Niezweryfikowane: otwarcie pliku w QGIS, faktyczne pobranie pliku przez przeglądarkę, wygląd stanu `:disabled`.
-
 ### Z-009 [P2] Stopka i onboarding
 - Status: w toku
 - Zgłoszone: 2026-11-16 (analityk)
@@ -75,13 +65,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 ## Zaprojektowane (gotowe do wdrożenia)
 
 ## Nowe (bez projektu rozwiązania)
-
-### Z-057 [P2] Współrzędne przystanku przez Float32Array i przebudowa indeksu przy zmianie dnia
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: współrzędne przystanku przechodzą przez `Float32Array`, więc punkt ustawiony z podpowiedzi ma dokładność rzędu metra (54.49620819 zamiast 54.49621). W adresie strony i tak są pięć miejsc po przecinku, więc skutek jest dziś niewidoczny. Przy okazji: przy zmianie typu dnia indeks przystanków jest budowany od nowa dla klucza miasto/dzień, mimo że dane dnia są w cache.
-- Dowód: obserwacja przy wdrożeniu Z-056 (2026-11-16).
-- Pliki: js/worker.js, js/app.js, js/engine.js.
 
 ### Z-001 [P1] Certyfikowany CMP (Consent Mode v2)
 - Status: nowe
@@ -236,24 +219,13 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Wymagane rozszerzenie, gdyby wpinać BIP: `pickLatestZip` dziś tam nie trafi (tekst linku „GTFS MZK Gorzów Wlkp." bez daty, data w href w formacie `DD-MM-RRRR`). Potrzebna gałąź: gdy żadna data się nie parsuje, a na stronie jest dokładnie jeden link `.zip`, wziąć ten link; opcjonalnie rozpoznawanie `DD-MM-RRRR`. Bez nowego trybu i bez nowego pola w `cities.json`. Credits, gdyby doszło do wpięcia: `{ "label": "MZK Gorzów Wlkp. (BIP)", "url": "https://bip.mzk-gorzow.com.pl/gtfs.html" }`.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
-### Z-061 [P2] Brak testów ścieżki workera `stops`
+### Z-063 [P2] Eksport widoku mapy do PNG
 - Status: nowe
-- Zgłoszone: 2026-11-17 (analityk)
-- Problem: obsługa komunikatu `stops` w `js/worker.js` oraz `getStopIndex` w `js/app.js` (cache na miasto i dzień, odrzucenie wyniku po zmianie miasta) nie mają żadnego testu. Czyste funkcje mają pokrycie w `tests/uilogic.test.mjs`. Regresja w ścieżce błędu, na przykład zwrot `null` po zmianie miasta, nie zostanie złapana przez `npm run check`. Rozmiar: średni, bo część logiki siedzi w `app.js`.
-- Dowód: obserwacja analityka 2026-11-17; zazębia się z Z-034 (zrobione) i Z-056 (wdrożone).
-- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
-- Pliki: js/worker.js, js/app.js, tests/ (nazwa nowego pliku testowego nieznana).
-- Jak sprawdzić: `npm run check` z przypadkiem zwrotu `null` po zmianie miasta; wynik nieznany do czasu wdrożenia.
-
-### Z-062 [P2] Spójność reguł `summary` w inwentarzu dostępności
-- Status: nowe
-- Zgłoszone: 2026-11-17 (wdrozeniowiec)
-- Problem: inwentarz kontrolek 44 px w `tests/a11y-css.test.mjs` obejmuje także `.diag summary`. Po Z-059 ten sam wzorzec (`summary` jako pole dotykowe) występuje w czterech sekcjach panelu. Do sprawdzenia: czy inwentarz nie powiela reguł i czy wszystkie `summary` w projekcie mają spójny styl.
-- Dowód: tests/a11y-css.test.mjs (inwentarz kontrolek 44 px; `.sec > summary` dopisane przy Z-059); zgłoszenie wdrożeniowca przy Z-059, 2026-11-17.
-- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
-- Wygląd i UX (esteta): nieznane — brak specyfikacji dla tego zadania.
-- Pliki: tests/a11y-css.test.mjs, css/style.css.
-- Jak sprawdzić: przy kolejnym audycie dostępności; wynik nieznany do czasu przeglądu.
+- Zgłoszone: 2026-11-17 (kronikarz)
+- Problem: eksport wyniku do PNG nie został wdrożony. Z-008 obejmowało eksport do PNG albo GeoJSON; GeoJSON wdrożono 2026-11-17 (w Z-008), PNG nie.
+- Dowód: linia z historii Z-008 z 2026-11-16 („Pozostaje: tryb czystego widoku bez panelu; eksport PNG (nie ruszane w tej fali)."), zastąpiona przy domknięciu Z-008 odesłaniem do tego zadania.
+- Uwaga: po Z-008 zrzut ekranu zwiniętego panelu daje mapę z legendą bez osobnego trybu, więc wartość eksportu PNG jest mniejsza niż przed tą zmianą. Warto to rozważyć przed wdrożeniem.
+- Pliki: nieznane — wymaga projektu.
 
 ## Zrobione
 
@@ -581,6 +553,59 @@ Pułapki do wdrożenia:
   5. Nowe tokeny w `:root`: `--map-bg`, `--dot-a`, `--dot-b`, `--shadow-rgb`; wszystkie kolory na sztywno podmienione, wartości identyczne, zero różnicy wizualnej; cienie zachowują cztery różne przezroczystości; nowy test w `tests/a11y-css.test.mjs` pilnuje, że poza `:root` nie ma wartości koloru zapisanej na sztywno (lista wyjątków pusta).
 - Pliki: js/app.js, js/uilogic.js, css/style.css, tests/a11y-css.test.mjs. Pozostałe pliki nieznane w zleceniu.
 - Jak sprawdzić: `npm run check`: 278 testów, 277 pass, 0 fail, 1 skipped, lint czysty (wynik podany w zleceniu); weryfikacja ręczna każdego punktu: nieznane.
+
+### Z-057 [P2] Współrzędne przystanku przez Float32Array i przebudowa indeksu przy zmianie dnia
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: współrzędne przystanku przechodzą przez `Float32Array`, więc punkt ustawiony z podpowiedzi ma dokładność rzędu metra (54.49620819 zamiast 54.49621). W adresie strony i tak są pięć miejsc po przecinku, więc skutek jest dziś niewidoczny. Przy okazji: przy zmianie typu dnia indeks przystanków jest budowany od nowa dla klucza miasto/dzień, mimo że dane dnia są w cache.
+- Dowód: obserwacja przy wdrożeniu Z-056 (2026-11-16).
+- Pliki: js/worker.js, js/app.js, js/engine.js.
+- Wdrożone 2026-11-17: `buildStopIndex` zwraca `lat`/`lon` jako `Float64Array`; wartość z podpowiedzi trafia do stanu aplikacji i do historii ostatnich punktów bez zaokrąglania. Koszt policzony przed zmianą: 8 bajtów na wpis, ok. 28 kB więcej w komunikacie `stops` dla GZM (3544 wpisy); uznano za akceptowalne, bufory dalej idą transferem, `js/worker.js` bez zmian. Starsze wpisy w historii ostatnich punktów zachowują dawną wartość. Cache indeksu: zamiast jednego wpisu `stopIdx` mała mapa po kluczu miasto plus dzień, limit 3; nowa czysta funkcja `createAsyncCache(limit = 3)` w `js/uilogic.js` (najstarszy wpis wypada; błąd i wynik `null` nie zostają w cache). Zmienione pliki (zlecenie wdrożeniowca dla trzech zadań): js/uilogic.js, js/app.js, tests/uilogic.test.mjs, tests/stops.test.mjs (nowy), tests/a11y-css.test.mjs.
+- Zweryfikowane w przeglądarce (Trójmiasto): wybór „Wrzeszcz PKP" ustawia punkt na 54.38125, 18.60442; `data/trojmiasto/workday.json` ma dla tego przystanku dokładnie te same wartości.
+- Niezweryfikowane: podgląd na telefonie; ścieżka `engine=main` w przeglądarce (w testach odpowiada jej `Engine.stopIndex`, Z-061).
+
+### Z-061 [P2] Brak testów ścieżki workera `stops`
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (analityk)
+- Problem: obsługa komunikatu `stops` w `js/worker.js` oraz `getStopIndex` w `js/app.js` (cache na miasto i dzień, odrzucenie wyniku po zmianie miasta) nie mają żadnego testu. Czyste funkcje mają pokrycie w `tests/uilogic.test.mjs`. Regresja w ścieżce błędu, na przykład zwrot `null` po zmianie miasta, nie zostanie złapana przez `npm run check`. Rozmiar: średni, bo część logiki siedzi w `app.js`.
+- Dowód: obserwacja analityka 2026-11-17; zazębia się z Z-034 (zrobione) i Z-056 (wdrożone).
+- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
+- Pliki: js/worker.js, js/app.js, tests/stops.test.mjs (nowy).
+- Wdrożone 2026-11-17: `tests/stops.test.mjs` (nowy, 8 testów) wzorem `tests/engine.test.mjs`: podmieniony `fetch`, bez prawdziwego workera. Pokryte: `Engine.stopIndex` zwraca indeks dla załadowanego miasta, `null` dla niezaładowanego oraz `null`, gdy miasto zmieni się w trakcie budowy (wstrzymany `fetch`); błąd pobrania odrzuca obietnicę, worker zamienia to na komunikat `error`, a w `app.js` kończy się wartością `null`. Cache: drugie wywołanie nie przelicza (licznik wywołań i tożsamość obiektu), błąd nie zostaje w cache i kolejna próba ponawia, wynik `null` nie jest zapamiętywany, limit wyrzuca najstarszy wpis.
+- Znana luka: strażnik `state.city === city` w `getStopIndex` zostaje w `js/app.js`, który wymaga DOM; nie jest pokryty testami świadomie.
+- Jak sprawdzić: `npm run check`: 305 testów, 304 pass, 0 fail, 1 skipped, lint czysty (wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17).
+
+### Z-062 [P2] Spójność reguł `summary` w inwentarzu dostępności
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (wdrozeniowiec)
+- Problem: inwentarz kontrolek 44 px w `tests/a11y-css.test.mjs` obejmuje także `.diag summary`. Po Z-059 ten sam wzorzec (`summary` jako pole dotykowe) występuje w czterech sekcjach panelu. Do sprawdzenia: czy inwentarz nie powiela reguł i czy wszystkie `summary` w projekcie mają spójny styl.
+- Dowód: tests/a11y-css.test.mjs (inwentarz kontrolek 44 px; `.sec > summary` dopisane przy Z-059); zgłoszenie wdrożeniowca przy Z-059, 2026-11-17.
+- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
+- Wygląd i UX (esteta): nieznane — brak specyfikacji dla tego zadania.
+- Pliki: tests/a11y-css.test.mjs, css/style.css.
+- Wdrożone 2026-11-17: przegląd wypadł dobrze. Wszystkie pięć elementów `<summary>` w `index.html` jest pokrytych (`.sec > summary` cztery razy oraz `.diag summary`), reguły się nie powielają, każdy ma `min-height: var(--tap)`, a `.sec-pinned` nie nadpisuje wysokości. CSS nie wymagał zmian (`css/style.css` bez zmian), nie dopisano wyjątku. Luka była w samym teście: sprawdzał tylko istnienie odpowiedniej reguły, więc nie wyłapałby nowego `<details>` o innym stylu. Dopisany test wymaga, żeby każdy `<summary>` w `index.html` był pod `.sec` albo w `.diag`, i żeby żadna reguła `summary` w CSS nie ustawiała wysokości innej niż `var(--tap)`.
+- Jak sprawdzić: `npm run check`: 305 testów, 304 pass, 0 fail, 1 skipped, lint czysty (wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17).
+
+### Z-008 [P2] Tryb czystego widoku i eksport
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak trybu bez panelu oraz eksportu wyniku do PNG lub GeoJSON.
+- Dowód: nieznane.
+- Wdrożone 2026-11-16 (część C, eksport GeoJSON): przycisk „Pobierz strefy (GeoJSON)" pod „Kopiuj link do tego widoku" zapisuje aktualne strefy jako `FeatureCollection` z sześcioma `MultiPolygon` (źródło: `contours` z `buildContours`, nie siatka czasów). Właściwości simplestyle plus metadane powielone w `properties`; współrzędne `[lon, lat]` zaokrąglone do 5 miejsc, nawijanie wg RFC 7946. Pobranie przez `Blob` i ukryty `<a download>`, bez zależności. Nazwa `izochrona-<miasto>-<yyyymmdd>-<HHMM>.geojson`. Zmierzone: Trójmiasto, plik 1,93 MB, generowanie ok. 26 ms. Odstępstwo: pominięto zdanie „Plik zawiera osiągnięte przystanki, nie obszary" (przy `walk=false` też powstają wielokąty).
+- Eksport PNG wydzielono do nowego zadania Z-063 (2026-11-17).
+- Rozstrzygnięcie (2026-11-17, esteta): osobny tryb czystego widoku odrzucony. Istniejące zwijanie panelu (`#collapseBtn`, `body.panel-collapsed`) już chowa całą treść i zostawia pasek nagłówka ok. 70 px, a `--panel-h` sam przesuwa zoom i atrybucję; osobny tryb dublowałby stan, przycisk i obsługę focusu. Odrzucono też wiązanie klawisza Escape z rozwijaniem panelu (Escape zamyka dziś listę wyszukiwania, dialog pomocy i dymek mapy), drugi przycisk na mapie oraz wpisywanie stanu zwinięcia do adresu URL. `buildQuery` i `parseUrlState` nietknięte. Zamiast tego jako rozszerzenie zwijania: legenda widoczna przy zwiniętym panelu, poprawka `aria-label` przycisku zwijania oraz komunikat dla czytnika ekranu.
+- Znaleziony błąd (w ramach powyższego, bez osobnego numeru): po zwinięciu panelu `aria-label` przycisku nadal brzmi „Zwiń panel", mimo że przycisk rozwija. Zmienia się tylko widoczny znak i `aria-expanded`.
+- Wdrożone 2026-11-17 (domknięcie, rozszerzenie zwijania panelu):
+  - Legenda widoczna przy zwiniętym panelu: jedna legenda w DOM w `.panel-body` (`role="group"`, `aria-labelledby="legendTitle"`), stan zwinięty pokazuje tylko ją (reguła `.panel.collapsed .panel-body > :not(.legend)`); w stanie zwiniętym `.legend` ma `margin: 0; padding: 8px 18px 12px`, bez własnego tła i cienia. Zero nowych tokenów i kolorów, zero animacji.
+  - `aria-label` przycisku `#collapseBtn` przełącza się „Zwiń panel" / „Rozwiń panel" razem z `aria-expanded`; widoczny znak („−" / „+") bez zmian.
+  - Ogłaszanie stanu: „Panel zwinięty. Widać samą mapę i legendę." oraz „Panel rozwinięty." zapisywane bezpośrednio do `#zoneSummary` (`role="status"`, `aria-live="polite"`), nie przez `say()` ani `announce()`; region czyszczony i wypełniany po 50 ms. Nic nie jest ogłaszane przy starcie strony, focus zostaje na przycisku.
+  - Źródło rozkładów na telefonie przy zwiniętym panelu: reguła `body:not(.panel-collapsed) .attr-extra { display: none }` zamiast dawnego ukrywania doklejki; atrybucja OpenStreetMap z Leaflet widoczna zawsze.
+  - Zmierzone (przeglądarka, Trójmiasto): desktop 1024 px, panel rozwinięty 666 px, zwinięty 143 px. Przy 360 px: rozwinięty 459 px, zwinięty 143 px; `--panel-h` przelicza się (offset kontrolek mapy zmienił się z 466,8 na 150 px). Legenda: 50 px rozwinięta, 70 px zwinięta (z paddingiem), sześć komórek z nagłówkiem „Czas podróży [min]". Odstępstwo od specyfikacji estety: szacowano zwinięty panel na ok. 105 px, wyszło 143 px, bo sama legenda z nagłówkiem ma 50 px.
+  - Potwierdzone niezależnie przez wątek główny: po zwinięciu w DOM jest jedna legenda, widoczna; `aria-label` to „Rozwiń panel"; `aria-expanded` to „false"; `#zoneSummary` zawiera „Panel zwinięty. Widać samą mapę i legendę.".
+  - Znane ryzyko: ogłoszenie stref oczekujące w momencie kliknięcia może po swojej sekundzie nadpisać komunikat o panelu.
+  - Testy: dwa nowe w `tests/mobile-layout.test.mjs` (legenda przy zwiniętym panelu; `aria-label` i oba teksty komunikatu) plus poprawiony test doklejki atrybucji; `TAP_USES_MIN` bez zmian (23). `npm run check`: wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17.
+- Pliki: js/walkgrid.js, js/worker.js, js/uilogic.js, js/app.js, index.html, css/style.css, tests/mobile-layout.test.mjs. Przy domknięciu: `css/style.css`, `js/app.js` (handler `#collapseBtn`), `tests/mobile-layout.test.mjs`; `index.html` bez zmian; `README.md` i `CURRENT_STATE.md` bez zmian (zwijanie panelu nie było w nich opisane).
+- Niezweryfikowane: otwarcie pliku w QGIS, faktyczne pobranie pliku przez przeglądarkę, wygląd stanu `:disabled` (z 2026-11-16); odczyt prawdziwym czytnikiem ekranu (sprawdzono tylko treść regionu i atrybuty); wygląd legendy w stanie zwiniętym nie przeszedł przeglądu estety; obrót ekranu przy zwiniętym panelu.
 
 ## Odrzucone
 

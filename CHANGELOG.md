@@ -7,11 +7,12 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-019 Brakujące profile opóźnień dla GZM i Szczecina — etap: weryfikacja (oczekiwanie na pierwszy przebieg kolektora z nową diagnostyką).
 - Z-002 Mobile i PWA — etap: wdrożenie (etapy 1 i 2 wdrożone; etap 3, service worker, czeka na decyzję właściciela).
 - Z-051 Rozkład Opola kończy się 2026-11-16; Łódź i Olsztyn mają nowe adresy źródeł i przeliczone dane (2026-11-17) — etap: wdrożenie (częściowo; Opole -> Z-054, Gorzów -> Z-055, przegląd przed 2026-12-30).
-- Z-008 Tryb czystego widoku i eksport — etap: wdrożenie (część eksportu GeoJSON zrobiona; tryb czystego widoku i PNG otwarte).
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
 - Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
 
 ## 2026-11-17
+### Dodane
+- Z-008 Zwinięty panel pokazuje legendę, więc zrzut ekranu z mapą ma objaśnienie kolorów. Czysty widok mapy powstaje przez istniejący przycisk zwijania, bez osobnego trybu. Na telefonie przy zwiniętym panelu widać źródło rozkładów; atrybucja OpenStreetMap widoczna zawsze. Przy okazji naprawiono błąd dostępności (przycisk zwijania po zwinięciu mówił „Zwiń panel") i dołożono ogłaszanie stanu panelu dla czytnika ekranu („Panel zwinięty. Widać samą mapę i legendę." / „Panel rozwinięty."). Odrzucono osobny tryb czystego widoku. (pliki: css/style.css, js/app.js, tests/mobile-layout.test.mjs; index.html bez zmian; testy: tests/mobile-layout.test.mjs — 2 nowe plus poprawiony test doklejki atrybucji, `TAP_USES_MIN` bez zmian (23); npm run check: lint czysty, 307 testów, 306 pass, 0 fail, 1 skipped (dosłowny wynik w sekcji Wewnętrzne); zmierzone w przeglądarce (Trójmiasto): desktop 1024 px panel 666 px rozwinięty, 143 px zwinięty; 360 px 459 px rozwinięty, 143 px zwinięty; legenda 50 px rozwinięta, 70 px zwinięta; odstępstwo: specyfikacja szacowała zwinięty panel na ok. 105 px; nie sprawdzone: odczyt prawdziwym czytnikiem ekranu (sprawdzono tylko treść regionu i atrybuty), wygląd legendy w stanie zwiniętym (nie przeszedł przeglądu estety), obrót ekranu przy zwiniętym panelu; znane ryzyko: ogłoszenie stref oczekujące w momencie kliknięcia może po swojej sekundzie nadpisać komunikat o panelu)
 ### Zmienione
 - Z-051 Dane rozkładowe Łodzi i Olsztyna odświeżone z nowych źródeł (ręczne przeliczenie za zgodą właściciela; pierwsze nadpisanie `data/<miasto>/` od podmiany źródeł). Łódź: feed UMŁ, zakres 2026-11-16–2026-12-31, dni 2026-11-17 (roboczy), 2026-11-21 (sobota), 2026-11-22 (niedziela); 24161 kursów, 2390 przystanków w 1336 zespołach, 674361 wierszy `stop_times`, 10350 przesiadek pieszych; jeden wzorzec rozbity przez wyprzedzanie w niedzielę. Olsztyn: feed ZDZiT (tryb `html-latest`), zakres 2026-10-26–2026-11-30, te same dni; 5570 kursów, 842 przystanki (603 po usunięciu bez kursów), 2036 przesiadek pieszych. Nic się nie zgubiło: lodz/workday 591578 → 597587 B, lodz/saturday 494458 → 499447, lodz/sunday 482585 → 488111; olsztyn/workday 137585 → 147801, olsztyn/saturday 103303 → 113587, olsztyn/sunday 87083 → 97415. Bramka jakości (`node tools/check-data.mjs`) nie zgłasza problemów dla Łodzi ani Olsztyna. Sprawdzone w przeglądarce (`?city=lodz`, `?city=olsztyn`, punkt w centrum): izochrona się liczy, sześć pasm w legendzie, status „Zasięg z punktu · dzień roboczy, 08:00.", brak ostrzeżenia o nieaktualnym rozkładzie; stopka: Łódź rozkład z 17.11.2026 ważny do 31.12.2026, Olsztyn rozkład z 17.11.2026 ważny do 30.11.2026. (pliki: data/lodz/meta.json, data/lodz/workday.json, data/lodz/saturday.json, data/lodz/sunday.json, data/olsztyn/meta.json, data/olsztyn/workday.json, data/olsztyn/saturday.json, data/olsztyn/sunday.json; testy: bez nowych; npm run check: 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty — wynik podany w zleceniu, nie wklejony dosłownie z terminala; nie sprawdzone: poprawność rozkładów względem terenu, przełączniki środków transportu, tryb porównania i tryb ostrożny na nowych danych, zachowanie przy następnym automatycznym odświeżeniu; Opole nadal otwarte w Z-051 i Z-054)
 - Z-059 Panel nie przewija się już w widoku domyślnym: trzy sekcje (Czas i kierunek, Dojście i środki transportu, Opóźnienia i statystyki) są zwinięte, a „Dane i kontakt" jest przypięta na dole panelu i zawsze widoczna. Zmierzone w przeglądarce (Trójmiasto, 1024x768): przed `scrollHeight` 1243 px przy 663 px, po zwinięciu 550 px przy 550 px. Stan sekcji zapamiętywany lokalnie, nie w adresie URL; sekcja „Czas i kierunek" otwiera się sama przy komunikacie o święcie, bez zapisu jako wybór użytkownika. Zmiana układu zatwierdzona przez właściciela. (pliki: index.html, css/style.css, js/uilogic.js, js/app.js, README.md, CURRENT_STATE.md; testy: tests/uilogic.test.mjs (18 nowych), tests/mobile-layout.test.mjs (TAP_USES_MIN 22 -> 23), tests/a11y-css.test.mjs (`.sec > summary` w inwentarzu); npm run check: dosłowny wynik poniżej, lint czysty; nie sprawdzone: pusta przestrzeń nad stopką na produkcji z włączonym AdSense, czytnik ekranu, prawdziwe urządzenie dotykowe)
@@ -47,6 +48,30 @@ Dosłowny wynik `npm run check` po Z-059:
 ```
   Lint czysty.
 - Powstał agent `liczytokena` (`.claude/agents/liczytokena.md`, wiersz w tabeli i w przepływie pracy w `CLAUDE.md`); pilnuje budżetu tokenów i układa plan fali. Utworzony na wyraźną prośbę właściciela 2026-11-17. (bez zmian w kodzie strony)
+- Z-057 Współrzędne przystanku z podpowiedzi liczone z pełną dokładnością (`Float64Array` zamiast `Float32Array`; ok. 28 kB więcej w komunikacie `stops` dla GZM); indeks przystanków trzymany w cache po miastach i dniach, więc przełączenie typu dnia nie buduje go od nowa. Widoczna zmiana to tylko dokładność współrzędnych w adresie i w historii ostatnich punktów. Starsze wpisy w historii zachowują dawną wartość. (pliki: js/uilogic.js, js/app.js; testy: tests/uilogic.test.mjs (zmieniony), tests/stops.test.mjs (nowy); npm run check: wynik dosłowny poniżej, lint czysty; sprawdzone w przeglądarce: „Wrzeszcz PKP" w Trójmieście ustawia 54.38125, 18.60442; nie sprawdzone: podgląd na telefonie, ścieżka `engine=main` w przeglądarce)
+- Z-061 Dodano 8 testów ścieżki workera `stops` (`tests/stops.test.mjs`): indeks dla załadowanego i niezaładowanego miasta, zmiana miasta w trakcie budowy, błąd pobrania, cache i limit. Znana luka: strażnik `state.city === city` w `getStopIndex` (`js/app.js`) wymaga DOM i nie jest pokryty testami. (pliki: tests/stops.test.mjs (nowy); npm run check: wynik dosłowny poniżej, lint czysty)
+- Z-062 Test dostępności pilnuje wszystkich `<summary>` w `index.html`: każdy musi być w `.sec` albo `.diag`, a żadna reguła `summary` w CSS nie ustawia wysokości innej niż `var(--tap)`. CSS bez zmian. (pliki: tests/a11y-css.test.mjs; npm run check: wynik dosłowny poniżej, lint czysty)
+- Dosłowny wynik `npm run check` po Z-057, Z-061 i Z-062 (2026-11-17):
+```
+ℹ tests 305
+ℹ pass 304
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+```
+  Lint czysty.
+- Dosłowny wynik `npm run check` po domknięciu Z-008 (2026-11-17):
+```
+ℹ tests 307
+ℹ suites 0
+ℹ pass 306
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 648.9991
+```
+  Lint czysty.
 
 ## 2026-11-16
 

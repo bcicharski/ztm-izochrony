@@ -122,3 +122,22 @@ test('#locateBtn niedostępny: aria-disabled ze stylem bez opacity', () => {
   assert.match(rule.body, /cursor:\s*not-allowed/);
   assert.ok(!/opacity/.test(rule.body));
 });
+
+test('summary (Z-062): każdy <summary> w index.html jest pod .sec albo .diag, a żadna reguła nie zmniejsza ich wysokości', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  // każdy <details> z summary: albo class="sec ...", albo wewnątrz <section class="diag">
+  const details = [...html.matchAll(/<details([^>]*)>\s*<summary/g)];
+  assert.ok(details.length >= 5, 'oczekiwano 4 sekcji panelu + szczegółów diagnostyki');
+  const diagStart = html.indexOf('class="diag"');
+  const diagEnd = html.indexOf('</section>', diagStart);
+  for (const m of details) {
+    const isSec = /class="[^"]*\bsec\b/.test(m[1]);
+    const inDiag = m.index > diagStart && m.index < diagEnd;
+    assert.ok(isSec || inDiag, `<details${m[1]}> z summary poza .sec i .diag — dodaj do inwentarza SIZED`);
+  }
+  // żadna reguła dla summary nie nadpisuje min-height wartością inną niż --tap
+  for (const r of ALL.filter(r => r.selectors.some(s => /\bsummary\b/.test(s)))) {
+    const h = r.body.match(/(?:^|[\s;])(?:min-)?height:\s*([^;]+);/);
+    if (h) assert.equal(h[1].trim(), 'var(--tap)', `${r.selectors.join(', ')}: wysokość summary ≠ --tap`);
+  }
+});
