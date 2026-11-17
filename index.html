@@ -163,7 +163,7 @@
         <ol>
           <li>Wybierz miasto.</li>
           <li>Kliknij punkt na mapie albo wpisz adres.</li>
-          <li>Ustaw godzinę i typ dnia — kolory pokażą, dokąd dojedziesz.</li>
+          <li>W sekcji „Czas i kierunek” ustaw godzinę i typ dnia — kolory pokażą, dokąd dojedziesz.</li>
         </ol>
         <div class="intro-actions">
           <button type="button" id="introOk">Rozumiem</button>
@@ -172,89 +172,9 @@
       </section>
       <p class="warn" id="dataWarn" role="alert" hidden></p>
 
-      <fieldset class="control">
-        <legend>Kierunek</legend>
-        <div class="segmented" role="group">
-          <input type="radio" name="direction" id="dirFrom" value="from" checked>
-          <label for="dirFrom">Z miejsca</label>
-          <input type="radio" name="direction" id="dirTo" value="to">
-          <label for="dirTo">Do miejsca</label>
-        </div>
-      </fieldset>
-
-      <fieldset class="control">
-        <legend>Czas</legend>
-        <div class="segmented" role="group">
-          <input type="radio" name="mode" id="modeTime" value="time" checked>
-          <label for="modeTime">O godzinie</label>
-          <input type="radio" name="mode" id="modeGeneral" value="general">
-          <label for="modeGeneral">Ogólnie</label>
-        </div>
-        <div class="time-row" id="timeRow">
-          <input type="time" id="timeInput" value="08:00" step="300">
-          <select id="daySelect" aria-label="Typ dnia">
-            <option value="workday" selected>dzień roboczy</option>
-            <option value="saturday">sobota</option>
-            <option value="sunday">niedziela</option>
-          </select>
-        </div>
-        <p class="hint" id="dayNote" role="status"></p>
-      </fieldset>
-
-      <fieldset class="control">
-        <legend>Dojście do przystanku</legend>
-        <label class="switch">
-          <input type="checkbox" id="walkToggle" checked>
-          <span class="track" aria-hidden="true"></span>
-          <span>Uwzględnij spacer</span>
-        </label>
-        <select id="accessSelect" aria-label="Czym dojeżdżasz do przystanku">
-          <option value="foot" selected>🚶 pieszo</option>
-          <option value="bike">🚲 rowerem, zostaje na przystanku</option>
-          <option value="bike-onboard">🚲 rowerem, jedzie z tobą</option>
-        </select>
-      </fieldset>
-
-      <fieldset class="control">
-        <legend>Środki transportu</legend>
-        <div class="veh-grid" id="vehGrid"></div>
-      </fieldset>
-
-      <fieldset class="control">
-        <legend>Opóźnienia</legend>
-        <label class="switch">
-          <input type="checkbox" id="safeToggle">
-          <span class="track" aria-hidden="true"></span>
-          <span>Tryb ostrożny (margines)</span>
-        </label>
-        <p class="hint" id="safeNote" role="status"></p>
-      </fieldset>
-
       <div class="legend" role="group" aria-labelledby="legendTitle">
         <h2 id="legendTitle">Czas podróży [min]</h2>
         <div class="legend-bar" id="legendBar" role="list"></div>
-      </div>
-
-      <label class="switch stats-switch" id="statsToggleRow">
-        <input type="checkbox" id="statsToggle">
-        <span class="track" aria-hidden="true"></span>
-        <span>Pokaż statystyki</span>
-      </label>
-
-      <div id="statsBox" hidden>
-        <table class="stats">
-          <thead>
-            <tr>
-              <th scope="col">strefa</th>
-              <th scope="col" class="num">zasięg</th>
-              <th scope="col" class="num" id="areaHead">% miasta</th>
-            </tr>
-          </thead>
-          <tbody id="statsBody"></tbody>
-        </table>
-        <p class="note">Zasięg = maks. odległość w linii prostej. % = udział powierzchni lądowej
-          miasta w granicach administracyjnych (aglomeracje: wszystkie gminy z listy
-          w konfiguracji). Pasmo „ponad 60 min" liczone do 90 min.</p>
       </div>
 
       <p class="status" id="status" role="status" aria-live="off"></p>
@@ -272,13 +192,130 @@
         <textarea class="diag-text" id="diagText" readonly hidden rows="6"
                   aria-label="Raport diagnostyczny do skopiowania"></textarea>
       </section>
-      <button class="share-btn" id="shareBtn">Kopiuj link do tego widoku</button>
+
+      <details class="sec" id="secTime">
+        <summary>
+          <span class="sec-text">
+            <span class="sec-title">Czas i kierunek</span>
+            <span class="sec-line"><span class="sec-dot" aria-hidden="true" hidden></span><span class="sec-sum" id="secTimeSum"></span></span>
+          </span>
+          <span class="sec-chev" aria-hidden="true"></span>
+          <span class="sr-only" id="secTimeFlag" hidden>— zmienione ustawienia</span>
+        </summary>
+        <div class="sec-body">
+          <fieldset class="control">
+            <legend>Czas</legend>
+            <div class="segmented" role="group">
+              <input type="radio" name="mode" id="modeTime" value="time" checked>
+              <label for="modeTime">O godzinie</label>
+              <input type="radio" name="mode" id="modeGeneral" value="general">
+              <label for="modeGeneral">Ogólnie</label>
+            </div>
+            <div class="time-row" id="timeRow">
+              <input type="time" id="timeInput" value="08:00" step="300">
+              <select id="daySelect" aria-label="Typ dnia">
+                <option value="workday" selected>dzień roboczy</option>
+                <option value="saturday">sobota</option>
+                <option value="sunday">niedziela</option>
+              </select>
+            </div>
+            <p class="hint" id="dayNote" role="status"></p>
+          </fieldset>
+
+          <fieldset class="control">
+            <legend>Kierunek</legend>
+            <div class="segmented" role="group">
+              <input type="radio" name="direction" id="dirFrom" value="from" checked>
+              <label for="dirFrom">Z miejsca</label>
+              <input type="radio" name="direction" id="dirTo" value="to">
+              <label for="dirTo">Do miejsca</label>
+            </div>
+          </fieldset>
+        </div>
+      </details>
+
+      <details class="sec" id="secAccess">
+        <summary>
+          <span class="sec-text">
+            <span class="sec-title">Dojście i środki transportu</span>
+            <span class="sec-line"><span class="sec-dot" aria-hidden="true" hidden></span><span class="sec-sum" id="secAccessSum"></span></span>
+          </span>
+          <span class="sec-chev" aria-hidden="true"></span>
+          <span class="sr-only" id="secAccessFlag" hidden>— zmienione ustawienia</span>
+        </summary>
+        <div class="sec-body">
+          <fieldset class="control">
+            <legend>Dojście do przystanku</legend>
+            <label class="switch">
+              <input type="checkbox" id="walkToggle" checked>
+              <span class="track" aria-hidden="true"></span>
+              <span>Uwzględnij spacer</span>
+            </label>
+            <select id="accessSelect" aria-label="Czym dojeżdżasz do przystanku">
+              <option value="foot" selected>🚶 pieszo</option>
+              <option value="bike">🚲 rowerem, zostaje na przystanku</option>
+              <option value="bike-onboard">🚲 rowerem, jedzie z tobą</option>
+            </select>
+          </fieldset>
+
+          <fieldset class="control">
+            <legend>Środki transportu</legend>
+            <div class="veh-grid" id="vehGrid"></div>
+          </fieldset>
+        </div>
+      </details>
+
+      <details class="sec sec-last" id="secDelay">
+        <summary>
+          <span class="sec-text">
+            <span class="sec-title">Opóźnienia i statystyki</span>
+            <span class="sec-line"><span class="sec-dot" aria-hidden="true" hidden></span><span class="sec-sum" id="secDelaySum"></span></span>
+          </span>
+          <span class="sec-chev" aria-hidden="true"></span>
+          <span class="sr-only" id="secDelayFlag" hidden>— zmienione ustawienia</span>
+        </summary>
+        <div class="sec-body">
+          <fieldset class="control">
+            <legend>Opóźnienia</legend>
+            <label class="switch">
+              <input type="checkbox" id="safeToggle">
+              <span class="track" aria-hidden="true"></span>
+              <span>Tryb ostrożny (margines)</span>
+            </label>
+            <p class="hint" id="safeNote" role="status"></p>
+          </fieldset>
+
+          <label class="switch stats-switch" id="statsToggleRow">
+            <input type="checkbox" id="statsToggle">
+            <span class="track" aria-hidden="true"></span>
+            <span>Pokaż statystyki</span>
+          </label>
+
+          <div id="statsBox" hidden>
+            <table class="stats">
+              <thead>
+                <tr>
+                  <th scope="col">strefa</th>
+                  <th scope="col" class="num">zasięg</th>
+                  <th scope="col" class="num" id="areaHead">% miasta</th>
+                </tr>
+              </thead>
+              <tbody id="statsBody"></tbody>
+            </table>
+            <p class="note">Zasięg = maks. odległość w linii prostej. % = udział powierzchni lądowej
+              miasta w granicach administracyjnych (aglomeracje: wszystkie gminy z listy
+              w konfiguracji). Pasmo „ponad 60 min" liczone do 90 min.</p>
+          </div>
+        </div>
+      </details>
+
+      <div class="action-row">
+        <button class="share-btn" id="shareBtn" type="button">Kopiuj link</button>
+        <button class="share-btn" id="exportBtn" type="button" disabled title="Najpierw przelicz zasięg"
+                aria-label="Pobierz strefy (GeoJSON)">Pobierz strefy</button>
+      </div>
       <textarea class="diag-text share-text" id="shareText" readonly hidden rows="3"
                 aria-label="Link do tego widoku do skopiowania"></textarea>
-      <button class="share-btn" id="exportBtn" type="button" disabled title="Najpierw przelicz zasięg">Pobierz strefy (GeoJSON)</button>
-      <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
-        ☕ Podoba się? Postaw kawę
-      </a>
 
       <div class="ad-box" id="adBox" hidden>
         <span class="ad-label">Reklama</span>
@@ -289,15 +326,30 @@
              data-ad-format="auto"
              data-full-width-responsive="true"></ins>
       </div>
-
-      <footer class="credits">
-        Dane: <span id="creditsLinks">…</span>
-        · rozkład z dnia <span id="feedDate">…</span><span id="feedDateNote"></span>
-        · ważny do <span id="feedEnd">…</span>
-        <span id="delayCoverageRow" hidden>· profile opóźnień: <span id="delayCoverage"></span></span>
-        · kontakt: <a href="mailto:Bartosz@excelninja.pro">Bartosz@excelninja.pro</a>
-      </footer>
     </div>
+
+    <details class="sec sec-pinned" id="secData">
+      <summary>
+        <span class="sec-text">
+          <span class="sec-title">Dane i kontakt</span>
+          <span class="sec-line"><span class="sec-dot" aria-hidden="true" hidden></span><span class="sec-sum" id="secDataSum"></span></span>
+        </span>
+        <span class="sec-chev" aria-hidden="true"></span>
+        <span class="sr-only" id="secDataFlag" hidden>— zmienione ustawienia</span>
+      </summary>
+      <div class="sec-body">
+        <footer class="credits">
+          Dane: <span id="creditsLinks">…</span>
+          · rozkład z dnia <span id="feedDate">…</span><span id="feedDateNote"></span>
+          · ważny do <span id="feedEnd">…</span>
+          <span id="delayCoverageRow" hidden>· profile opóźnień: <span id="delayCoverage"></span></span>
+          · kontakt: <a href="mailto:Bartosz@excelninja.pro">Bartosz@excelninja.pro</a>
+        </footer>
+        <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
+          ☕ Podoba się? Postaw kawę
+        </a>
+      </div>
+    </details>
   </main>
 
   <dialog id="helpDialog" aria-labelledby="helpTitle">

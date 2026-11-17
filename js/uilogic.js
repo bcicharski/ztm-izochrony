@@ -607,3 +607,80 @@ export function mergeSearchResults(stops, places, { limit = 8 } = {}) {
     ...(places ?? []).map(p => ({ label: p.label, lat: p.lat, lng: p.lng, source: 'place' })),
   ].slice(0, limit);
 }
+
+// --- zwijane sekcje panelu (Z-059) -----------------------------------------------
+
+/** Klucz w localStorage: jedna mapa `{idSekcji: bool}`. Stan sekcji NIE trafia do adresu URL. */
+export const PANEL_SECTIONS_KEY = 'panel-sections';
+/** Znane sekcje (id elementów `<details>`); nieznane klucze z pamięci są odrzucane. */
+export const PANEL_SECTION_IDS = ['secTime', 'secAccess', 'secDelay', 'secData'];
+
+/**
+ * Odczyt mapy stanu sekcji z surowego tekstu localStorage. Odporny na pusty
+ * tekst, zły JSON, nieznane identyfikatory i wartości inne niż bool — takie
+ * wpisy odpadają, brakujące sekcje zostają zamknięte (układ domyślny).
+ */
+export function parseSectionState(raw) {
+  let data;
+  try { data = JSON.parse(raw); } catch { return {}; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  const out = {};
+  for (const id of PANEL_SECTION_IDS) if (typeof data[id] === 'boolean') out[id] = data[id];
+  return out;
+}
+
+export const serializeSectionState = map => JSON.stringify(
+  Object.fromEntries(PANEL_SECTION_IDS.filter(id => typeof map?.[id] === 'boolean').map(id => [id, map[id]])));
+
+const SUMMARY_DAY = { workday: 'dzień roboczy', saturday: 'sobota', sunday: 'niedziela' };
+const SUMMARY_ACCESS = { foot: 'pieszo', bike: 'rowerem', 'bike-onboard': 'rowerem w pojeździe' };
+
+/** „Czas i kierunek": bieżące wartości; `changed`, gdy odbiegają od `defaults` ({ timeMin, day }). */
+export function timeSectionSummary({ mode, timeMin, day, direction }, defaults = {}) {
+  const dir = direction === 'to' ? 'do miejsca' : 'z miejsca';
+  const head = mode === 'general' ? 'ogólnie' : `${fmtClock(timeMin)} · ${SUMMARY_DAY[day] ?? day}`;
+  const changed = mode === 'general' || direction === 'to'
+    || (defaults.timeMin != null && timeMin !== defaults.timeMin)
+    || (defaults.day != null && day !== defaults.day);
+  return { text: `${head} · ${dir}`, changed };
+}
+
+/** Nazwa środka bez ikony emoji z początku etykiety: „🚌 Autobus" → „autobus". */
+const vehName = label => String(label).replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
+
+/**
+ * „Dojście i środki transportu". `groups` = `cityCfg().veh`, `veh` = mapa
+ * kluczy → bool. Do trzech nazw wprost, powyżej „N z M środków". Przy jednym
+ * środku filtr jest ukryty w panelu, więc podsumowanie mówi tylko o dojściu.
+ */
+export function accessSectionSummary({ walk, access, groups, veh }) {
+  const on = groups.filter(g => veh[g.key]);
+  if (groups.length >= 2 && on.length === 0) return { text: 'tylko pieszo', changed: true };
+  const walkPart = walk ? (SUMMARY_ACCESS[access] ?? 'pieszo') : 'bez spaceru';
+  let vehPart = null;
+  if (groups.length >= 2) {
+    if (on.length === groups.length) vehPart = 'wszystkie środki';
+    else vehPart = on.length <= 3 ? on.map(g => vehName(g.label)).join(', ') : `${on.length} z ${groups.length} środków`;
+  }
+  const changed = !walk || access !== 'foot' || (vehPart !== null && on.length !== groups.length);
+  return { text: vehPart ? `${walkPart} · ${vehPart}` : walkPart, changed };
+}
+
+/** „Opóźnienia i statystyki". Statystyki liczą się tylko w trybie jednego punktu (w porównaniu przełącznik jest ukryty). */
+export function delaySectionSummary({ safe, stats, compare }) {
+  const showStats = !!stats && !compare;
+  return {
+    text: [safe ? 'ostrożny' : 'standardowo', showStats ? 'statystyki' : null].filter(Boolean).join(' · '),
+    changed: !!safe || showStats,
+  };
+}
+
+/** „yyyymmdd" → „yyyy-mm-dd"; cokolwiek innego → null. */
+export const fmtIsoDate = d => (d && /^\d{8}$/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : null);
+
+/** „Dane i kontakt": data rozkładu albo „rozkład nieaktualny" (wtedy `changed`, bo wymaga uwagi). */
+export function dataSectionSummary({ feedDate, stale }) {
+  if (stale) return { text: 'rozkład nieaktualny', changed: true };
+  const iso = fmtIsoDate(feedDate);
+  return { text: iso ? `rozkład z ${iso}` : 'źródła i kontakt', changed: false };
+}

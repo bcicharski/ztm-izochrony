@@ -39,6 +39,7 @@ const SIZED = [
   '.coffee-btn',
   '#dayNote button', // „Pokaż niedzielę" (Z-022)
   '#diagCopy',       // „Kopiuj raport diagnostyczny" (Z-025)
+  '.sec > summary',  // sekcje panelu (Z-059)
   '.diag summary',   // rozwijane szczegóły diagnostyki (Z-025)
   '.consent-actions button',
   '.leaflet-container .leaflet-bar a', // tylko @media (pointer: coarse)

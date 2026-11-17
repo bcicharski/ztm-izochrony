@@ -13,6 +13,8 @@ import {
   esc, optionId, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
   zonesToGeoJSON, exportFileName, shouldShowIntro,
+  PANEL_SECTIONS_KEY, PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
+  timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary,
 } from './uilogic.js';
 import { Engine } from './engine.js';
 import { dayDataNotice } from './calendar.js';
@@ -580,13 +582,13 @@ $('shareBtn').addEventListener('click', async () => {
     ta.select();
     say('Nie udało się skopiować automatycznie — adres jest zaznaczony w polu, naciśnij Ctrl+C.');
   }
-  setTimeout(() => { btn.textContent = 'Kopiuj link do tego widoku'; }, 2000);
+  setTimeout(() => { btn.textContent = 'Kopiuj link'; }, 2000);
 });
 
 // Eksport stref do GeoJSON (Z-008): źródłem są wektorowe obrysy z fazy
 // „contours" — te same, które rysuje mapa. Zero zależności: Blob + <a download>.
 let exportContours = null;
-const EXPORT_LABEL = 'Pobierz strefy (GeoJSON)';
+const EXPORT_LABEL = 'Pobierz strefy';
 
 function setExportReady(contours) {
   exportContours = contours;
@@ -691,6 +693,56 @@ if (typeof ResizeObserver !== 'undefined') {
     lastPanelH = h;
     document.documentElement.style.setProperty('--panel-h', h + 'px');
   }).observe($('panel'));
+}
+
+// --- zwijane sekcje panelu (Z-059) ---------------------------------------------
+// Natywne <details>: otwieranie, klawiatura i stan dla czytnika robi przeglądarka.
+// Tu tylko: pamięć stanu (jeden klucz localStorage, nic w adresie URL) i
+// podsumowania w nagłówkach (czyste funkcje z uilogic.js).
+
+const sectionPrefs = (() => {
+  try { return parseSectionState(localStorage.getItem(PANEL_SECTIONS_KEY)); } catch { return {}; }
+})();
+const skipSave = new Set(); // sekcje otwarte automatycznie — nie zapisujemy tego jako wyboru użytkownika
+
+for (const id of PANEL_SECTION_IDS) {
+  const el = $(id);
+  if (sectionPrefs[id] === true) el.open = true;
+  el.addEventListener('toggle', () => {
+    if (skipSave.delete(id)) return;
+    sectionPrefs[id] = el.open;
+    try { localStorage.setItem(PANEL_SECTIONS_KEY, serializeSectionState(sectionPrefs)); } catch { /* bez pamięci: układ domyślny */ }
+  });
+}
+
+/** Otwiera sekcję bez zapisywania tego jako wyboru użytkownika (komunikat wymagający działania). */
+function openSectionAuto(id) {
+  const el = $(id);
+  if (el.open) return;
+  skipSave.add(id);
+  el.open = true;
+}
+
+// domyślne = „gdybym wyszedł teraz” (sprzed stanu z linku), więc opcje z linku dostają znacznik
+const initialDefaults = { timeMin: Math.floor(now.minutes / 5) * 5, day: todayDay };
+let feedYmd = null;     // data rozkładu wybranego typu dnia (yyyymmdd) — do nagłówka „Dane i kontakt"
+let feedStale = false;  // rozkład po terminie ważności
+
+/** Bieżące wartości ustawień w nagłówkach sekcji; `data-changed` + kropka dla odbiegających od domyślnych. */
+function renderSections() {
+  const views = {
+    secTime: timeSectionSummary(state, initialDefaults),
+    secAccess: accessSectionSummary({ walk: state.walk, access: state.access, groups: cityCfg().veh, veh: state.veh }),
+    secDelay: delaySectionSummary(state),
+    secData: dataSectionSummary({ feedDate: feedYmd, stale: feedStale }),
+  };
+  for (const id of PANEL_SECTION_IDS) {
+    const v = views[id];
+    $(`${id}Sum`).textContent = v.text;
+    $(id).toggleAttribute('data-changed', v.changed);
+    $(id).querySelector('.sec-dot').hidden = !v.changed;
+    $(`${id}Flag`).hidden = !v.changed;
+  }
 }
 
 // --- legenda (zawsze widoczna, kompaktowa) -----------------------------------
@@ -988,6 +1040,7 @@ function statusText(walkOnly) {
  * starsze (`computeSeq`) — spóźnione fazy są ignorowane.
  */
 async function recompute() {
+  renderSections(); // nagłówki sekcji pokazują bieżące ustawienia także w trakcie wczytywania miasta
   if (!cityReady) return; // loadCityAssets uruchomi przeliczenie, gdy miasto będzie gotowe
   const seq = ++computeSeq;
   const t0 = performance.now();
@@ -1079,10 +1132,14 @@ function renderDayInfo() {
   const today = warsawNow();
   const n = dayDataNotice(cityMeta, state.day, today.ymd);
   const view = dayInfoView(n, { dayFromUrl, day: state.day, todayDay });
+  feedYmd = n.date ?? null;
   $('feedDate').textContent = view.feedDate;
   $('feedDateNote').textContent = view.feedDateNote;
 
   const note = $('dayNote');
+  // komunikat wymagający działania (np. „Pokaż niedzielę”) otwiera swoją sekcję — raz na nowy tekst
+  if (view.text && view.text !== note.dataset.shown) openSectionAuto('secTime');
+  note.dataset.shown = view.text;
   note.textContent = view.text;
   if (view.offerSunday) {
     const btn = document.createElement('button');
@@ -1112,6 +1169,7 @@ function applyMeta(meta) {
   $('feedEnd').textContent = end ?? '—';
 
   const stale = !!meta?.feedEndDate && meta.feedEndDate < todayKey();
+  feedStale = stale;
   const warn = $('dataWarn');
   warn.hidden = !stale;
   warn.textContent = stale
@@ -1130,6 +1188,7 @@ function applyMeta(meta) {
   cityMetaReady = true;
   renderDayInfo();
   renderDelayCoverage();
+  renderSections();
 }
 
 /** Stan pokrycia profilami opóźnień bieżącego miasta (kontrakt: delayCoverage w data.js). */
@@ -1169,6 +1228,10 @@ async function loadCityAssets() {
   renderVehControls();
   cityMeta = null;
   cityMetaReady = false;
+  feedYmd = null;
+  feedStale = false;
+  $('dayNote').dataset.shown = '';
+  renderSections();
   $('feedDate').textContent = '…';
   $('feedDateNote').textContent = '';
   $('dayNote').textContent = '';
@@ -1253,6 +1316,7 @@ $('statsToggle').checked = state.stats;
 $('safeToggle').checked = state.safe;
 syncModeUi();
 renderSafeNote();
+renderSections();
 refreshIntro();
 // animate:false — animowany zoom bywa przerywany przez invalidateSize
 // z ResizeObservera przy starcie i widok zostawał na zoomie domyślnym

@@ -794,3 +794,167 @@ test('mergeSearchResults: przystanki przed adresami, limit, puste wejścia, stab
   assert.equal(mergeSearchResults(null, places).length, 1);
   assert.deepEqual(mergeSearchResults(stops, places), m);
 });
+
+// --- zwijane sekcje panelu (Z-059) -----------------------------------------------
+
+import {
+  PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
+  timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary, fmtIsoDate,
+} from '../js/uilogic.js';
+
+const DEF = { timeMin: 8 * 60 + 15, day: 'workday' };
+const GROUPS5 = [
+  { key: 'tram', label: '🚋 Tramwaj' }, { key: 'bus', label: '🚌 Autobus' },
+  { key: 'trol', label: '🚎 Trolejbus' }, { key: 'rail', label: '🚆 Kolej' }, { key: 'metro', label: '🚇 Metro' },
+];
+const allOn = gs => Object.fromEntries(gs.map(g => [g.key, true]));
+
+test('timeSectionSummary: wartości domyślne nie są „zmienione"', () => {
+  assert.deepEqual(timeSectionSummary({ mode: 'time', timeMin: 495, day: 'workday', direction: 'from' }, DEF),
+    { text: '08:15 · dzień roboczy · z miejsca', changed: false });
+});
+
+test('timeSectionSummary: tryb ogólny bez godziny, kierunek „do miejsca", inny dzień i godzina', () => {
+  assert.deepEqual(timeSectionSummary({ mode: 'general', timeMin: 495, day: 'workday', direction: 'from' }, DEF),
+    { text: 'ogólnie · z miejsca', changed: true });
+  assert.deepEqual(timeSectionSummary({ mode: 'time', timeMin: 18 * 60 + 30, day: 'saturday', direction: 'to' }, DEF),
+    { text: '18:30 · sobota · do miejsca', changed: true });
+  assert.equal(timeSectionSummary({ mode: 'time', timeMin: 500, day: 'workday', direction: 'from' }, DEF).changed, true);
+  assert.equal(timeSectionSummary({ mode: 'time', timeMin: 495, day: 'sunday', direction: 'from' }, DEF).changed, true);
+});
+
+test('accessSectionSummary: domyślnie „pieszo · wszystkie środki"', () => {
+  assert.deepEqual(accessSectionSummary({ walk: true, access: 'foot', groups: GROUPS5, veh: allOn(GROUPS5) }),
+    { text: 'pieszo · wszystkie środki', changed: false });
+});
+
+test('accessSectionSummary: rower, brak spaceru, lista do trzech nazw bez emoji', () => {
+  const veh = { ...allOn(GROUPS5), trol: false, rail: false, metro: false };
+  assert.deepEqual(accessSectionSummary({ walk: true, access: 'bike', groups: GROUPS5, veh }),
+    { text: 'rowerem · tramwaj, autobus', changed: true });
+  assert.deepEqual(accessSectionSummary({ walk: false, access: 'foot', groups: GROUPS5, veh: allOn(GROUPS5) }),
+    { text: 'bez spaceru · wszystkie środki', changed: true });
+  assert.equal(accessSectionSummary({ walk: true, access: 'bike-onboard', groups: GROUPS5, veh: allOn(GROUPS5) }).text,
+    'rowerem w pojeździe · wszystkie środki');
+});
+
+test('accessSectionSummary: trzy nazwy wprost, powyżej „N z M środków", wszystkie odznaczone = tylko pieszo', () => {
+  const three = { ...allOn(GROUPS5), rail: false, metro: false };
+  assert.equal(accessSectionSummary({ walk: true, access: 'foot', groups: GROUPS5, veh: three }).text,
+    'pieszo · tramwaj, autobus, trolejbus');
+  const four = { ...allOn(GROUPS5), metro: false };
+  assert.deepEqual(accessSectionSummary({ walk: true, access: 'foot', groups: GROUPS5, veh: four }),
+    { text: 'pieszo · 4 z 5 środków', changed: true });
+  const none = Object.fromEntries(GROUPS5.map(g => [g.key, false]));
+  assert.deepEqual(accessSectionSummary({ walk: true, access: 'foot', groups: GROUPS5, veh: none }),
+    { text: 'tylko pieszo', changed: true });
+});
+
+test('accessSectionSummary: jeden środek (filtr ukryty) — tylko o dojściu', () => {
+  const one = [{ key: 'bus', label: '🚌 Autobus' }];
+  assert.deepEqual(accessSectionSummary({ walk: true, access: 'foot', groups: one, veh: { bus: true } }),
+    { text: 'pieszo', changed: false });
+});
+
+test('delaySectionSummary: standardowo / ostrożny / statystyki; w porównaniu statystyk nie ma', () => {
+  assert.deepEqual(delaySectionSummary({ safe: false, stats: false, compare: false }), { text: 'standardowo', changed: false });
+  assert.deepEqual(delaySectionSummary({ safe: true, stats: true, compare: false }), { text: 'ostrożny · statystyki', changed: true });
+  assert.deepEqual(delaySectionSummary({ safe: false, stats: true, compare: false }), { text: 'standardowo · statystyki', changed: true });
+  assert.deepEqual(delaySectionSummary({ safe: false, stats: true, compare: true }), { text: 'standardowo', changed: false });
+});
+
+test('dataSectionSummary: data ISO, rozkład nieaktualny, brak danych', () => {
+  assert.equal(fmtIsoDate('20261110'), '2026-11-10');
+  assert.equal(fmtIsoDate(null), null);
+  assert.equal(fmtIsoDate('2026-11-10'), null);
+  assert.deepEqual(dataSectionSummary({ feedDate: '20261110', stale: false }), { text: 'rozkład z 2026-11-10', changed: false });
+  assert.deepEqual(dataSectionSummary({ feedDate: '20261110', stale: true }), { text: 'rozkład nieaktualny', changed: true });
+  assert.deepEqual(dataSectionSummary({ feedDate: null, stale: false }), { text: 'źródła i kontakt', changed: false });
+});
+
+test('parseSectionState: pusty tekst, zły JSON, nie-obiekt, nieznane id, złe typy, brakujące', () => {
+  assert.deepEqual(parseSectionState(''), {});
+  assert.deepEqual(parseSectionState(null), {});
+  assert.deepEqual(parseSectionState('{zepsuty'), {});
+  assert.deepEqual(parseSectionState('[true]'), {});
+  assert.deepEqual(parseSectionState('42'), {});
+  assert.deepEqual(parseSectionState('{"secTime":true,"obcy":true,"secAccess":"tak","secData":false}'),
+    { secTime: true, secData: false });
+});
+
+test('serializeSectionState: tylko znane id i bool, odczyt oddaje to samo', () => {
+  const map = { secTime: true, secDelay: false, obcy: true, secData: 'x' };
+  const raw = serializeSectionState(map);
+  assert.deepEqual(parseSectionState(raw), { secTime: true, secDelay: false });
+  assert.equal(serializeSectionState(undefined), '{}');
+});
+
+// --- znaczniki i CSS sekcji (Z-059) --------------------------------------------------
+
+const sectionsCss = fs.readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+
+test('index.html: każda sekcja to <details> z <summary>, id zgodne z PANEL_SECTION_IDS', () => {
+  for (const id of PANEL_SECTION_IDS) {
+    assert.match(indexHtml, new RegExp(`<details class="sec[^"]*" id="${id}">\\s*<summary>`), id);
+    assert.match(indexHtml, new RegExp(`id="${id}Sum"`));
+    assert.match(indexHtml, new RegExp(`<span class="sr-only" id="${id}Flag" hidden>— zmienione ustawienia</span>`));
+  }
+  assert.ok(!/<details[^>]*\sopen[\s>]/.test(indexHtml), 'żadna sekcja nie startuje otwarta');
+});
+
+/** Fragment HTML sekcji `<details id=...>` do jej zamknięcia. */
+const sectionHtml = id => {
+  const at = indexHtml.indexOf(`id="${id}"`);
+  return indexHtml.slice(at, indexHtml.indexOf('</details>', at));
+};
+
+test('index.html: #status, #diagBox, #dataWarn i legenda nie są w żadnej sekcji', () => {
+  for (const id of ['status', 'diagBox', 'dataWarn', 'legendBar', 'zoneSummary']) {
+    for (const sec of PANEL_SECTION_IDS) assert.ok(!sectionHtml(sec).includes(`id="${id}"`), `${id} w ${sec}`);
+  }
+});
+
+test('index.html: zawartość sekcji — Czas, Kierunek, Dojście, Środki, Opóźnienia, statystyki, stopka', () => {
+  const t = sectionHtml('secTime'), a = sectionHtml('secAccess'), d = sectionHtml('secDelay'), p = sectionHtml('secData');
+  for (const id of ['modeTime', 'timeInput', 'daySelect', 'dayNote', 'dirFrom', 'dirTo']) assert.ok(t.includes(`id="${id}"`), id);
+  for (const id of ['walkToggle', 'accessSelect', 'vehGrid']) assert.ok(a.includes(`id="${id}"`), id);
+  for (const id of ['safeToggle', 'safeNote', 'statsToggle', 'statsBox']) assert.ok(d.includes(`id="${id}"`), id);
+  assert.ok(p.includes('class="credits"') && p.includes('class="coffee-btn"'));
+  for (const sec of [t, a, d, p]) assert.ok(!/<h2/.test(sec), 'drugi <h2> obok summary');
+});
+
+test('index.html: „Dane i kontakt" jest dzieckiem .panel (po #panelBody), nie #panelBody', () => {
+  const bodyStart = indexHtml.indexOf('id="panelBody"');
+  const secAt = indexHtml.indexOf('id="secData"');
+  assert.ok(secAt > bodyStart && secAt < indexHtml.indexOf('</main>'));
+  // tuż przed sekcją zamyka się #panelBody (wcięcie 4 spacji = wcięcie <div class="panel-body">)
+  assert.match(indexHtml.slice(bodyStart, secAt), /\n {4}<\/div>\s*<details class="sec sec-pinned"\s*$/);
+});
+
+test('index.html: rząd dwóch przycisków, #exportBtn z pełnym aria-label, krok 3 wskazówki kieruje do sekcji', () => {
+  assert.match(indexHtml, /<div class="action-row">\s*<button class="share-btn" id="shareBtn" type="button">Kopiuj link<\/button>\s*<button class="share-btn" id="exportBtn"/);
+  assert.match(indexHtml, /id="exportBtn"[^>]*aria-label="Pobierz strefy \(GeoJSON\)"[^>]*>Pobierz strefy<\/button>/);
+  assert.match(indexHtml, /<li>W sekcji „Czas i kierunek” ustaw/);
+});
+
+test('style.css: summary min-height var(--tap), focus z offsetem -2px, marker domyślny usunięty', () => {
+  assert.match(sectionsCss, /\.sec > summary \{[^}]*min-height: var\(--tap\)/);
+  assert.match(sectionsCss, /\.sec > summary \{[^}]*list-style: none/);
+  assert.ok(sectionsCss.includes('.sec > summary::-webkit-details-marker { display: none; }'));
+  assert.match(sectionsCss, /\.sec > summary:focus-visible \{[^}]*outline: 2px solid var\(--accent\);[^}]*outline-offset: -2px/);
+  assert.match(sectionsCss, /\.sec-pinned \.sec-body \{[^}]*max-height: 28vh;[^}]*overflow-y: auto/);
+  assert.match(sectionsCss, /\.sec-pinned \{[^}]*flex: none/);
+});
+
+test('style.css: .ad-box:has(unfilled) ukryty, bez rezerwacji wysokości reklamy', () => {
+  assert.ok(sectionsCss.includes('.ad-box:has(ins[data-ad-status="unfilled"]) { display: none; }'));
+  assert.ok(!/\.ad-box\s*\{[^}]*min-height/.test(sectionsCss));
+});
+
+test('app.js: stan sekcji w jednym kluczu localStorage, nie w adresie URL', () => {
+  const appSrc = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.ok(appSrc.includes('PANEL_SECTIONS_KEY') && appSrc.includes("addEventListener('toggle'"));
+  const src = fs.readFileSync(new URL('../js/uilogic.js', import.meta.url), 'utf8');
+  const build = src.slice(src.indexOf('export function buildQuery'), src.indexOf('export const reducedMotionFrom'));
+  assert.ok(!/sec[A-Z]|panel-sections/.test(build), 'buildQuery nie może znać sekcji');
+});

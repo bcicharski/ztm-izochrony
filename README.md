@@ -78,6 +78,14 @@ miasta). Można też użyć przyciskiem geolokalizacji. Bieżący widok
 (punkt i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj
 link" pozwala go udostępnić.
 
+Panel jest zwijany: miasto, tryb, wyszukiwarka i wynik (legenda, status)
+zawsze widać, a rzadziej zmieniane ustawienia siedzą w sekcjach „Czas
+i kierunek", „Dojście i środki transportu" oraz „Opóźnienia i statystyki"
+(natywne `<details>`, domyślnie zamknięte, z bieżącym podsumowaniem w nagłówku
+i kropką przy ustawieniach odbiegających od domyślnych). „Dane i kontakt"
+(źródła, daty rozkładu, kawa) jest przypięte na dole panelu. Stan sekcji
+pamięta `localStorage` (klucz `panel-sections`); nie trafia do adresu URL.
+
 Przycisk „Pobierz strefy (GeoJSON)" zapisuje aktualne strefy jako plik
 `izochrona-<miasto>-<yyyymmdd>-<HHMM>.geojson` (MultiPolygon na pasmo, pasma
 kumulatywne, współrzędne [lon, lat] z dokładnością do 5 miejsc, metadane widoku

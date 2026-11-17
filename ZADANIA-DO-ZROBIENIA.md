@@ -72,65 +72,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: js/uilogic.js, js/app.js, index.html, css/style.css.
 - Niezweryfikowane: zachowanie przy niedostępnym `localStorage` (kod w `try/catch`, nie wymuszano); wybór z żywych wyników Nominatim.
 
-### Z-060 [P2] Pięć drobnych usterek: czytnik ekranu, Enter, schowek, lokalizacja, kolory
-- Status: w toku
-- Zgłoszone: 2026-11-17 (analityk)
-- Problem: pięć niezależnych usterek znalezionych przez analityka. Każda da się odhaczyć osobno.
-- Dowód: obserwacje analityka 2026-11-17.
-  - [ ] 1. Komunikaty lokalizacji i eksportu nie docierają do czytnika ekranu: `#status` ma `aria-live="off"` (celowo, Z-045) i jest czytany tylko przez `announce()`, a pięć komunikatów omija tę funkcję: „Ustalam lokalizację…", błąd geolokalizacji, „Jesteś poza obszarem…", „Zapisano plik…", „Nie udało się przygotować pliku…".
-  - [ ] 2. Enter przy dwóch znakach nic nie robi: `typeSearch` dopuszcza 2 znaki i obiecuje „Enter szuka też adresów.", a obsługa Enter wychodzi po cichu przy mniej niż trzech znakach. Wygląda jak zawieszona wyszukiwarka.
-  - [ ] 3. Awaryjna ścieżka przycisku „Kopiuj link" gubi adres: przy odmowie schowka adres ląduje w etykiecie przycisku i znika po 2000 ms, zanim da się go zaznaczyć. Dotyczy HTTP, iframe i odmowy dostępu do schowka.
-  - [ ] 4. Wyłączony `#locateBtn` nie mówi dlaczego: powód jest tylko w `title`, którego nie ma na dotyku ani w czytniku ekranu, i brak stylu `:disabled`.
-  - [ ] 5. Kolory na sztywno w `css/style.css` wbrew zasadzie „nowy kolor = token w `:root`": tło `#f4f4f2`, kropki `.dot-a` `#2a81cb` i `.dot-b` `#e8722d`, cienie `rgba(28, 28, 40, …)` w czterech miejscach. Tokeny `--dot-a` i `--dot-b` są już założone w specyfikacji trybu ciemnego Z-044.
-- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
-- Wygląd i UX (esteta): nieznane — brak specyfikacji dla tego zadania.
-- Pliki: css/style.css (punkt 5); pozostałe pliki nieznane w zleceniu, do ustalenia przy wdrożeniu.
-- Jak sprawdzić: `npm run check` (wynik dośle wątek główny; nieznane do czasu wdrożenia) oraz weryfikacja ręczna każdego punktu z osobna.
-
 ## Zaprojektowane (gotowe do wdrożenia)
-
-### Z-059 [P1] Zwijane sekcje panelu i przypięta stopka (decyzja właściciela)
-- Status: zaprojektowane
-- Zgłoszone: 2026-11-17 (właściciel)
-- Problem: panel sterowania jest bardzo długi, pod nim wyświetla się pusta przestrzeń, a dopiero pod nią dane kontaktowe.
-- Dowód: pomiar wątku głównego w przeglądarce, 2026-11-17, Trójmiasto, okno 800 px: `#panelBody` ma `scrollHeight` 1244 px przy `clientHeight` 663 px (prawie 600 px przewijania); `footer.credits` zaczyna się na 1182 px. Pusta przestrzeń nie występuje lokalnie: `#adBox` jest ukryty (wysokość 0), a treść jest ciągła. Hipoteza estety: na produkcji jednostka AdSense rezerwuje wysokość bez wypełnienia (`<ins>` ma inline `style="display:block"` i `data-full-width-responsive="true"`, etykieta „Reklama" jest ukryta). Komentarz w `css/style.css` mówi, że witryna czeka na zatwierdzenie AdSense. Do sprawdzenia na produkcji po zgodzie: czy `ins.adsbygoogle` ma inline `height` i `data-ad-status="unfilled"`.
-- Rozwiązanie (rozwiazywacz): nieznane — brak przeglądu rozwiazywacza. Zalecenie estety do wdrożenia po potwierdzeniu na produkcji: `.ad-box:has(ins[data-ad-status="unfilled"]) { display: none }`; nie dodawać `min-height` na boksie reklamy.
-- Wygląd i UX (esteta, 2026-11-17): natywne `<details>`/`<summary>` dla trzech sekcji panelu (Czas i kierunek, Dojście i środki transportu, Opóźnienia i statystyki), domyślnie zamkniętych; stopka „Dane i kontakt" przypięta na dole panelu. Nagłówek sekcji pokazuje bieżące wartości w jednej linii z wielokropkiem. Nienegocjowalne: bez animacji wysokości; stan sekcji nie trafia do URL; `#status`, `#diagBox` i `#dataWarn` nie w zamkniętych sekcjach; pamięć stanu w `localStorage` w `try/catch`; żadnych nowych tokenów.
-<details>
-<summary>Pełna specyfikacja estety</summary>
-
-Mechanizm: natywne `<details>`/`<summary>`. Powody: Enter i Spacja działają bez JS; Tab omija zawartość zamkniętej sekcji; stan „zwinięte/rozwinięte" podawany natywnie, bez ręcznego `aria-expanded`; wyszukiwanie na stronie samo otwiera pasującą sekcję; wzorzec jest już w projekcie (`.diag`). Cena: brak animacji wysokości, zgodnie z `prefers-reduced-motion`.
-
-Układ panelu od góry:
-1. Zawsze widoczne: miasto, tryb, wyszukiwarka(i) adresu, podpowiedź, intro, ostrzeżenie o danych.
-2. Zawsze widoczny wynik: legenda, status, `#zoneSummary`, `#diagBox`.
-3. Sekcja „Czas i kierunek" (fieldsety Czas z `#dayNote` oraz Kierunek) — domyślnie zamknięta.
-4. Sekcja „Dojście i środki transportu" — domyślnie zamknięta.
-5. Sekcja „Opóźnienia i statystyki" (tryb ostrożny z `#safeNote`, przełącznik statystyk i `#statsBox`) — domyślnie zamknięta.
-6. Zawsze widoczne: dwa przyciski w jednym rzędzie po 50 procent („Kopiuj link" i „Pobierz strefy", pełny `aria-label` „Pobierz strefy (GeoJSON)"), pod nimi `#adBox` bez rezerwacji miejsca.
-7. Sekcja „Dane i kontakt" przypięta na dole panelu, poza `#panelBody`, `flex: none`: źródła, daty rozkładu, kontakt, przycisk kawy. Domyślnie zamknięta, widoczna jako wiersz 44 px. Po otwarciu treść ma `max-height: 28vh` i własne przewijanie.
-
-Pierwsza wizyta: wszystkie sekcje zamknięte. Jedyne automatyczne otwarcie: „Czas i kierunek", gdy `#dayNote` jest niepusty (komunikat o święcie z przyciskiem, Z-022). Opcje przyniesione linkiem sekcji nie otwierają jej; sygnalizuje je znacznik w nagłówku.
-
-Pamięć stanu: `localStorage`, jeden klucz z mapą `{id: bool}`, zapis w zdarzeniu `toggle`, odczyt i zapis w `try/catch` wzorem `consentGet`. Do adresu URL nie trafia nic; format linków zostaje nietknięty.
-
-Nagłówek sekcji: zawsze bieżące wartości, nie tylko zmienione. Jedna linia z wielokropkiem. Przykłady: „08:15 · dzień roboczy · z miejsca", „pieszo · wszystkie środki", „standardowo", „rozkład z 2026-11-10". Przy liście środków do trzech nazw, powyżej „3 z 5 środków". Stan odbiegający od domyślnego: tekst `--muted` na `--ink`, waga 600, kropka 8 px w `--accent` (`aria-hidden`) oraz ukryte `.sr-only` „— zmienione ustawienia". Podsumowanie bez `aria-live`.
-
-Forma `<summary>`: płaski wiersz z `border-top: 1px solid var(--line)`, `min-height: var(--tap)`, `padding: 6px 0`, cały wiersz klikalny. Tytuł 11 px, waga 600, uppercase, `letter-spacing: .06em`, `--muted` (wzór `.control legend`); pod nim podsumowanie 12,5 px. Chevron 20 px po prawej, obrót o 90 stopni przy otwarciu, `transition: transform 120ms` objęte globalnym wyłącznikiem `prefers-reduced-motion`. Focus: `outline: 2px solid var(--accent); outline-offset: -2px` (offset ujemny, bo panel ma `overflow`).
-
-Szacunek skrócenia (z reguł CSS, nie pomiar): panel mobilny ok. 1112 px treści plus 62 px nagłówka dziś; ok. 513 px treści plus 44 px przypiętej stopki po zmianie. Zysk ok. 550 px (ok. 47 procent). Przewijanie spada z ok. 780 do ok. 180 px.
-
-Pułapki do wdrożenia:
-- Elementy w zamkniętym `<details>` mają `offsetHeight` 0 i nie przyjmują focusu. Kod mierzący je albo ustawiający na nich focus (np. `#dayNote button`) musi najpierw otworzyć sekcję.
-- Krok 3 wskazówki pierwszej wizyty (`index.html`, „Ustaw godzinę i typ dnia…") prowadziłby do ukrytej kontrolki. Tekst trzeba poprawić.
-- Nie przenosić `#status`, `#diagBox` ani `#dataWarn` do zamkniętych sekcji.
-- Nie wpisywać stanu sekcji do adresu URL. Nie robić animacji wysokości. Nie dublować nazw: wewnątrz sekcji żadnego drugiego `<h2>` obok `summary`; fieldsety zostają z `legend`.
-
-</details>
-
-- Scalone: Z-036 (zadanie wchłonięte; patrz sekcja „Odrzucone").
-- Pliki: index.html, css/style.css, js/app.js, js/uilogic.js (czyste funkcje podsumowań), tests/.
-- Jak sprawdzić: nieznane — w zleceniu brak ustaleń o testach i weryfikacji ręcznej. Punkt odniesienia: pomiar 2026-11-17 (800 px, `#panelBody` 1244/663 px).
 
 ## Nowe (bez projektu rozwiązania)
 
@@ -302,6 +244,16 @@ Pułapki do wdrożenia:
 - Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
 - Pliki: js/worker.js, js/app.js, tests/ (nazwa nowego pliku testowego nieznana).
 - Jak sprawdzić: `npm run check` z przypadkiem zwrotu `null` po zmianie miasta; wynik nieznany do czasu wdrożenia.
+
+### Z-062 [P2] Spójność reguł `summary` w inwentarzu dostępności
+- Status: nowe
+- Zgłoszone: 2026-11-17 (wdrozeniowiec)
+- Problem: inwentarz kontrolek 44 px w `tests/a11y-css.test.mjs` obejmuje także `.diag summary`. Po Z-059 ten sam wzorzec (`summary` jako pole dotykowe) występuje w czterech sekcjach panelu. Do sprawdzenia: czy inwentarz nie powiela reguł i czy wszystkie `summary` w projekcie mają spójny styl.
+- Dowód: tests/a11y-css.test.mjs (inwentarz kontrolek 44 px; `.sec > summary` dopisane przy Z-059); zgłoszenie wdrożeniowca przy Z-059, 2026-11-17.
+- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
+- Wygląd i UX (esteta): nieznane — brak specyfikacji dla tego zadania.
+- Pliki: tests/a11y-css.test.mjs, css/style.css.
+- Jak sprawdzić: przy kolejnym audycie dostępności; wynik nieznany do czasu przeglądu.
 
 ## Zrobione
 
@@ -562,6 +514,73 @@ Pułapki do wdrożenia:
 - Dowód: pole `counts.days.<dzień>.overtaking` wprowadzone przy Z-005; ostrzeżenie w tools/check-data.mjs.
 - Wdrożone 2026-11-17: po przeliczeniu Łodzi bramka zgłosiła „niedziela: 1 wzorców z wyprzedzaniem kursów (było 1)" — alarm przy niezmienionej wartości. Warunek rozszerzony o `f.overtaking > b.overtaking`: ostrzeżenie tylko przy wzroście liczby wzorców z wyprzedzaniem; stała wartość i spadek są ciche. Brak pola po którejkolwiek stronie dalej oznacza pominięcie; ostrzeżenie nie blokuje publikacji. Test: nowy przypadek „niezmieniona liczba nie ostrzega (Z-052)" w `tests/check-data.test.mjs`. `node tools/check-data.mjs` na realnych danych zgłasza teraz problem w 1 z 18 miast (Opole, zgodnie z Z-051/Z-054), wcześniej w 2.
 - Pliki: tools/check-data.mjs; testy: tests/check-data.test.mjs.
+
+### Z-059 [P1] Zwijane sekcje panelu i przypięta stopka (decyzja właściciela)
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (właściciel)
+- Problem: panel sterowania jest bardzo długi, pod nim wyświetla się pusta przestrzeń, a dopiero pod nią dane kontaktowe.
+- Dowód: pomiar wątku głównego w przeglądarce, 2026-11-17, Trójmiasto, okno 800 px: `#panelBody` ma `scrollHeight` 1244 px przy `clientHeight` 663 px (prawie 600 px przewijania); `footer.credits` zaczyna się na 1182 px. Pusta przestrzeń nie występuje lokalnie: `#adBox` jest ukryty (wysokość 0), a treść jest ciągła. Hipoteza estety: na produkcji jednostka AdSense rezerwuje wysokość bez wypełnienia (`<ins>` ma inline `style="display:block"` i `data-full-width-responsive="true"`, etykieta „Reklama" jest ukryta). Komentarz w `css/style.css` mówi, że witryna czeka na zatwierdzenie AdSense. Do sprawdzenia na produkcji po zgodzie: czy `ins.adsbygoogle` ma inline `height` i `data-ad-status="unfilled"`.
+- Rozwiązanie (rozwiazywacz): nieznane — brak przeglądu rozwiazywacza. Zalecenie estety do wdrożenia po potwierdzeniu na produkcji: `.ad-box:has(ins[data-ad-status="unfilled"]) { display: none }`; nie dodawać `min-height` na boksie reklamy.
+- Wygląd i UX (esteta, 2026-11-17): natywne `<details>`/`<summary>` dla trzech sekcji panelu (Czas i kierunek, Dojście i środki transportu, Opóźnienia i statystyki), domyślnie zamkniętych; stopka „Dane i kontakt" przypięta na dole panelu. Nagłówek sekcji pokazuje bieżące wartości w jednej linii z wielokropkiem. Nienegocjowalne: bez animacji wysokości; stan sekcji nie trafia do URL; `#status`, `#diagBox` i `#dataWarn` nie w zamkniętych sekcjach; pamięć stanu w `localStorage` w `try/catch`; żadnych nowych tokenów.
+<details>
+<summary>Pełna specyfikacja estety</summary>
+
+Mechanizm: natywne `<details>`/`<summary>`. Powody: Enter i Spacja działają bez JS; Tab omija zawartość zamkniętej sekcji; stan „zwinięte/rozwinięte" podawany natywnie, bez ręcznego `aria-expanded`; wyszukiwanie na stronie samo otwiera pasującą sekcję; wzorzec jest już w projekcie (`.diag`). Cena: brak animacji wysokości, zgodnie z `prefers-reduced-motion`.
+
+Układ panelu od góry:
+1. Zawsze widoczne: miasto, tryb, wyszukiwarka(i) adresu, podpowiedź, intro, ostrzeżenie o danych.
+2. Zawsze widoczny wynik: legenda, status, `#zoneSummary`, `#diagBox`.
+3. Sekcja „Czas i kierunek" (fieldsety Czas z `#dayNote` oraz Kierunek) — domyślnie zamknięta.
+4. Sekcja „Dojście i środki transportu" — domyślnie zamknięta.
+5. Sekcja „Opóźnienia i statystyki" (tryb ostrożny z `#safeNote`, przełącznik statystyk i `#statsBox`) — domyślnie zamknięta.
+6. Zawsze widoczne: dwa przyciski w jednym rzędzie po 50 procent („Kopiuj link" i „Pobierz strefy", pełny `aria-label` „Pobierz strefy (GeoJSON)"), pod nimi `#adBox` bez rezerwacji miejsca.
+7. Sekcja „Dane i kontakt" przypięta na dole panelu, poza `#panelBody`, `flex: none`: źródła, daty rozkładu, kontakt, przycisk kawy. Domyślnie zamknięta, widoczna jako wiersz 44 px. Po otwarciu treść ma `max-height: 28vh` i własne przewijanie.
+
+Pierwsza wizyta: wszystkie sekcje zamknięte. Jedyne automatyczne otwarcie: „Czas i kierunek", gdy `#dayNote` jest niepusty (komunikat o święcie z przyciskiem, Z-022). Opcje przyniesione linkiem sekcji nie otwierają jej; sygnalizuje je znacznik w nagłówku.
+
+Pamięć stanu: `localStorage`, jeden klucz z mapą `{id: bool}`, zapis w zdarzeniu `toggle`, odczyt i zapis w `try/catch` wzorem `consentGet`. Do adresu URL nie trafia nic; format linków zostaje nietknięty.
+
+Nagłówek sekcji: zawsze bieżące wartości, nie tylko zmienione. Jedna linia z wielokropkiem. Przykłady: „08:15 · dzień roboczy · z miejsca", „pieszo · wszystkie środki", „standardowo", „rozkład z 2026-11-10". Przy liście środków do trzech nazw, powyżej „3 z 5 środków". Stan odbiegający od domyślnego: tekst `--muted` na `--ink`, waga 600, kropka 8 px w `--accent` (`aria-hidden`) oraz ukryte `.sr-only` „— zmienione ustawienia". Podsumowanie bez `aria-live`.
+
+Forma `<summary>`: płaski wiersz z `border-top: 1px solid var(--line)`, `min-height: var(--tap)`, `padding: 6px 0`, cały wiersz klikalny. Tytuł 11 px, waga 600, uppercase, `letter-spacing: .06em`, `--muted` (wzór `.control legend`); pod nim podsumowanie 12,5 px. Chevron 20 px po prawej, obrót o 90 stopni przy otwarciu, `transition: transform 120ms` objęte globalnym wyłącznikiem `prefers-reduced-motion`. Focus: `outline: 2px solid var(--accent); outline-offset: -2px` (offset ujemny, bo panel ma `overflow`).
+
+Szacunek skrócenia (z reguł CSS, nie pomiar): panel mobilny ok. 1112 px treści plus 62 px nagłówka dziś; ok. 513 px treści plus 44 px przypiętej stopki po zmianie. Zysk ok. 550 px (ok. 47 procent). Przewijanie spada z ok. 780 do ok. 180 px.
+
+Pułapki do wdrożenia:
+- Elementy w zamkniętym `<details>` mają `offsetHeight` 0 i nie przyjmują focusu. Kod mierzący je albo ustawiający na nich focus (np. `#dayNote button`) musi najpierw otworzyć sekcję.
+- Krok 3 wskazówki pierwszej wizyty (`index.html`, „Ustaw godzinę i typ dnia…") prowadziłby do ukrytej kontrolki. Tekst trzeba poprawić.
+- Nie przenosić `#status`, `#diagBox` ani `#dataWarn` do zamkniętych sekcji.
+- Nie wpisywać stanu sekcji do adresu URL. Nie robić animacji wysokości. Nie dublować nazw: wewnątrz sekcji żadnego drugiego `<h2>` obok `summary`; fieldsety zostają z `legend`.
+
+</details>
+
+- Scalone: Z-036 (zadanie wchłonięte; patrz sekcja „Odrzucone").
+- Wdrożone 2026-11-17: trzy `<details class="sec">` w `#panelBody` (`secTime`, `secAccess`, `secDelay`), domyślnie zamknięte; sekcja „Dane i kontakt" (`secData`) jako ostatnie dziecko `.panel`, poza przewijanym `#panelBody`, razem z `footer.credits` i przyciskiem kawy. Nowy rząd `.action-row` z przyciskami „Kopiuj link" i „Pobierz strefy" po 50 procent; drugi ma pełny `aria-label`. Krok 3 wskazówki pierwszej wizyty wskazuje sekcję „Czas i kierunek". Stan sekcji w `localStorage` (klucz `panel-sections`, `try/catch`), poza adresem URL; auto-otwarcie „Czas i kierunek" przy niepustym `#dayNote` nie jest zapisywane jako wybór użytkownika. Czyste funkcje w `js/uilogic.js`; `.ad-box:has(ins[data-ad-status="unfilled"])` ukrywa boks reklamy bez wypełnienia; zero nowych tokenów i kolorów.
+- Pomiar po wdrożeniu (Trójmiasto, 1024x768; potwierdzone też przy 800 px): `#panelBody` `scrollHeight` 550 przy `clientHeight` 550, czyli bez przewijania (przed: 1243 przy 663). Wiersz „Dane i kontakt" widoczny bez przewijania (górna krawędź 639 px przy oknie 768 px). Odstęp 26 px nad stopką to margines rzędu 10 px i dolny padding `#panelBody` 16 px. Przy 360x740 brak poziomego przewijania; przy 360 px treść otwartej „Dane i kontakt" ma 151 px przy limicie 207 px.
+- Pliki: index.html, css/style.css, js/uilogic.js, js/app.js, tests/uilogic.test.mjs, tests/mobile-layout.test.mjs, tests/a11y-css.test.mjs, README.md, CURRENT_STATE.md.
+- Niezweryfikowane: pusta przestrzeń nad stopką na produkcji z włączonym AdSense (lokalnie `#adBox` ukryty, zabezpieczenie `:has`, bez `min-height`); naturalny komunikat `#dayNote` nie wystąpił w żadnym z 18 miast (auto-otwarcie sprawdzono na zmienionym `meta.json` Torunia); czytnik ekranu i prawdziwe urządzenie dotykowe nie były używane.
+- Jak sprawdzić: `npm run check`: 296 testów, 295 pass, 0 fail, 1 skipped, lint czysty (wynik podany w zleceniu); w przeglądarce: czysty profil, klawiatura (Tab, Enter, Spacja), podsumowania, przeładowanie, adres URL bez zmian, 360 px.
+
+### Z-060 [P2] Pięć drobnych usterek: czytnik ekranu, Enter, schowek, lokalizacja, kolory
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (analityk)
+- Problem: pięć niezależnych usterek znalezionych przez analityka. Każda da się odhaczyć osobno.
+- Dowód: obserwacje analityka 2026-11-17.
+  - [x] 1. Komunikaty lokalizacji i eksportu nie docierają do czytnika ekranu: `#status` ma `aria-live="off"` (celowo, Z-045) i jest czytany tylko przez `announce()`, a pięć komunikatów omija tę funkcję: „Ustalam lokalizację…", błąd geolokalizacji, „Jesteś poza obszarem…", „Zapisano plik…", „Nie udało się przygotować pliku…".
+  - [x] 2. Enter przy dwóch znakach nic nie robi: `typeSearch` dopuszcza 2 znaki i obiecuje „Enter szuka też adresów.", a obsługa Enter wychodzi po cichu przy mniej niż trzech znakach. Wygląda jak zawieszona wyszukiwarka.
+  - [x] 3. Awaryjna ścieżka przycisku „Kopiuj link" gubi adres: przy odmowie schowka adres ląduje w etykiecie przycisku i znika po 2000 ms, zanim da się go zaznaczyć. Dotyczy HTTP, iframe i odmowy dostępu do schowka.
+  - [x] 4. Wyłączony `#locateBtn` nie mówi dlaczego: powód jest tylko w `title`, którego nie ma na dotyku ani w czytniku ekranu, i brak stylu `:disabled`.
+  - [x] 5. Kolory na sztywno w `css/style.css` wbrew zasadzie „nowy kolor = token w `:root`": tło `#f4f4f2`, kropki `.dot-a` `#2a81cb` i `.dot-b` `#e8722d`, cienie `rgba(28, 28, 40, …)` w czterech miejscach. Tokeny `--dot-a` i `--dot-b` są już założone w specyfikacji trybu ciemnego Z-044.
+- Rozwiązanie (rozwiazywacz): nieznane — brak projektu rozwiązania.
+- Wygląd i UX (esteta): nieznane — brak specyfikacji dla tego zadania.
+- Wdrożone i wypchnięte w commicie 29b0d6b (data wdrożenia nieznana; zapis 2026-11-17). Wszystkie pięć punktów:
+  1. Helper `say()` w `js/app.js` prowadzi pięć komunikatów przez `announce()`; `aria-live="off"` na `#status` bez zmian (Z-045).
+  2. Enter przy jednym lub dwóch znakach pokazuje w `#searchStatus` „Wpisz co najmniej 3 znaki, aby szukać adresu." i zostawia przystanki na ekranie; próg trzech znaków dla Nominatim zostaje; Enter dogania odroczone `typeSearch` (150 ms).
+  3. Awaryjna ścieżka „Kopiuj link" używa trwałego pola `#shareText` z zaznaczoną treścią (wzór `#diagText`, Z-025); pole znika przy udanym kopiowaniu i przy każdym przeliczeniu.
+  4. Wyłączony `#locateBtn` ma `aria-disabled` zamiast `disabled` (zostaje w kolejności tabulatora) oraz `aria-describedby` wskazujące trwały `#locateHint`; `title` usunięty; nowa czysta funkcja `locateUnavailableReason(secure, hasGeo)` w `js/uilogic.js`.
+  5. Nowe tokeny w `:root`: `--map-bg`, `--dot-a`, `--dot-b`, `--shadow-rgb`; wszystkie kolory na sztywno podmienione, wartości identyczne, zero różnicy wizualnej; cienie zachowują cztery różne przezroczystości; nowy test w `tests/a11y-css.test.mjs` pilnuje, że poza `:root` nie ma wartości koloru zapisanej na sztywno (lista wyjątków pusta).
+- Pliki: js/app.js, js/uilogic.js, css/style.css, tests/a11y-css.test.mjs. Pozostałe pliki nieznane w zleceniu.
+- Jak sprawdzić: `npm run check`: 278 testów, 277 pass, 0 fail, 1 skipped, lint czysty (wynik podany w zleceniu); weryfikacja ręczna każdego punktu: nieznane.
 
 ## Odrzucone
 
