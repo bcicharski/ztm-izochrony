@@ -71,6 +71,8 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: własny baner zgody nie spełnia wymogu Google dla EOG — potrzebny certyfikowany CMP. Uwaga: ryzyko prawne.
 - Dowód: index.html:321-359.
+- Przegląd (2026-11-17): usunięcie AdSense (Z-064) może w całości lub w części odebrać rację bytu temu wpisowi; wymaga przeglądu, nie zamknięty.
+- Z-064 (2026-11-17): reklamy usunięte; wymóg certyfikowanego CMP dotyczył reklam, a zgoda zostaje dla samych statystyk (Google Analytics). Wymaga ponownej oceny; nie zamknięty.
 - Pliki: index.html oraz ustawienie w panelu AdSense (poza kodem).
 
 ### Z-003 [P1] Mniejsze dane
@@ -156,6 +158,8 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: po zgodzie żądania reklamowe (`pagead2.googlesyndication.com/.../ads?...url=`) niosą pełny adres strony razem z parametrem `p=lat,lon`, czyli lokalizacją użytkownika. Naprawa `page_location` z Z-040 dotyczyła wyłącznie Analytics.
 - Dowód: obserwacja listy żądań w przeglądarce podczas wdrożenia Z-025. Potwierdzone 2026-11-16 w przeglądarce: żądania `https://pagead2.googlesyndication.com/pagead/ads?...` niosą pełny adres ze współrzędnymi w parametrach `url=` i `ref=`, dwa razy na odsłonę (jednostka 0x0 i 249x600). Przyczyna: AdSense czyta adres wprost z `location`, więc nadpisanie `page_location` w gtag go nie obejmuje. Zadanie nadal czeka na decyzję właściciela.
 - Uwaga: przeniesienie współrzędnych z query do fragmentu adresu zatrzymałoby wyciek, ale zmienia format linków — wymaga zgodności wstecznej ze starymi linkami i decyzji właściciela.
+- Przegląd (2026-11-17): usunięcie AdSense (Z-064) może w całości lub w części odebrać rację bytu temu wpisowi; wymaga przeglądu, nie zamknięty.
+- Z-064 (2026-11-17): reklam nie ma, żądania reklamowe nie występują, więc zadanie traci przedmiot. Nie zamknięte; do przeglądu.
 - Pliki: index.html, js/app.js.
 
 ### Z-037 [P2] Automatyczne ustawianie niedzieli w święto (decyzja właściciela)
@@ -170,6 +174,8 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Zgłoszone: nieznane
 - Problem: obecny tekst: „Strona korzysta z Google Analytics (anonimowe statystyki) oraz reklam Google — pliki cookie zapisywane tylko po zgodzie." Propozycja: „Używamy cookies Google (statystyki, reklamy) — tylko po zgodzie." Skróciłoby baner na telefonie ze 129 do ok. 105 px. To treść prawna, więc decyzja należy do właściciela.
 - Dowód: nieznane.
+- Przegląd (2026-11-17): tekst banera zależy od decyzji o AdSense (Z-064); jeśli reklamy znikną, zdanie o reklamach przestaje być prawdziwe. Wymaga przeglądu przez właściciela.
+- Z-064 (2026-11-17): częściowo wykonane — zdanie o reklamach znikło z banera, który jest krótszy o ten człon. Nowa treść dosłownie: „Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie." Propozycja z tego wpisu nie została przyjęta dosłownie. Nie zamknięte.
 - Pliki: index.html.
 
 ### Z-039 [P2] Zewnętrzna usługa zbierania błędów (decyzja właściciela)
@@ -606,6 +612,40 @@ Pułapki do wdrożenia:
   - Testy: dwa nowe w `tests/mobile-layout.test.mjs` (legenda przy zwiniętym panelu; `aria-label` i oba teksty komunikatu) plus poprawiony test doklejki atrybucji; `TAP_USES_MIN` bez zmian (23). `npm run check`: wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17.
 - Pliki: js/walkgrid.js, js/worker.js, js/uilogic.js, js/app.js, index.html, css/style.css, tests/mobile-layout.test.mjs. Przy domknięciu: `css/style.css`, `js/app.js` (handler `#collapseBtn`), `tests/mobile-layout.test.mjs`; `index.html` bez zmian; `README.md` i `CURRENT_STATE.md` bez zmian (zwijanie panelu nie było w nich opisane).
 - Niezweryfikowane: otwarcie pliku w QGIS, faktyczne pobranie pliku przez przeglądarkę, wygląd stanu `:disabled` (z 2026-11-16); odczyt prawdziwym czytnikiem ekranu (sprawdzono tylko treść regionu i atrybuty); wygląd legendy w stanie zwiniętym nie przeszedł przeglądu estety; obrót ekranu przy zwiniętym panelu.
+
+### Z-064 [P1] Usunięcie bloku AdSense
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (właściciel, „usunięcie bloku AdSense")
+- Problem: pusta przestrzeń między treścią panelu a danymi kontaktowymi. Najmocniejsza hipoteza: niewypełniona jednostka AdSense rezerwuje miejsce. Usunięcie bloku rozwiązuje to u źródła.
+- Dowód: stan kodu ustalony przez wątek główny 2026-11-17 (numery linii nieznane): `index.html` — `<div class="ad-box" id="adBox" hidden>` z `<ins class="adsbygoogle">` w `#panelBody` przed przypiętą sekcją „Dane i kontakt"; `js/app.js` — `loadAds()` odkrywa blok i woła `adsbygoogle.push` dopiero po zgodzie na pliki cookie; `css/style.css` — reguły `.ad-box`, ukryta etykieta „Reklama" oraz `.ad-box:has(ins[data-ad-status="unfilled"]) { display: none }` (Z-059); komentarz w CSS mówi o czekaniu na zatwierdzenie AdSense („Faza 2").
+- Rozstrzygnięte 2026-11-17 przez właściciela:
+  - Zakres: usunięte w całości, razem ze skryptem.
+  - Treść banera zgody: „Skróć do samych statystyk". Nowa treść dosłownie: „Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie."
+  - Z-032, Z-001 i Z-038 nie są zamknięte; przy każdym dopisano zdanie o nowej sytuacji (sekcja „Nowe").
+- Powiązanie: Z-065 (zwolnione miejsce w panelu), wdrożone razem.
+- Wdrożone 2026-11-17: z `index.html` usunięto meta `google-adsense-account`, blok `<div class="ad-box" id="adBox">` z `<ins class="adsbygoogle">`, funkcję `window.loadAds` i jej dwa wywołania. Z `css/style.css` usunięto `.ad-box`, `.ad-box[hidden]`, `.ad-label` oraz regułę `.ad-box:has(ins[data-ad-status="unfilled"])` (Z-059). Zgoda na cookies zostaje: baner, `consentGet`/`consentSet` i warunkowe ładowanie GA działają bez zmian. Dialog pomocy mówi: „Google Analytics (statystyki) działa wyłącznie po wyrażeniu zgody". Wysokość panelu bez zmian: 548 px na desktopie.
+- Testy: `tests/support-ui.test.mjs` (nowy, 5 testów; w tym brak śladów AdSense w HTML i CSS oraz dosłowna treść banera z kontrolą, że baner, `consentGet`/`consentSet` i `loadGA` zostają); `tests/uilogic.test.mjs` — usunięty test reguły `:has(unfilled)`, bo dotyczył usuniętej reguły.
+- Pliki: index.html, css/style.css, tests/support-ui.test.mjs (nowy), tests/uilogic.test.mjs, README.md, CURRENT_STATE.md.
+- Jak sprawdzić: `grep` po `index.html`, `css/style.css` i `js/*.js` bez trafień `adsbygoogle`, `googlesyndication`, `ad-box`, `adBox`, `loadAds`, `google-adsense` (wątek główny); w przeglądarce: baner z nową treścią, brak skryptu reklamowego, „Zgoda" zapisuje zgodę, chowa baner i ładuje GA bez błędu w konsoli (wątek główny). `npm run check`: wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17 (wspólny z Z-065).
+- Niezweryfikowane: nieznane.
+
+### Z-065 [P2] Przycisk wsparcia widoczny zawsze
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (właściciel, „przycisk do suppi widoczny zawsze")
+- Problem: przycisk wsparcia (`a.coffee-btn`) trafił przy Z-059 do przypiętej sekcji „Dane i kontakt", która jest domyślnie zamknięta. Przycisk jest niewidoczny, dopóki użytkownik sam nie rozwinie tej sekcji. Przed Z-059 stał w głównej kolumnie panelu i był widoczny po przewinięciu.
+- Oczekiwanie właściciela: przycisk ma być widoczny zawsze, bez rozwijania czegokolwiek.
+- Dowód: układ po Z-059 (sekcja „Zrobione"); `a.coffee-btn` wewnątrz przypiętej, zwiniętej domyślnie sekcji „Dane i kontakt" w `index.html`; numer linii nieznany.
+- Otwarte pytania (projekt: esteta), rozstrzygnięte:
+  - Gdzie w panelu: w nagłówku, obok „?" i przycisku zwijania, bez odbudowy długości panelu. Wariant ikonowy zatwierdzony przez właściciela, znając jego cenę: w nagłówku widać samą ikonę, bez tekstu.
+  - Stan zwinięty: ikona widoczna w tym samym miejscu.
+  - Telefon: ikona widoczna także przy przewiniętym panelu, bo nagłówek leży poza przewijanym `#panelBody`.
+- Powiązanie: Z-064 zwolniło miejsce; wdrożone razem.
+- Wdrożone 2026-11-17: ikona ☕ w nagłówku panelu, obok „?" i przycisku zwijania. Forma: 32x32 px, `top: 12px`, `right: 100px`, `border-radius: 8px`, tło `--surface`, obramowanie `1px dashed var(--line)`; hover i focus z istniejących reguł `.coffee-btn`; bez animacji, bez nowych tokenów i kolorów. Przerywana linia jest jedynym sygnałem, że link prowadzi na zewnątrz (bez ikonki strzałki, świadomie). Glif `☕` ma `aria-hidden="true"`; link ma `aria-label` „Postaw kawę autorowi — wsparcie przez zewnętrzny serwis suppi.pl, otwiera się w nowej karcie", `target="_blank" rel="noopener"`, adres `https://suppi.pl/bcicharski`. Pełny link „Postaw kawę" zostaje w sekcji „Dane i kontakt" (0 px, sekcja domyślnie zamknięta) z innym `aria-label`: „Podoba się? Postaw kawę — otwiera zewnętrzny serwis suppi.pl w nowej karcie". Świadomie dwa linki do tego samego celu z różnymi nazwami dostępnymi, żeby czytnik nie czytał dwa razy tego samego.
+- Pomiary (przeglądarka, panel 300 px): środki trzech przycisków nagłówka co 44 px (kawa x=200, „?" x=244, zwijanie x=288); nakładki pola dotykowego 44x44 px stykają się, nie nachodzą. Tytuł „Dokąd dojadę?" kończy się na x=164,3, ikona zaczyna na x=184: luz 19,7 px (specyfikacja estety szacowała ok. 13 px). Podtytuł wchodzi poziomo pod ikonę, ale jego linia zaczyna się na y=60, tam gdzie ikona się kończy; boksy stykają się, więc przesunięcie `top: 10px` nie było potrzebne. Przy 360 px brak poziomego przewijania, trzy przyciski w jednej linii. Panel zwinięty: ikona w tym samym miejscu.
+- Testy: `tests/support-ui.test.mjs` (5 testów: dwa linki `.coffee-btn` o różnych `aria-label`, jeden w nagłówku przed `#helpBtn`, drugi w sekcji „Dane i kontakt"; pole dotykowe `var(--tap)` przez nakładkę `::before`; brak reguły ukrywającej ikonę przy zwiniętym panelu). `tests/a11y-css.test.mjs`: inwentarz nakładek `::before` ma cztery pozycje; test odstępów w nagłówku sprawdza też 44 px między ikoną kawy a „?". `TAP_USES_MIN` zostaje 23 (dopisano selektor do istniejącej reguły, nie przybyło deklaracji).
+- Pliki: index.html, css/style.css, tests/support-ui.test.mjs (nowy), tests/a11y-css.test.mjs, README.md, CURRENT_STATE.md.
+- Jak sprawdzić: `npm run check`: 311 testów, 310 pass, 0 fail, 1 skipped, lint czysty (wynik dosłowny w CHANGELOG.md, sekcja 2026-11-17). Wątek główny: w dokumencie dwa linki `.coffee-btn` o różnych `aria-label`; ikona na (184, 28, 216, 60); link prowadzi na `https://suppi.pl/bcicharski` z `target="_blank"` i `rel="noopener"`; brak skryptu reklamowego na stronie.
+- Niezweryfikowane: kliknięcie w ikonę i faktyczne otwarcie suppi.pl; czytnik ekranu; prawdziwe urządzenie dotykowe. Podgląd przy 300 px to szerokość panelu na desktopie, nie osobny widok telefonu.
 
 ## Odrzucone
 

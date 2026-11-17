@@ -946,11 +946,6 @@ test('style.css: summary min-height var(--tap), focus z offsetem -2px, marker do
   assert.match(sectionsCss, /\.sec-pinned \{[^}]*flex: none/);
 });
 
-test('style.css: .ad-box:has(unfilled) ukryty, bez rezerwacji wysokości reklamy', () => {
-  assert.ok(sectionsCss.includes('.ad-box:has(ins[data-ad-status="unfilled"]) { display: none; }'));
-  assert.ok(!/\.ad-box\s*\{[^}]*min-height/.test(sectionsCss));
-});
-
 test('app.js: stan sekcji w jednym kluczu localStorage, nie w adresie URL', () => {
   const appSrc = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
   assert.ok(appSrc.includes('PANEL_SECTIONS_KEY') && appSrc.includes("addEventListener('toggle'"));

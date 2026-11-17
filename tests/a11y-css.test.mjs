@@ -49,6 +49,7 @@ const SIZED = [
 const OVERLAY = [
   '.help-btn',
   '.collapse-btn',
+  '.coffee-icon',
   '.leaflet-container a.leaflet-popup-close-button',
 ];
 
@@ -81,7 +82,7 @@ test('inwentarz: każda kontrolka ma wysokość --tap albo nakładkę', () => {
   }
 });
 
-test('nakładek ::before jest dokładnie 3 (nowa wymaga przemyślenia kolizji)', () => {
+test('nakładek ::before jest dokładnie 4 (nowa wymaga przemyślenia kolizji)', () => {
   const overlays = ALL.flatMap(r => r.selectors.filter(s => s.endsWith('::before'))
     .filter(() => /min-height:\s*var\(--tap\)/.test(r.body)));
   assert.equal(overlays.length, OVERLAY.length);
@@ -92,6 +93,7 @@ test('przyciski nagłówka: środki co 44 px (nakładki się nie nachodzą)', ()
   const right = sel => Number(ALL.find(r => r.selectors.includes(sel) && /\bright:\s*\d+px/.test(r.body))
     .body.match(/\bright:\s*(\d+)px/)[1]);
   assert.equal(right('.help-btn') - right('.collapse-btn'), 44);
+  assert.equal(right('.coffee-btn.coffee-icon') - right('.help-btn'), 44);
 });
 
 test('kolory: poza :root żadnej wartości hex ani rgba() na sztywno (nowy kolor = nowy token)', () => {

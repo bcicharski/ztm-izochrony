@@ -83,7 +83,8 @@ zawsze widać, a rzadziej zmieniane ustawienia siedzą w sekcjach „Czas
 i kierunek", „Dojście i środki transportu" oraz „Opóźnienia i statystyki"
 (natywne `<details>`, domyślnie zamknięte, z bieżącym podsumowaniem w nagłówku
 i kropką przy ustawieniach odbiegających od domyślnych). „Dane i kontakt"
-(źródła, daty rozkładu, kawa) jest przypięte na dole panelu. Stan sekcji
+(źródła, daty rozkładu, link do wsparcia) jest przypięte na dole panelu;
+ikona ☕ (wsparcie autora) stoi w nagłówku panelu, zawsze widoczna, także przy panelu zwiniętym. Stan sekcji
 pamięta `localStorage` (klucz `panel-sections`); nie trafia do adresu URL.
 
 Przycisk „Pobierz strefy (GeoJSON)" zapisuje aktualne strefy jako plik

@@ -118,6 +118,7 @@ html, body {
    pozycjonowanego przodka (np. .help-head jest sticky). */
 .help-btn::before,
 .collapse-btn::before,
+.coffee-icon::before,
 .leaflet-container a.leaflet-popup-close-button::before {
   content: "";
   position: absolute;
@@ -798,21 +799,24 @@ html, body {
   color: var(--accent);
   border-color: var(--accent);
 }
-
-.ad-box {
-  margin: 0 0 10px;
+/* Wariant ikonowy w nagłówku panelu: widoczny zawsze (też zwinięty), 0 px
+   wysokości. Środek co 44 px od przycisków ? i − (116 / 72 / 28 px od prawej). */
+.coffee-btn.coffee-icon {
+  position: absolute;
+  top: 12px;
+  right: 100px;
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+  line-height: 30px;
+  border-radius: 8px;
 }
-.ad-box[hidden] { display: none; }
-
-.ad-label {
-  /* ukryte do czasu zatwierdzenia witryny przez AdSense (Faza 2) */
-  display: none;
-  margin-bottom: 2px;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  text-align: center;
+.coffee-btn.coffee-icon:active {
+  border-color: var(--accent);
+  background: var(--line);
 }
 
 .credits {
@@ -954,9 +958,6 @@ html, body {
   border-top: 0;
 }
 .panel.collapsed .sec-pinned { display: none; }
-
-/* AdSense bez reklamy (unfilled) nie może zostawiać pustej luki nad panelem */
-.ad-box:has(ins[data-ad-status="unfilled"]) { display: none; }
 
 /* ---------- pomoc ---------- */
 

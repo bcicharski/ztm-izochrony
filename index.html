@@ -76,11 +76,7 @@
   <meta name="theme-color" content="#ffffff">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 
-  <!-- Google AdSense — weryfikacja własności witryny przez meta tag (bez żądań
-       sieciowych); sam skrypt reklam ładuje loadAds() dopiero po zgodzie -->
-  <meta name="google-adsense-account" content="ca-pub-7876278687977632">
-
-  <!-- Google Analytics (gtag.js) i AdSense — skrypty ładowane DOPIERO po zgodzie
+  <!-- Google Analytics (gtag.js) — skrypt ładowany DOPIERO po zgodzie
        użytkownika; przed zgodą do Google nie wychodzi żadne żądanie -->
   <script>
     // localStorage bywa niedostępny (tryb prywatny Safari, zablokowane dane
@@ -114,8 +110,7 @@
   <div id="map"></div>
 
   <div class="consent" id="consentBar" role="region" aria-label="Zgoda na pliki cookie" hidden>
-    <p>Strona korzysta z Google Analytics (anonimowe statystyki) oraz reklam
-      Google — pliki cookie zapisywane tylko po zgodzie.</p>
+    <p>Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie.</p>
     <div class="consent-actions">
       <button id="consentYes">Zgoda</button>
       <button id="consentNo" class="secondary">Nie, dziękuję</button>
@@ -126,6 +121,9 @@
     <header class="panel-header">
       <h1>Dokąd dojadę?</h1>
       <p class="subtitle">Zasięg komunikacji miejskiej</p>
+      <a class="coffee-btn coffee-icon" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener"
+         aria-label="Postaw kawę autorowi — wsparcie przez zewnętrzny serwis suppi.pl, otwiera się w nowej karcie"
+         title="Postaw kawę — wsparcie autora (suppi.pl)"><span aria-hidden="true">☕</span></a>
       <button class="help-btn" id="helpBtn" aria-label="Pomoc — jak korzystać z mapy">?</button>
       <button class="collapse-btn" id="collapseBtn" aria-label="Zwiń panel" aria-expanded="true">−</button>
     </header>
@@ -317,15 +315,6 @@
       <textarea class="diag-text share-text" id="shareText" readonly hidden rows="3"
                 aria-label="Link do tego widoku do skopiowania"></textarea>
 
-      <div class="ad-box" id="adBox" hidden>
-        <span class="ad-label">Reklama</span>
-        <ins class="adsbygoogle"
-             style="display:block"
-             data-ad-client="ca-pub-7876278687977632"
-             data-ad-slot="6970050259"
-             data-ad-format="auto"
-             data-full-width-responsive="true"></ins>
-      </div>
     </div>
 
     <details class="sec sec-pinned" id="secData">
@@ -345,7 +334,8 @@
           <span id="delayCoverageRow" hidden>· profile opóźnień: <span id="delayCoverage"></span></span>
           · kontakt: <a href="mailto:Bartosz@excelninja.pro">Bartosz@excelninja.pro</a>
         </footer>
-        <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
+        <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener"
+           aria-label="Podoba się? Postaw kawę — otwiera zewnętrzny serwis suppi.pl w nowej karcie">
           ☕ Podoba się? Postaw kawę
         </a>
       </div>
@@ -474,7 +464,7 @@
         rzeczywiste czasy zależą m.in. od ruchu ulicznego i opóźnień.
         Odwiedziny zlicza anonimowo <a href="https://www.goatcounter.com"
         target="_blank" rel="noopener">GoatCounter</a> (bez plików cookie
-        i bez profilowania), a Google Analytics oraz reklamy Google działają
+        i bez profilowania), a Google Analytics (statystyki) działa
         wyłącznie po wyrażeniu zgody; zgodę można cofnąć czyszcząc dane strony
         w przeglądarce. Ostatnio wybrane punkty zapisujemy tylko w Twojej
         przeglądarce; wyczyścisz je opcją „Wyczyść historię” na liście pod polem adresu.</p>
@@ -482,32 +472,14 @@
   </dialog>
 
   <script>
-    // ładuje skrypt i jednostkę AdSense — wyłącznie po zgodzie; do tego momentu
-    // przeglądarka nie łączy się z googlesyndication.com
-    window.loadAds = () => {
-      const box = document.getElementById('adBox');
-      if (!box || box.dataset.loaded) return;
-      box.hidden = false;
-      box.dataset.loaded = '1';
-      if (!document.getElementById('adsScript')) {
-        const s = document.createElement('script');
-        s.async = true;
-        s.id = 'adsScript';
-        s.crossOrigin = 'anonymous';
-        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7876278687977632';
-        document.head.appendChild(s);
-      }
-      try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* niezatwierdzone */ }
-    };
     (() => {
       const decision = consentGet();
-      if (decision === 'granted') loadAds();
       if (decision) return; // decyzja już zapadła
       const bar = document.getElementById('consentBar');
       bar.hidden = false;
       const choose = value => {
         consentSet(value);
-        if (value === 'granted') { loadGA(); loadAds(); }
+        if (value === 'granted') { loadGA(); }
         bar.hidden = true;
       };
       document.getElementById('consentYes').addEventListener('click', () => choose('granted'));
