@@ -14,7 +14,7 @@ const mapJs = read('js/map.js');
 // lokalizacji z Z-002 (.locate-btn min-width/min-height, .locate-set). Zabezpiecza pola
 // dotykowe 44 px: zagęszczanie marginesów ani porządki w CSS nie mogą usunąć
 // żadnej deklaracji wysokości. Podnoś tę stałą, gdy dochodzi kolejna kontrolka.
-const TAP_USES_MIN = 24; // 24 po .consent-toggle
+const TAP_USES_MIN = 25; // 25 po .consent .link-btn
 
 test('offset kontrolek mapy podąża za --panel-h, bez reguły zerującej', () => {
   assert.ok(css.includes('bottom: calc(var(--panel-h, 62vh) + 8px)'));
@@ -68,7 +68,7 @@ test('legenda: jedna w DOM, zostaje widoczna przy zwiniętym panelu', () => {
   assert.equal((html.match(/class="legend"/g) || []).length, 1);
   assert.equal((html.match(/id="legendBar"/g) || []).length, 1);
   assert.ok(/role="group" aria-labelledby="legendTitle"/.test(html));
-  assert.ok(/\.panel\.collapsed \.panel-body > :not\(\.legend\)\s*\{\s*display:\s*none/.test(css));
+  assert.ok(/\.panel\.collapsed \.panel-body > :not\(\.legend\):not\(#dataWarn\):not\(#diagBox\)\s*\{\s*display:\s*none/.test(css));
   // kontener nie jest już chowany razem z zawartością
   assert.ok(!/\.panel\.collapsed \.panel-body\s*\{\s*display:\s*none/.test(css));
   assert.ok(/\.panel\.collapsed \.panel-body > \.legend\s*\{[^}]*padding:\s*8px 18px 12px/.test(css));
@@ -79,4 +79,16 @@ test('przycisk zwijania: aria-label i komunikat dla czytnika w obu stanach', () 
   assert.ok(app.includes("collapsed ? 'Rozwiń panel' : 'Zwiń panel'"));
   assert.ok(app.includes('Panel zwinięty. Widać samą mapę i legendę.'));
   assert.ok(app.includes("'Panel rozwinięty.'"));
+});
+
+test('zwinięty panel: #dataWarn i #diagBox zostają widoczne, #status jest ukryty', () => {
+  const m = css.match(/\.panel\.collapsed \.panel-body > ([^{]*)\{\s*display:\s*none/);
+  assert.ok(m, 'brak reguły ukrywającej w zwiniętym panelu');
+  assert.ok(m[1].includes(':not(#dataWarn)') && m[1].includes(':not(#diagBox)'));
+  // #status nie jest wyjątkiem, więc podlega regule ogólnej
+  assert.ok(!m[1].includes('#status'));
+  // oba ostrzeżenia nadal chowa atrybut hidden, gdy nie ma czego pokazać
+  assert.ok(css.includes('.warn[hidden] { display: none; }'));
+  assert.match(html, /<p class="warn" id="dataWarn"[^>]* hidden>/);
+  assert.match(html, /<section class="diag" id="diagBox"[^>]* hidden>/);
 });

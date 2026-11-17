@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const html = read('index.html');
 const css = read('css/style.css');
+const app = read('js/app.js');
 
 test('Z-064: w index.html nie ma już śladu AdSense', () => {
   for (const s of ['adsbygoogle', 'ad-box', 'ad-label', 'loadAds', 'google-adsense-account', 'googlesyndication', 'adBox']) {
@@ -142,7 +143,53 @@ test('Z-068: treść polityki zawiera zatwierdzone, dosłowne fragmenty', () => 
 
 test('Z-068: okno pomocy odsyła do polityki, a zdanie o wycofaniu zgody zostaje', () => {
   const t = html.replace(/\s+/g, ' ');
-  assert.ok(t.includes('Pełne informacje o danych znajdziesz w polityce prywatności, pod stopką panelu.</p>'));
+  assert.ok(t.includes('Pełne informacje o danych znajdziesz w polityce prywatności — link jest w sekcji „Dane i kontakt” na dole panelu.</p>'));
+  assert.ok(!t.includes('pod stopką panelu'));
   assert.ok(t.includes('możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń).'));
+  assert.ok(!/reklam/i.test(html));
+});
+
+const policy = () => html.match(/<dialog id="privacyDialog"[\s\S]*?<\/dialog>/)[0].replace(/\s+/g, ' ');
+
+test('polityka: akapity o wyszukiwaniu adresu i lokalizacji, dosłownie, po akapicie o mapie', () => {
+  const t = policy();
+  const addr = '<p><strong>Wyszukiwanie adresu.</strong> Gdy wpiszesz adres i naciśniesz Enter, Twoja przeglądarka pyta o niego serwis Nominatim prowadzony przez OpenStreetMap. Trafia tam wpisany przez Ciebie tekst oraz obszar miasta, w którym szukamy; serwis widzi przy tym Twój adres IP. Nic tam nie wysyłamy, dopóki sam nie poprosisz o wyszukanie — podpowiedzi nazw przystanków działają bez sieci, na danych już wczytanych do przeglądarki.</p>';
+  const loc = '<p><strong>Twoja lokalizacja.</strong> Dwa przyciski pytają przeglądarkę o Twoje położenie: „Użyj mojej lokalizacji” przy polu adresu i „Wyśrodkuj na mnie” na mapie. Używamy go wyłącznie na Twoim urządzeniu — do ustawienia punktu startowego i wyśrodkowania mapy. Nie wysyłamy go nigdzie.</p>';
+  assert.ok(t.includes(addr));
+  assert.ok(t.includes(loc));
+  assert.ok(t.indexOf('<strong>Mapa.</strong>') < t.indexOf(addr) && t.indexOf(addr) < t.indexOf(loc));
+  assert.ok(/Nominatim/.test(t));
+  // polityka wymienia usługę, której adres faktycznie woła app.js
+  assert.ok(app.includes('nominatim.openstreetmap.org'));
+});
+
+test('polityka: akapit o liczniku nie twierdzi „wyłącznie ścieżkę", dosłowna nowa treść', () => {
+  const t = policy();
+  assert.ok(!t.includes('wyłącznie ścieżkę adresu'));
+  assert.ok(t.includes('<p><strong>Licznik odwiedzin bez zgody.</strong> Niezależnie od powyższego liczymy odwiedziny narzędziem GoatCounter. Nie ustawia ono plików cookie, nie profiluje i nie śledzi Cię między stronami. Przekazujemy mu ścieżkę adresu bez parametrów, więc współrzędne Twojego punktu nie są do niego wysyłane. Sam skrypt licznika przesyła przy tym standardowe dane przeglądarki: adres strony, z której do nas trafiłeś, rozmiar ekranu i identyfikator przeglądarki.</p>'));
+});
+
+test('zgoda przy niedostępnej pamięci: decyzja z sesji, kontrolka wycofania i dosłowna linia stanu', () => {
+  const choose = html.slice(html.indexOf('const choose'), html.indexOf('toggle.addEventListener'));
+  assert.ok(html.includes("'Statystyki Google Analytics: włączone. Tej decyzji nie udało się zapamiętać — przy następnej wizycie zapytamy ponownie.'"));
+  assert.match(choose, /if \(consentGet\(\) === value\) \{ render\(\); return; \}/); // odczyt zwrotny po zapisie
+  assert.match(choose, /row\.hidden = false;/);
+  assert.match(choose, /toggle\.textContent = REVOKE;/);
+  assert.match(html, /consentGet\(\) === 'granted' \|\| sessionDecision === 'granted'/);
+  assert.ok(html.includes('Nie udało się zapisać wyboru w tej przeglądarce. Statystyki Google pozostają wyłączone.'));
+  assert.match(html, /const REVOKE = 'Wycofaj zgodę na statystyki';/);
+});
+
+test('baner zgody: przycisk polityki po zdaniu, zdanie i przyciski bez zmian, to samo okno', () => {
+  const bar = html.match(/<div class="consent"[\s\S]*?<\/div>\s*<\/div>/)[0];
+  const sentence = '<p>Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie.</p>';
+  assert.ok(bar.includes(sentence));
+  assert.match(bar, /<button type="button" class="link-btn" id="consentPolicy">Polityka prywatności<\/button>/);
+  assert.ok(bar.indexOf(sentence) < bar.indexOf('id="consentPolicy"'));
+  assert.ok(bar.includes('<button id="consentYes">Zgoda</button>'));
+  assert.ok(bar.includes('<button id="consentNo" class="secondary">Nie, dziękuję</button>'));
+  assert.ok(html.includes("getElementById('consentPolicy').addEventListener('click', open)"));
+  assert.ok(html.includes("getElementById('privacyOpen').addEventListener('click', open)"));
+  assert.match(css, /\.consent \.link-btn:focus-visible/);
   assert.ok(!/reklam/i.test(html));
 });

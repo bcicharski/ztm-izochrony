@@ -45,10 +45,11 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 ### Z-009 [P2] Stopka i onboarding
 - Status: w toku
 - Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak kontaktu i social media w stopce, przycisk Suppi za nisko, brak samouczka w 3 krokach.
+- Problem: z pierwotnego zakresu zostało jedno — odnośniki do profili społecznościowych w stopce. **Czeka na dane od właściciela**: adresów profili nie ma nigdzie w repozytorium, więc nie zaczynać tego zadania bez nich. (Stan sprawdzony w kodzie 2026-11-17; zrobione części opisano niżej.)
 - Dowód: nieznane.
 - Wdrożone 2026-11-16 (część D, wskazówka przy pierwszej wizycie): blok z trzema krokami, przyciskiem „Rozumiem" i linkiem „Pełna pomoc" w panelu, wariant niemodalny (`showModal()` odrzucone, bo czyniłoby pasek zgody `#consentBar` nieklikalnym). Znika po „Rozumiem" albo po pierwszym wskazaniu punktu i nie wraca. Warunek `shouldShowIntro({ seen, consentPending, pointFromUrl })` w `js/uilogic.js`; klucz `seen-intro`; brak pamięci = wskazówka wraca przy każdej wizycie, ale znika po pierwszej interakcji. Zmierzone: 155 px wysokości przy 800 px szerokości, 138 px przy 360 px.
-- Pozostaje: kontakt i social media w stopce, przycisk Suppi.
+- Zrobione poza częścią D: kontakt w stopce już istniał (`index.html`, `mailto:Bartosz@excelninja.pro`); przycisk wsparcia zrobiono w Z-065 (ikona ☕ w nagłówku panelu, widoczna także przy zwiniętym panelu; pełny link „Podoba się? Postaw kawę" w sekcji „Dane i kontakt"; zarzut „za nisko" nieaktualny); samouczek w trzech krokach to część D tego zadania (wskazówka przy pierwszej wizycie, wyżej).
+- Pozostaje: odnośniki do profili społecznościowych w stopce — **czeka na dane od właściciela** (adresy profili). Nie zaczynać bez nich.
 - Pliki: index.html, css/style.css, js/app.js, js/uilogic.js.
 - Niezweryfikowane: nieznane.
 
@@ -56,9 +57,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Status: w toku
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: brak krótkich linków, dynamicznego obrazka OG, iframe, wyszukiwania po nazwie przystanku offline i historii adresów.
-- Dowód: nieznane.
+- Dowód: statyczny obrazek OG istnieje — `assets/og-image.png` w repozytorium od commitu d837462, `index.html` wskazuje go w `og:image` (sprawdzone 2026-11-17).
 - Wdrożone 2026-11-16 (część A, historia ostatnich punktów): klik w puste pole adresu pokazuje do pięciu ostatnio wybranych punktów bieżącego miasta; jeden klik ustawia punkt; ostatnia pozycja czyści historię. Wpis powstaje tylko przy wyborze z listy wyników (nie przy kliknięciu w mapę, przeciągnięciu znacznika, GPS ani punkcie z URL). 12 wpisów globalnie, 5 pokazywanych po filtrze na miasto, deduplikacja po współrzędnych zaokrąglonych do 5 miejsc, wygasanie po 90 dniach, klucz `recent-points`, kształt `{v:1, items:[...]}`, `localStorage` w `try/catch`. Pamięć funkcjonalna, nie analityczna — zdanie o tym jest w pomocy. ARIA: nagłówek grupy jako `li[role=presentation]` pomijany strzałkami, wiersze `role="option"`.
-- Pozostaje: krótkie linki; dynamiczny obrazek OG; iframe. Część B (wyszukiwanie przystanków po nazwie) zrobiona jako Z-056.
+- Pozostaje (stan 2026-11-17):
+  - Statyczny obrazek OG: ZROBIONY, nie jest już do zrobienia (`assets/og-image.png`, `og:image` w `index.html`).
+  - Dynamiczny obrazek OG (inny dla każdego miasta albo widoku): NIEWYKONALNY w obecnej architekturze. Wymagałby generowania po stronie serwera, a projekt ma nienegocjowalny zakaz backendu; wykonanie wymaga zmiany zasad projektu.
+  - Krótkie linki: NIEWYKONALNE w obecnej architekturze bez zewnętrznej usługi przekierowań, która też wychodzi poza „zero backendu" (ustalenie `liczytokena`).
+  - Iframe: da się zrobić statycznie, ale to nowy sposób użycia strony; wymaga zgody właściciela (ustalenie `liczytokena`).
+  - Część B (wyszukiwanie przystanków po nazwie) zrobiona jako Z-056.
 - Pliki: js/uilogic.js, js/app.js, index.html, css/style.css.
 - Niezweryfikowane: zachowanie przy niedostępnym `localStorage` (kod w `try/catch`, nie wymuszano); wybór z żywych wyników Nominatim.
 
@@ -678,6 +684,17 @@ Pułapki do wdrożenia:
 - Pliki: index.html, css/style.css, tests/support-ui.test.mjs.
 - Jak sprawdzić: `npm run check` (wynik w CHANGELOG.md, sekcja 2026-11-17); w przeglądarce: link w stopce otwiera okno, zamknięcie przez × i klik w tło, Escape; wymiary okna jak wyżej.
 - Niezweryfikowane: zamykanie Escape sprawdzone tylko symulowanym zdarzeniem, nie przy dwóch oknach naraz; nie zrobiono zrzutu ekranu, tylko pomiary; działanie nakładki pola dotykowego przycisku zamknięcia nie było mierzone; zachowanie na produkcji nie było sprawdzane.
+
+### Z-069 [P1] Polityka prywatności, zgoda i zwinięty panel: sześć poprawek z przeglądu fal 7 i 8
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (analityk, przegląd kodu z fal 7 i 8)
+- Problem: przegląd znalazł sześć rozbieżności: polityka pomijała wyszukiwarkę adresów (Nominatim) i lokalizację; akapit o liczniku odwiedzin twierdził, że leci wyłącznie ścieżka; zwinięty panel chował ostrzeżenie o nieaktualnym rozkładzie i błąd obliczeń; zgoda przy niedostępnej pamięci zostawiała Analytics bez możliwości wycofania; baner zgody nie prowadził do polityki; odsyłacz w oknie pomocy wskazywał złe miejsce.
+- Dowód: przegląd analityka z 2026-11-17 (fale 7 i 8); szczegóły punktów w CHANGELOG.md, sekcja 2026-11-17.
+- Wdrożone 2026-11-17: (1) w polityce akapity „Wyszukiwanie adresu" (Nominatim, co tam trafia, zastrzeżenie o podpowiedziach przystanków bez sieci) i „Twoja lokalizacja" (oba przyciski lokalizacji) po akapicie o mapie; (2) akapit o liczniku odwiedzin przepisany: zamiast „wyłącznie ścieżka" zdanie, że współrzędne punktu nie są wysyłane, i wymienienie standardowych danych przeglądarki przesyłanych przez licznik; (3) `.panel.collapsed` nie ukrywa `#dataWarn` i `#diagBox` (reguła `:not(#dataWarn):not(#diagBox)`), `#status` dalej się chowa, `#diagBox` ma `max-height: 40vh` z przewijaniem; zmierzone `?city=opole` 360 px: ostrzeżenie 70 px po zwinięciu, panel 459 -> 220 px; opis w CURRENT_STATE.md poprawiony; (4) zgoda: po zapisie odczyt zwrotny; przy nieudanym zapisie wiersz wycofania się pokazuje, decyzja trzyma się w zmiennej sesji, a linia stanu mówi, że decyzji nie udało się zapamiętać; (5) baner ma przycisk „Polityka prywatności" otwierający okno polityki, ze wspólnym handlerem z przyciskiem w stopce; zdanie banera i teksty „Zgoda"/„Odmowa" bez zmian; (6) odsyłacz w oknie pomocy: „link jest w sekcji „Dane i kontakt” na dole panelu".
+- Pliki: index.html, css/style.css, tests/support-ui.test.mjs, tests/mobile-layout.test.mjs, README.md, CURRENT_STATE.md. `js/` nietknięte.
+- Testy: 4 nowe w `tests/support-ui.test.mjs` (akapity polityki z kolejnością i wzmianką o Nominatim, kod woła `nominatim.openstreetmap.org`; akapit o liczniku bez starego zdania; dosłowna linia stanu przy nieudanym zapisie z odczytem zwrotnym; baner z przyciskiem polityki przy niezmienionym zdaniu i wspólnym handlerze) plus poprawione asercje; `tests/mobile-layout.test.mjs`: nowy test zwiniętego panelu, `TAP_USES_MIN` 24 -> 25.
+- Jak sprawdzić: `npm run check`: pass 325, fail 0, skipped 1, lint czysty (dosłowny wynik w CHANGELOG.md, sekcja 2026-11-17, Wewnętrzne). W przeglądarce (wątek główny): `?city=opole` 360 px po zwinięciu; kliknięcia przy 360 px: link banera, okno, Escape, powrót fokusu na link, „Zgoda", zapis `granted`, baner znika; nieudany zapis zgody przez nadpisanie `localStorage`.
+- Niezweryfikowane: prawdziwy tryb prywatny Safari (sprawdzono symulacją); wzrokowe przewinięcie nowych akapitów polityki do końca na ekranie (sprawdzono testem na tekst); czytnik ekranu.
 
 ## Odrzucone
 

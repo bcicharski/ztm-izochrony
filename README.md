@@ -107,7 +107,7 @@ z `data/<miasto>/meta.json`). Po tym terminie panel wyświetla ostrzeżenie,
 a typy dnia, których build nie wygenerował (`meta.dates`), są wyłączone
 w selektorze.
 
-**Polityka prywatności (Z-068).** Link „Polityka prywatności” w stopce sekcji „Dane i kontakt” otwiera okno `#privacyDialog` (administrator danych, Google Analytics po zgodzie, GoatCounter, pamięć lokalna, OpenStreetMap, prawa użytkownika). Okno pomocy odsyła do niego zdaniem na końcu akapitu o danych.
+**Polityka prywatności (Z-068).** Link „Polityka prywatności” w stopce sekcji „Dane i kontakt” otwiera okno `#privacyDialog` (administrator danych, Google Analytics po zgodzie, GoatCounter, pamięć lokalna, OpenStreetMap, wyszukiwanie adresu przez Nominatim, lokalizacja, prawa użytkownika). Okno pomocy odsyła do niego zdaniem na końcu akapitu o danych. Ten sam link jest też w banerze zgody. Przy zwiniętym panelu ostrzeżenie o nieaktualnym rozkładzie i komunikat o błędzie zostają widoczne obok legendy. Gdy przeglądarka nie zapisze decyzji o zgodzie, kontrolka wycofania i tak się pokazuje (z informacją, że wybór nie zostanie zapamiętany).
 
 ## Testy i lint
 

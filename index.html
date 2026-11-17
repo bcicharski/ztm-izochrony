@@ -138,6 +138,7 @@
 
   <div class="consent" id="consentBar" role="region" aria-label="Zgoda na pliki cookie" hidden>
     <p>Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie.</p>
+    <button type="button" class="link-btn" id="consentPolicy">Polityka prywatności</button>
     <div class="consent-actions">
       <button id="consentYes">Zgoda</button>
       <button id="consentNo" class="secondary">Nie, dziękuję</button>
@@ -499,7 +500,7 @@
         i bez profilowania), a Google Analytics (statystyki) działa
         wyłącznie po wyrażeniu zgody; możesz ją w każdej chwili wycofać albo udzielić ponownie w sekcji „Dane i kontakt” na dole panelu (przy zwiniętym panelu najpierw go rozwiń). Ostatnio wybrane punkty zapisujemy tylko w Twojej
         przeglądarce; wyczyścisz je opcją „Wyczyść historię” na liście pod polem adresu.
-        Pełne informacje o danych znajdziesz w polityce prywatności, pod stopką panelu.</p>
+        Pełne informacje o danych znajdziesz w polityce prywatności — link jest w sekcji „Dane i kontakt” na dole panelu.</p>
     </div>
   </dialog>
 
@@ -519,11 +520,15 @@
 
       <p><strong>Zgodę możesz wycofać w każdej chwili.</strong> Służy do tego przycisk w sekcji „Dane i kontakt” na dole panelu. Wycofanie usuwa pliki cookie Analytics i wyłącza pomiar od razu, bez przeładowania strony. Tym samym przyciskiem możesz zgody udzielić ponownie.</p>
 
-      <p><strong>Licznik odwiedzin bez zgody.</strong> Niezależnie od powyższego liczymy odwiedziny narzędziem GoatCounter. Nie ustawia ono plików cookie, nie profiluje i nie śledzi Cię między stronami. Przekazujemy mu wyłącznie ścieżkę adresu, bez parametrów — współrzędne Twojego punktu nie są do niego wysyłane.</p>
+      <p><strong>Licznik odwiedzin bez zgody.</strong> Niezależnie od powyższego liczymy odwiedziny narzędziem GoatCounter. Nie ustawia ono plików cookie, nie profiluje i nie śledzi Cię między stronami. Przekazujemy mu ścieżkę adresu bez parametrów, więc współrzędne Twojego punktu nie są do niego wysyłane. Sam skrypt licznika przesyła przy tym standardowe dane przeglądarki: adres strony, z której do nas trafiłeś, rozmiar ekranu i identyfikator przeglądarki.</p>
 
       <p><strong>Co zostaje w Twojej przeglądarce.</strong> W pamięci lokalnej przeglądarki zapisujemy cztery rzeczy: decyzję o zgodzie (<code>ga-consent</code>), ostatnio wybrane punkty startowe (<code>recent-points</code>), informację o obejrzeniu wskazówki pierwszej wizyty (<code>seen-intro</code>) i stan zwinięcia sekcji panelu (<code>panel-sections</code>). Te dane nie opuszczają Twojego urządzenia — nie wysyłamy ich nigdzie i nie mamy do nich dostępu. Historię ostatnich punktów skasujesz opcją „Wyczyść historię” pod polem adresu; resztę — czyszcząc dane strony w przeglądarce.</p>
 
       <p><strong>Mapa.</strong> Podkład pochodzi z OpenStreetMap. Pobierając kafelki mapy, Twoja przeglądarka łączy się bezpośrednio z serwerami OpenStreetMap, które widzą przy tym Twój adres IP i oglądany fragment mapy.</p>
+
+      <p><strong>Wyszukiwanie adresu.</strong> Gdy wpiszesz adres i naciśniesz Enter, Twoja przeglądarka pyta o niego serwis Nominatim prowadzony przez OpenStreetMap. Trafia tam wpisany przez Ciebie tekst oraz obszar miasta, w którym szukamy; serwis widzi przy tym Twój adres IP. Nic tam nie wysyłamy, dopóki sam nie poprosisz o wyszukanie — podpowiedzi nazw przystanków działają bez sieci, na danych już wczytanych do przeglądarki.</p>
+
+      <p><strong>Twoja lokalizacja.</strong> Dwa przyciski pytają przeglądarkę o Twoje położenie: „Użyj mojej lokalizacji” przy polu adresu i „Wyśrodkuj na mnie” na mapie. Używamy go wyłącznie na Twoim urządzeniu — do ustawienia punktu startowego i wyśrodkowania mapy. Nie wysyłamy go nigdzie.</p>
 
       <p><strong>Linki na zewnątrz.</strong> Przycisk wsparcia prowadzi do serwisu suppi.pl, który ma własną politykę prywatności.</p>
 
@@ -549,15 +554,29 @@
         line.textContent = msg || ('Statystyki Google Analytics: ' + (granted ? 'włączone.' : 'wyłączone.'));
         toggle.textContent = granted ? REVOKE : GRANT;
       };
+      // Gdy zapis się nie udał (tryb prywatny, zablokowane dane witryny), decyzja
+      // z tej sesji i tak obowiązuje — inaczej GA działałby bez możliwości
+      // wycofania. Trzymamy ją w pamięci i pokazujemy kontrolkę z ostrzeżeniem.
+      let sessionDecision = null;
+      const MEM_NOTE = 'Statystyki Google Analytics: włączone. Tej decyzji nie udało się zapamiętać — przy następnej wizycie zapytamy ponownie.';
       const choose = value => {
         consentSet(value);
         if (value === 'granted') { loadGA(); }
         bar.hidden = true;
-        render();
+        if (consentGet() === value) { render(); return; }
+        sessionDecision = value;
+        if (value === 'granted') {
+          row.hidden = false;
+          line.textContent = MEM_NOTE;
+          toggle.textContent = REVOKE;
+        } else {
+          render();
+        }
       };
       toggle.addEventListener('click', () => {
-        if (consentGet() === 'granted') {
+        if (consentGet() === 'granted' || sessionDecision === 'granted') {
           consentSet('denied');
+          sessionDecision = null;
           gaRevoke(); // cookies i wyciszenie działają nawet przy błędzie zapisu
           render(consentGet() === 'denied'
             ? 'Zgodę wycofano. Usunęliśmy pliki cookie Google Analytics i wyłączyliśmy pomiar — nic więcej nie jest wysyłane.'
@@ -586,10 +605,13 @@
     (() => {
       const dialog = document.getElementById('privacyDialog');
       const close = document.getElementById('privacyClose');
-      document.getElementById('privacyOpen').addEventListener('click', () => {
+      // dwa wejścia do tego samego okna: stopka panelu i baner zgody
+      const open = () => {
         dialog.showModal();
         close.focus();
-      });
+      };
+      document.getElementById('privacyOpen').addEventListener('click', open);
+      document.getElementById('consentPolicy').addEventListener('click', open);
       close.addEventListener('click', () => dialog.close());
       dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
     })();

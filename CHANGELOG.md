@@ -61,10 +61,16 @@ Dosłowny wynik `npm run check` po Z-059:
 ℹ todo 0
 ℹ duration_ms 801.3152
 ```
+- Z-069 (punkt 5/6) Baner zgody ma przycisk „Polityka prywatności", który otwiera okno polityki; działa jak link i dzieli handler z przyciskiem w stopce. Zdanie banera i teksty „Zgoda" i „Odmowa" bez zmian. Okno zasłania baner na czas otwarcia; zamyka się Escape, przyciskiem zamknięcia lub kliknięciem w tło. (pliki: index.html, css/style.css, tests/support-ui.test.mjs; testy: baner z przyciskiem przy niezmienionym zdaniu i wspólnym handlerze; sprawdzone prawdziwymi kliknięciami przy 360 px; nie sprawdzone: czytnik ekranu)
+- Z-069 (punkt 6/6) Zdanie w oknie pomocy wskazuje właściwe miejsce odsyłacza: „link jest w sekcji „Dane i kontakt” na dole panelu". (pliki: index.html, tests/support-ui.test.mjs)
 
 ### Naprawione
 - Z-066 Licznik GoatCounter nie dostaje już lokalizacji użytkownika: raportuje samą ścieżkę `/`, bez parametru `p=` z adresu. To ten sam wyciek co Z-040, tylko innym kanałem (licznik nie działa lokalnie, więc wyciek był niewidoczny). Pomoc i zgoda bez zmian. (pliki: index.html, tests/support-ui.test.mjs; testy: tests/support-ui.test.mjs — nowy przypadek: nadpisanie `path` istnieje, stoi przed skryptem licznika i ma właściwą postać; npm run check: lint czysty, 312 testów, 311 pass, 0 fail, 1 skipped (dosłowny wynik w sekcji Wewnętrzne); potwierdzone w przeglądarce: przy `?city=trojmiasto&p=54.35540,18.64450&...` licznik raportuje `/`; nie sprawdzone: nieznane)
 - Z-052 Ostrzeżenie o wyprzedzaniu kursów w bramce jakości danych nie zapala się już przy niezmienionej liczbie wzorców — alarmuje tylko wzrost. Po przeliczeniu Łodzi fałszywy alarm dotyczył wartości, która się nie zmieniła. Ostrzeżenie nigdy nie blokuje publikacji. Dane na stronie bez zmian. (pliki: tools/check-data.mjs; testy: tests/check-data.test.mjs — 1 nowy przypadek „niezmieniona liczba nie ostrzega (Z-052)"; npm run check: lint czysty, 270 testów, 269 pass, 0 fail, 1 skipped — dosłowny wynik w sekcji Wewnętrzne; nie sprawdzone: zachowanie bramki przy następnym automatycznym odświeżeniu)
+- Z-069 (punkt 1/6) Polityka prywatności opisuje wyszukiwarkę adresów: zapytania do Nominatim (tekst wpisany przez użytkownika, obszar miasta, adres IP) oraz oba przyciski lokalizacji („Wyśrodkuj na mnie" na mapie i „Użyj mojej lokalizacji" przy polu adresu). Dwa nowe akapity po akapicie o mapie. (pliki: index.html, tests/support-ui.test.mjs; testy: kolejność akapitów, wzmianka o Nominatim i kontrola, że kod woła nominatim.openstreetmap.org; nie sprawdzone: wzrokowe przewinięcie akapitów na ekranie)
+- Z-069 (punkt 2/6) Akapit o liczniku odwiedzin w polityce nie twierdzi już, że wysyłana jest „wyłącznie ścieżka adresu". Zostaje stwierdzenie, że współrzędne punktu nie są wysyłane, i dochodzi wymienienie standardowych danych przeglądarki przesyłanych przez licznik. (pliki: index.html, tests/support-ui.test.mjs; testy: nowy tekst akapitu i brak starego zdania)
+- Z-069 (punkt 3/6) Zwinięty panel nie chowa już ostrzeżenia o nieaktualnym rozkładzie (`#dataWarn`) ani błędu obliczeń (`#diagBox`, z `max-height: 40vh` i przewijaniem); linia `#status` dalej się chowa. Zmierzone (`?city=opole`, 360 px): ostrzeżenie 70 px po zwinięciu, panel 459 -> 220 px. (pliki: css/style.css, tests/mobile-layout.test.mjs, CURRENT_STATE.md, README.md; testy: nowy test zwiniętego panelu, `TAP_USES_MIN` 24 -> 25)
+- Z-069 (punkt 4/6) Zgoda przy niedostępnej pamięci: po zapisie następuje odczyt zwrotny. Gdy zapis się nie udał, wiersz wycofania zgody i tak się pokazuje, decyzja z bieżącej sesji trzyma się w pamięci, a linia stanu mówi: „Statystyki Google Analytics: włączone. Tej decyzji nie udało się zapamiętać — przy następnej wizycie zapytamy ponownie." Wcześniej pomiar działał bez możliwości wycofania. (pliki: index.html, tests/support-ui.test.mjs; testy: dosłowna linia stanu i odczyt zwrotny; sprawdzone w przeglądarce przez nadpisanie zapisu do pamięci: wiersz widoczny, wycofanie ustawia flagę wyłączającą pomiar)
 - Z-060 Pięć drobnych usterek: komunikaty lokalizacji i eksportu docierają do czytnika ekranu; Enter przy jednym lub dwóch znakach pokazuje komunikat, że trzeba wpisać co najmniej 3 znaki (próg dla adresów bez zmian); awaryjne kopiowanie linku zostawia adres do zaznaczenia w polu; wyłączony przycisk lokalizacji ma trwały opis powodu zamiast `title`; kolory w CSS wyłącznie z tokenów w `:root` (wartości bez zmian, zero różnicy wizualnej). (pliki: js/app.js, js/uilogic.js, css/style.css; testy: tests/a11y-css.test.mjs (1 nowy); wdrożenie w commicie 29b0d6b; npm run check: 278 testów, 277 pass, 0 fail, 1 skipped, lint czysty (wynik podany w zleceniu, nie wklejony dosłownie z terminala); nie sprawdzone: weryfikacja ręczna każdego punktu)
 
 ### Usunięte
@@ -120,6 +126,16 @@ Dosłowny wynik `npm run check` po Z-059:
 ℹ skipped 1
 ```
   Lint czysty.
+- Dosłowny wynik `npm run check` po Z-069 (2026-11-17), po uzupełnieniu akapitu o lokalizacji:
+```
+ℹ pass 325
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 683.2906
+```
+  Lint czysty. Łącznie 326 testów.
 
 ## 2026-11-16
 

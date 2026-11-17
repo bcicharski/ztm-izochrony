@@ -137,13 +137,22 @@ html, body {
   padding: 14px 18px 16px;
   overflow-y: auto;
 }
-/* Zwinięty panel: ukryte wszystko poza legendą (jedna legenda w DOM, bez duplikatu).
+/* Zwinięty panel: ukryte wszystko poza legendą (jedna legenda w DOM, bez duplikatu)
+   i ostrzeżeniami — #dataWarn (nieaktualny rozkład) i #diagBox (błąd obliczeń)
+   nie mogą zniknąć razem ze zwiniętym panelem; oba mają [hidden], gdy nie ma
+   czego pokazać. #status to zwykły komunikat o wyniku, więc zostaje ukryty.
    Selektor ogólny, więc nowe elementy w .panel-body nie wymagają zmian tutaj. */
 .panel.collapsed .panel-body {
   padding: 0;
   overflow: visible;
 }
-.panel.collapsed .panel-body > :not(.legend) { display: none; }
+.panel.collapsed .panel-body > :not(.legend):not(#dataWarn):not(#diagBox) { display: none; }
+.panel.collapsed .panel-body > #dataWarn { margin: 8px 18px 0; }
+.panel.collapsed .panel-body > #diagBox {
+  margin: 8px 18px 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
 .panel.collapsed .panel-body > .legend { margin: 0; padding: 8px 18px 12px; }
 
 .hint {
@@ -1034,7 +1043,8 @@ html, body {
 
 /* przycisk w stopce wyglądający jak link (.credits a); śródtekstowy — jak linki,
    poza wymogiem rozmiaru celu (WCAG 2.5.8) */
-.credits .link-btn {
+.credits .link-btn,
+.consent .link-btn {
   padding: 0;
   border: 0;
   background: none;
@@ -1064,6 +1074,17 @@ html, body {
 .consent[hidden] { display: none; }
 
 .consent p { margin: 0 0 10px; }
+
+/* link do polityki prywatności w banerze — osobny element po zdaniu, więc dostaje
+   pełne pole dotykowe (w stopce jest śródtekstowy) */
+.consent .link-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  touch-action: manipulation;
+}
 
 .consent-actions {
   display: flex;
@@ -1171,6 +1192,7 @@ html, body {
 .veh input:focus-visible,
 .credits a:focus-visible,
 .credits .link-btn:focus-visible,
+.consent .link-btn:focus-visible,
 .help-body a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
