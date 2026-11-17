@@ -267,6 +267,16 @@ export const geoErrorMessage = code => {
   }
 };
 
+/**
+ * Powód niedostępności lokalizacji (przycisk #locateBtn): `null`, gdy działa.
+ * Pokazywany jako trwały tekst — `title` nie istnieje na dotyku i nie czyta go czytnik.
+ */
+export const locateUnavailableReason = (secureContext, hasGeolocation) => {
+  if (!secureContext) return 'Lokalizacja wymaga bezpiecznego połączenia (HTTPS).';
+  if (!hasGeolocation) return 'Przeglądarka nie udostępnia lokalizacji.';
+  return null;
+};
+
 /** Pozycja w prostokącie `bbox` = [latS, lonW, latN, lonE]. */
 export const inBbox = (lat, lon, bbox) =>
   lat >= bbox[0] && lat <= bbox[2] && lon >= bbox[1] && lon <= bbox[3];
@@ -503,6 +513,10 @@ export const shouldShowIntro = ({ seen, consentPending, pointFromUrl }) =>
 
 /** Najkrótsze zapytanie o przystanek (znaki po normalizacji). */
 export const STOP_QUERY_MIN = 2;
+/** Najkrótsze zapytanie o adres (znaki): krótsze marnowałoby zapytania do geokodera. */
+export const ADDRESS_QUERY_MIN = 3;
+/** Komunikat po Enterze przy zapytaniu krótszym niż `ADDRESS_QUERY_MIN`. */
+export const ADDRESS_QUERY_HINT = 'Wpisz co najmniej 3 znaki, aby szukać adresu.';
 
 /**
  * Normalizacja nazw do porównań: małe litery, bez znaków diakrytycznych

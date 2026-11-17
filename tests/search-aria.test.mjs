@@ -130,3 +130,42 @@ test('style.css: chip .res-kind i nazwa z wielokropkiem', () => {
   assert.match(css, /.res-kind {[^}]*flex: none/);
   assert.match(css, /.res-name {[^}]*text-overflow: ellipsis/);
 });
+
+// --- komunikaty dla czytnika, Enter przy krótkim zapytaniu, link awaryjny, lokalizacja ---
+import { locateUnavailableReason, ADDRESS_QUERY_MIN, ADDRESS_QUERY_HINT } from '../js/uilogic.js';
+
+test('locateUnavailableReason: HTTP, brak geolokalizacji, działa', () => {
+  assert.match(locateUnavailableReason(false, true), /HTTPS/);
+  assert.match(locateUnavailableReason(true, false), /nie udostępnia/);
+  assert.equal(locateUnavailableReason(true, true), null);
+});
+
+test('Enter przy krótkim zapytaniu: komunikat do #searchStatus, próg 3 zachowany', () => {
+  assert.equal(ADDRESS_QUERY_MIN, 3);
+  assert.equal(ADDRESS_QUERY_HINT, 'Wpisz co najmniej 3 znaki, aby szukać adresu.');
+  assert.ok(appSrc.includes('query.length < ADDRESS_QUERY_MIN'));
+  assert.ok(/if \(query\.length < ADDRESS_QUERY_MIN\) \{[^}]*status\.textContent = ADDRESS_QUERY_HINT/.test(appSrc));
+});
+
+test('komunikaty lokalizacji i eksportu idą przez say() -> announce()', () => {
+  assert.ok(/function say\(text\) \{[^}]*announce\(text\)/.test(appSrc));
+  for (const t of ['Ustalam lokalizację…', 'Jesteś poza obszarem', 'Zapisano plik', 'Nie udało się przygotować pliku', 'geoErrorMessage(err?.code)']) {
+    const i = appSrc.indexOf(t);
+    assert.ok(i > 0, t);
+    assert.ok(/say\(/.test(appSrc.slice(Math.max(0, i - 40), i)), `${t}: bez say()`);
+  }
+});
+
+test('Kopiuj link: awaryjne pole #shareText zamiast etykiety przycisku', () => {
+  assert.ok(/id="shareText"[^>]*readonly[^>]*hidden/.test(html));
+  assert.ok(!appSrc.includes('btn.textContent = location.href'));
+  assert.ok(appSrc.includes("ta.value = location.href"));
+  assert.ok(appSrc.includes("$('shareText').hidden = true"));
+});
+
+test('#locateBtn niedostępny: aria-disabled + aria-describedby na #locateHint', () => {
+  assert.ok(/id="locateHint"[^>]*hidden/.test(html));
+  assert.ok(appSrc.includes("btn.setAttribute('aria-disabled', 'true')"));
+  assert.ok(appSrc.includes("'aria-describedby', 'locateHint'"));
+  assert.ok(!appSrc.includes("$('locateBtn').disabled"));
+});

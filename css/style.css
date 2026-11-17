@@ -17,7 +17,11 @@
   --accent: #b83289;
   --radius: 12px;
   --tap: 44px;
-  --shadow: 0 4px 24px rgba(28, 28, 40, 0.14);
+  --shadow-rgb: 28, 28, 40; /* kanały koloru cieni; przezroczystość podaje miejsce użycia */
+  --shadow: 0 4px 24px rgba(var(--shadow-rgb), 0.14);
+  --map-bg: #f4f4f2;  /* tło mapy pod kafelkami */
+  --dot-a: #2a81cb;   /* punkt A (kropka w wyszukiwarce) */
+  --dot-b: #e8722d;   /* punkt B (tryb porównania) */
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -32,7 +36,7 @@ html, body {
 #map {
   position: fixed;
   inset: 0;
-  background: #f4f4f2;
+  background: var(--map-bg);
 }
 
 .zone-canvas { pointer-events: none; }
@@ -192,8 +196,8 @@ html, body {
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--line);
 }
-.dot-a { background: #2a81cb; }
-.dot-b { background: #e8722d; }
+.dot-a { background: var(--dot-a); }
+.dot-b { background: var(--dot-b); }
 
 .search-row input {
   flex: 1;
@@ -229,6 +233,14 @@ html, body {
   touch-action: manipulation;
 }
 .search-row button:hover { color: var(--ink); }
+/* aria-disabled zamiast :disabled (przycisk zostaje fokusowalny, powód w #locateHint);
+   bez opacity: zbiłaby kontrast poniżej 4,5:1. Przerywana ramka odróżnia od aktywnego. */
+.search-row button[aria-disabled="true"],
+.search-row button[aria-disabled="true"]:hover {
+  color: var(--muted);
+  border-style: dashed;
+  cursor: not-allowed;
+}
 
 .search-row input:focus-visible,
 .search-row button:focus-visible {
@@ -417,7 +429,7 @@ html, body {
   font-weight: 600;
   /* stan „włączony" nie różni się już kolorem tekstu — obrys akcentem */
   box-shadow: inset 0 0 0 1px var(--accent);
-  filter: drop-shadow(0 1px 1.5px rgba(28, 28, 40, 0.15));
+  filter: drop-shadow(0 1px 1.5px rgba(var(--shadow-rgb), 0.15));
 }
 
 .segmented input:focus-visible + label {
@@ -456,7 +468,7 @@ html, body {
   height: 16px;
   border-radius: 50%;
   background: var(--surface);
-  box-shadow: 0 1px 3px rgba(28, 28, 40, 0.25);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.25);
 }
 .switch input:checked + .track {
   background: var(--accent);
@@ -747,6 +759,7 @@ html, body {
   overflow-y: auto;
   overflow-wrap: anywhere;
 }
+.share-text { margin: 0 0 10px; }
 .diag-text {
   box-sizing: border-box;
   width: 100%;
@@ -825,7 +838,7 @@ html, body {
 }
 
 #helpDialog::backdrop {
-  background: rgba(28, 28, 40, 0.45);
+  background: rgba(var(--shadow-rgb), 0.45);
 }
 
 .help-head {

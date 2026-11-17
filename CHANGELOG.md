@@ -10,6 +10,8 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-008 Tryb czystego widoku i eksport — etap: wdrożenie (część eksportu GeoJSON zrobiona; tryb czystego widoku i PNG otwarte).
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
 - Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
+- Z-059 Zwijane sekcje panelu i przypięta stopka (decyzja właściciela; Z-036 scalone z tym zadaniem) — etap: wdrożenie (projekt i wygląd gotowe, 2026-11-17).
+- Z-060 Pięć drobnych usterek (komunikaty dla czytnika ekranu, Enter przy dwóch znakach, kopiowanie linku, powód wyłączonej lokalizacji, kolory w tokenach) — etap: wdrożenie.
 
 ## 2026-11-17
 ### Zmienione
@@ -34,6 +36,7 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 ℹ duration_ms 500.5958
 ```
   Lint czysty.
+- Powstał agent `liczytokena` (`.claude/agents/liczytokena.md`, wiersz w tabeli i w przepływie pracy w `CLAUDE.md`); pilnuje budżetu tokenów i układa plan fali. Utworzony na wyraźną prośbę właściciela 2026-11-17. (bez zmian w kodzie strony)
 
 ## 2026-11-16
 

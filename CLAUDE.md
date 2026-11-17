@@ -68,10 +68,14 @@ Definicje: `.claude/agents/*.md`.
 | `wdrozeniowiec` | sonnet | pełne | Wdraża rozwiązanie w kodzie + testy. |
 | `kronikarz` | haiku | Read, Write, Edit, Glob, Grep | Utrzymuje `ZADANIA-DO-ZROBIENIA.md` i `CHANGELOG.md`. Nic więcej. |
 | `sekretarz` | haiku | Read, Grep, Glob | Rozmawia z właścicielem. Decyduje, kiedy potrzebna jest jego decyzja. |
+| `liczytokena` | haiku | Read, Grep, Glob, Bash (tylko odczyt) | Pilnuje budżetu tokenów. Szacuje koszt zadań i układa plan fali. Nie zmienia kodu. |
 
 ### Przepływ pracy
 
 ```
+liczytokena       na wejściu fali: ile zadań mieści się w limicie i w jakiej
+                  kolejności; wątek główny podaje mu stan limitów, bo sam go
+                  nie widzi. Zadanie, które nie zmieści się w całości, czeka.
 analityk          znajduje problemy
   -> kronikarz    zapisuje je jako Z-NNN w ZADANIA-DO-ZROBIENIA.md
 rozwiazywacz      projektuje rozwiązanie dla wybranego Z-NNN

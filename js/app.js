@@ -9,7 +9,7 @@ import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateContro
 import {
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
-  geoErrorMessage, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
+  geoErrorMessage, locateUnavailableReason, ADDRESS_QUERY_MIN, ADDRESS_QUERY_HINT, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
   esc, optionId, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
   zonesToGeoJSON, exportFileName, shouldShowIntro,
@@ -464,7 +464,15 @@ function attachSearch(inputId, listId, statusId, onPick) {
     if (e.key !== 'Enter') return;
     if (open && active >= 0) { pick(active); return; }
     const query = input.value.trim();
-    if (query.length < 3) return;
+    if (query.length < ADDRESS_QUERY_MIN) {
+      // lista przystanków (jeśli jest) zostaje; tylko komunikat pod polem.
+      // Odroczone wyszukiwanie z pisania doganiamy teraz, żeby nie nadpisało komunikatu.
+      if (!query) return;
+      clearTimeout(typeTimer);
+      await typeSearch();
+      status.textContent = ADDRESS_QUERY_HINT;
+      return;
+    }
     clearTimeout(typeTimer);
     const mine = ++seq;
     const stops = cachedStops(query);
@@ -509,50 +517,68 @@ attachSearch('searchInput2', 'searchResults2', 'searchStatus2', latlng => setPoi
 // kontrolka na mapie tylko wyśrodkowuje widok (dymek kółka ma „Ustaw tu…").
 const geoAvailable = window.isSecureContext && !!navigator.geolocation;
 
+/** Komunikat w #status + ogłoszenie dla czytnika (debounce 1 s: szybka odpowiedź kasuje „Ustalam…"). */
+function say(text) {
+  $('status').textContent = text;
+  announce(text);
+}
+
 /** Pozycja poza bieżącym miastem → komunikat z propozycją najbliższego; true = poza. */
 function warnIfOutsideCity(lat, lng) {
   if (inBbox(lat, lng, cityCfg().bbox)) return false;
   const near = nearestCity(lat, lng, CITIES);
-  $('status').textContent = `Jesteś poza obszarem: ${cityCfg().name}.` +
-    (near && near !== state.city ? ` Najbliższe miasto: ${CITIES[near].name}.` : '');
+  say(`Jesteś poza obszarem: ${cityCfg().name}.` +
+    (near && near !== state.city ? ` Najbliższe miasto: ${CITIES[near].name}.` : ''));
   return true;
 }
 
 if (geoAvailable) {
   $('locateBtn').addEventListener('click', () => {
-    $('status').textContent = 'Ustalam lokalizację…';
+    say('Ustalam lokalizację…');
     navigator.geolocation.getCurrentPosition(
       pos => {
         const { latitude: lat, longitude: lng } = pos.coords;
         if (warnIfOutsideCity(lat, lng)) return;
         setPoint(L.latLng(lat, lng), true);
       },
-      err => { $('status').textContent = geoErrorMessage(err?.code); },
+      err => { say(geoErrorMessage(err?.code)); },
       { enableHighAccuracy: true, timeout: 10000 },
     );
   });
   addLocateControl(map, {
     label: 'Wyśrodkuj na mnie',
     onLocate: ll => { warnIfOutsideCity(ll.lat, ll.lng); },
-    onError: msg => { $('status').textContent = msg; },
+    onError: msg => { say(msg); },
     onSetStart: ll => {
       if (!warnIfOutsideCity(ll.lat, ll.lng)) setPoint(ll, true);
     },
   });
 } else {
-  $('locateBtn').disabled = true;
-  $('locateBtn').title = window.isSecureContext
-    ? 'Przeglądarka nie udostępnia lokalizacji.'
-    : 'Lokalizacja wymaga bezpiecznego połączenia (HTTPS).';
+  // aria-disabled zamiast disabled: przycisk zostaje w kolejności tabulatora,
+  // a czytnik odczyta powód z aria-describedby (trwały tekst #locateHint)
+  const btn = $('locateBtn');
+  const hint = $('locateHint');
+  hint.textContent = locateUnavailableReason(window.isSecureContext, !!navigator.geolocation);
+  hint.hidden = false;
+  btn.setAttribute('aria-disabled', 'true');
+  btn.setAttribute('aria-describedby', 'locateHint');
+  btn.removeAttribute('title');
 }
 
 $('shareBtn').addEventListener('click', async () => {
   const btn = $('shareBtn');
+  const ta = $('shareText');
   try {
     await navigator.clipboard.writeText(location.href);
     btn.textContent = 'Skopiowano ✓';
+    ta.hidden = true;
   } catch {
-    btn.textContent = location.href; // ostateczność: pokaż link do ręcznego skopiowania
+    // ostateczność (HTTP, iframe, odmowa): trwałe pole z zaznaczonym adresem — Ctrl+C
+    ta.value = location.href;
+    ta.hidden = false;
+    ta.focus();
+    ta.select();
+    say('Nie udało się skopiować automatycznie — adres jest zaznaczony w polu, naciśnij Ctrl+C.');
   }
   setTimeout(() => { btn.textContent = 'Kopiuj link do tego widoku'; }, 2000);
 });
@@ -577,7 +603,6 @@ $('exportBtn').addEventListener('click', async () => {
   btn.textContent = 'Przygotowuję plik…';
   // oddaj sterowanie, żeby etykieta zdążyła się narysować przed pracą
   await new Promise(r => setTimeout(r, 0));
-  const status = $('status');
   try {
     const now = warsawNow();
     const dayKey = state.mode === 'time' ? state.day : 'workday';
@@ -608,12 +633,12 @@ $('exportBtn').addEventListener('click', async () => {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    status.textContent = `Zapisano plik ${name}.`;
+    say(`Zapisano plik ${name}.`);
     btn.textContent = 'Pobrano ✓';
     setTimeout(() => { btn.textContent = EXPORT_LABEL; }, 2000);
   } catch (err) {
     console.error(err);
-    status.textContent = 'Nie udało się przygotować pliku — spróbuj ponownie.';
+    say('Nie udało się przygotować pliku — spróbuj ponownie.');
     btn.textContent = EXPORT_LABEL;
   }
   btn.removeAttribute('aria-busy');
@@ -967,6 +992,7 @@ async function recompute() {
   const seq = ++computeSeq;
   const t0 = performance.now();
   setExportReady(null); // niegotowy do końca fazy „contours"
+  $('shareText').hidden = true; // pole awaryjnego linku pokazywałoby nieaktualny adres
   updateUrl();
   const status = $('status');
   cancelAnnounce(); // nie ogłaszamy „Obliczam zasięg…" ani wyniku poprzedniego przeliczenia

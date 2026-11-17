@@ -146,6 +146,7 @@
                aria-label="Szukaj adresu punktu" autocomplete="off">
         <button id="locateBtn" title="Użyj mojej lokalizacji" aria-label="Użyj mojej lokalizacji">⌖</button>
       </div>
+      <p class="hint" id="locateHint" hidden></p>
       <ul class="search-results" id="searchResults" role="listbox" aria-label="Wyniki wyszukiwania" hidden></ul>
       <p class="hint" id="searchStatus" role="status"></p>
 
@@ -272,6 +273,8 @@
                   aria-label="Raport diagnostyczny do skopiowania"></textarea>
       </section>
       <button class="share-btn" id="shareBtn">Kopiuj link do tego widoku</button>
+      <textarea class="diag-text share-text" id="shareText" readonly hidden rows="3"
+                aria-label="Link do tego widoku do skopiowania"></textarea>
       <button class="share-btn" id="exportBtn" type="button" disabled title="Najpierw przelicz zasięg">Pobierz strefy (GeoJSON)</button>
       <a class="coffee-btn" href="https://suppi.pl/bcicharski" target="_blank" rel="noopener">
         ☕ Podoba się? Postaw kawę

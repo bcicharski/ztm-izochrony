@@ -92,3 +92,32 @@ test('przyciski nagłówka: środki co 44 px (nakładki się nie nachodzą)', ()
     .body.match(/\bright:\s*(\d+)px/)[1]);
   assert.equal(right('.help-btn') - right('.collapse-btn'), 44);
 });
+
+test('kolory: poza :root żadnej wartości hex ani rgba() na sztywno (nowy kolor = nowy token)', () => {
+  // wyjątki jawnie: <selektor> -> dozwolona liczba literałów (dziś zero)
+  const allowed = {};
+  const literal = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d|hsla?\(\s*\d/g;
+  for (const r of ALL) {
+    if (r.selectors.includes(':root')) continue;
+    const n = (r.body.match(literal) || []).length;
+    const ok = r.selectors.some(s => allowed[s] >= n) || n === 0;
+    assert.ok(ok, `${r.selectors.join(', ')}: kolor na sztywno — dodaj token w :root`);
+  }
+});
+
+test('tokeny punktów A/B i kanałów cienia istnieją w :root', () => {
+  const root = ALL.find(r => r.selectors.includes(':root')).body;
+  for (const t of ['--dot-a', '--dot-b', '--map-bg', '--shadow-rgb']) {
+    assert.ok(root.includes(`${t}:`), `brak ${t}`);
+  }
+  assert.match(root, /--dot-a:\s*#2a81cb/);
+  assert.match(root, /--dot-b:\s*#e8722d/);
+});
+
+test('#locateBtn niedostępny: aria-disabled ze stylem bez opacity', () => {
+  const rule = ALL.find(r => r.selectors.includes('.search-row button[aria-disabled="true"]'));
+  assert.ok(rule, 'brak reguły aria-disabled');
+  assert.match(rule.body, /color:\s*var\(--muted\)/);
+  assert.match(rule.body, /cursor:\s*not-allowed/);
+  assert.ok(!/opacity/.test(rule.body));
+});
