@@ -14,8 +14,26 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 ## 2026-11-17
 ### Zmienione
 - Z-051 Dane rozkładowe Łodzi i Olsztyna odświeżone z nowych źródeł (ręczne przeliczenie za zgodą właściciela; pierwsze nadpisanie `data/<miasto>/` od podmiany źródeł). Łódź: feed UMŁ, zakres 2026-11-16–2026-12-31, dni 2026-11-17 (roboczy), 2026-11-21 (sobota), 2026-11-22 (niedziela); 24161 kursów, 2390 przystanków w 1336 zespołach, 674361 wierszy `stop_times`, 10350 przesiadek pieszych; jeden wzorzec rozbity przez wyprzedzanie w niedzielę. Olsztyn: feed ZDZiT (tryb `html-latest`), zakres 2026-10-26–2026-11-30, te same dni; 5570 kursów, 842 przystanki (603 po usunięciu bez kursów), 2036 przesiadek pieszych. Nic się nie zgubiło: lodz/workday 591578 → 597587 B, lodz/saturday 494458 → 499447, lodz/sunday 482585 → 488111; olsztyn/workday 137585 → 147801, olsztyn/saturday 103303 → 113587, olsztyn/sunday 87083 → 97415. Bramka jakości (`node tools/check-data.mjs`) nie zgłasza problemów dla Łodzi ani Olsztyna. Sprawdzone w przeglądarce (`?city=lodz`, `?city=olsztyn`, punkt w centrum): izochrona się liczy, sześć pasm w legendzie, status „Zasięg z punktu · dzień roboczy, 08:00.", brak ostrzeżenia o nieaktualnym rozkładzie; stopka: Łódź rozkład z 17.11.2026 ważny do 31.12.2026, Olsztyn rozkład z 17.11.2026 ważny do 30.11.2026. (pliki: data/lodz/meta.json, data/lodz/workday.json, data/lodz/saturday.json, data/lodz/sunday.json, data/olsztyn/meta.json, data/olsztyn/workday.json, data/olsztyn/saturday.json, data/olsztyn/sunday.json; testy: bez nowych; npm run check: 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty — wynik podany w zleceniu, nie wklejony dosłownie z terminala; nie sprawdzone: poprawność rozkładów względem terenu, przełączniki środków transportu, tryb porównania i tryb ostrożny na nowych danych, zachowanie przy następnym automatycznym odświeżeniu; Opole nadal otwarte w Z-051 i Z-054)
+
+### Naprawione
+- Z-052 Ostrzeżenie o wyprzedzaniu kursów w bramce jakości danych nie zapala się już przy niezmienionej liczbie wzorców — alarmuje tylko wzrost. Po przeliczeniu Łodzi fałszywy alarm dotyczył wartości, która się nie zmieniła. Ostrzeżenie nigdy nie blokuje publikacji. Dane na stronie bez zmian. (pliki: tools/check-data.mjs; testy: tests/check-data.test.mjs — 1 nowy przypadek „niezmieniona liczba nie ostrzega (Z-052)"; npm run check: lint czysty, 270 testów, 269 pass, 0 fail, 1 skipped — dosłowny wynik w sekcji Wewnętrzne; nie sprawdzone: zachowanie bramki przy następnym automatycznym odświeżeniu)
+
 ### Wewnętrzne
 - Z-051 i Z-054 Decyzja właściciela: rozkład Opola zostaje widoczny ze starymi danymi i z ostrzeżeniem o nieaktualnym rozkładzie; wariant „czasowo ukryć miasto" odrzucony. Ostrzeżenie potwierdzone w przeglądarce dla `?city=opole`; Z-054 (konwerter TransXChange na GTFS) pozostaje otwarte jako jedyna droga do naprawy Opola. (bez zmian w kodzie; npm run check: nie dotyczy, brak zmian w kodzie)
+- Z-050 Domknięcie obserwacji z 2026-11-17: za zgodą właściciela uruchomiono `node tools/build-delays.mjs`. Pole `delays` wróciło do `meta.json` wszystkich 18 miast; Trójmiasto 170 z 187 linii, Poznań 155 z 213, Kraków 87 z 215; pozostałe 15 miast bez pokrycia (GZM i Szczecin — Z-019). Bramka jakości nie zgłasza już zgubionych metadanych. Pliki `delays.json` i rozkłady bez zmian. (pliki: data/<miasto>/meta.json dla 18 miast; testy: bez nowych; npm run check: patrz wynik poniżej; sprawdzone w przeglądarce: stopka Trójmiasta „170 z 187 linii (pomiary do 17.11.2026)"; nie sprawdzone: odczyt stopki przez czytnik ekranu)
+- Z-058 Domknięcie: konwersja CRLF na LF objęła pliki z raportu i `tools/check-data.mjs`, który też miał CRLF (pliki: .github/workflows/refresh-data.yml, CLAUDE.md, CURRENT_STATE.md, README.md, tools/build-bridges.mjs, tools/check-data.mjs, tools/geo.mjs, vendor/leaflet/leaflet.css; treść bez zmian). Otwarte: `.claude/agents/*.md` (sześć plików) nadal z CRLF, zostawione, bo zmiany w agentach wymagają wyraźnej prośby właściciela. Wynik `npm run check` poniżej.
+- Dosłowny wynik `npm run check` po domknięciach Z-050, Z-052 i Z-058 (2026-11-17):
+```
+ℹ tests 270
+ℹ suites 0
+ℹ pass 269
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 500.5958
+```
+  Lint czysty.
 
 ## 2026-11-16
 

@@ -75,5 +75,12 @@
     "1_N96": "N96",
     "1_123B": "123B",
     "1_102": "102"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 61,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

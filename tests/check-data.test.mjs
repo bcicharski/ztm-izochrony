@@ -175,6 +175,16 @@ test('wyprzedzanie kursów: ostrzeżenie z liczbą, nigdy blokada', () => {
   assert.equal(gate(withOver(meta(), 0), base).level, 'ok');
 });
 
+test('wyprzedzanie kursów: niezmieniona liczba nie ostrzega (Z-052)', () => {
+  const withOver = (m, n) => withDays(m, { workday: { ...m.counts.days.workday, overtaking: n } });
+  // stała cecha feedu: tyle samo wzorców co poprzednio — cisza zamiast cotygodniowego alarmu
+  assert.equal(gate(withOver(meta(), 1), withOver(meta(), 1)).level, 'ok');
+  // spadek też nie jest zdarzeniem
+  assert.equal(gate(withOver(meta(), 1), withOver(meta(), 4)).level, 'ok');
+  // dopiero wzrost
+  assert.equal(gate(withOver(meta(), 2), withOver(meta(), 1)).level, 'warn');
+});
+
 test('wyprzedzanie kursów: brak pola po którejkolwiek stronie = pominięcie', () => {
   const withOver = (m, n) => withDays(m, { workday: { ...m.counts.days.workday, overtaking: n } });
   assert.equal(gate(meta(), meta()).level, 'ok');

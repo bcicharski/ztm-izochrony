@@ -80,5 +80,12 @@
     "1_K": "K",
     "1_G": "G",
     "1_F": "F"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 58,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

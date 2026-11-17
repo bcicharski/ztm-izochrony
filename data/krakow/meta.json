@@ -431,5 +431,12 @@
     "route_944": "49",
     "route_957": "16",
     "route_958": "17"
+  },
+  "delays": {
+    "routes": 87,
+    "routesTotal": 215,
+    "keys": 2063,
+    "updated": "20261117",
+    "source": "gtfsrt"
   }
 }

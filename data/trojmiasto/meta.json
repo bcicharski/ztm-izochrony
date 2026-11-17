@@ -1863,5 +1863,12 @@
     "SKM_S3": "S3",
     "SKM_S4": "S4",
     "SKM_S40": "S40"
+  },
+  "delays": {
+    "routes": 170,
+    "routesTotal": 187,
+    "keys": 5052,
+    "updated": "20261117",
+    "source": "gdansk-departures"
   }
 }

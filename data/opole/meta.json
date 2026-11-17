@@ -38,5 +38,12 @@
     "SZ4": "SZ4",
     "SZ2": "SZ2",
     "SZ20": "SZ20"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 27,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

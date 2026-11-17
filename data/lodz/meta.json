@@ -195,5 +195,12 @@
     "outsideStops": 0,
     "outsideShare": 0,
     "maxOutsideKm": 0
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 129,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

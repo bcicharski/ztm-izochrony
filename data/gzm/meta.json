@@ -5531,5 +5531,12 @@
     "122182": "M10",
     "122183": "M10",
     "122184": "M10"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 461,
+    "keys": 0,
+    "updated": "20261117",
+    "source": "gtfsrt"
   }
 }

@@ -67,5 +67,12 @@
     "S2": "S2",
     "S3": "S3",
     "Z": "Z"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 51,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

@@ -221,13 +221,6 @@ _(pusto)_
 - Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): przycisk „Zapisz to miasto offline"; zapis `data/<miasto>/*` do nazwanego cache razem z `meta.generated`; widoczna data pobrania; przycisk „Odśwież"; automatyczne unieważnienie po 7 dniach; przycisk „Usuń dane offline". Koszt: kilka MB na telefonie użytkownika.
 - Pliki: nieznane.
 
-### Z-052 [P2] Ostrzeżenie `overtaking` może być kolejnym stałym szumem
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: bramka zapala ostrzeżenie przy każdym `overtaking > 0`, gdy poprzedni build ma to pole. Czy to szum, da się ocenić dopiero na realnych wartościach po następnym buildzie — dziś nie ma ich w `meta.json`.
-- Dowód: pole `counts.days.<dzień>.overtaking` wprowadzone przy Z-005; ostrzeżenie w tools/check-data.mjs.
-- Pliki: tools/check-data.mjs
-
 ### Z-053 [P2] Potwierdzenie progów bramki na realnych `counts` i `grid`
 - Status: nowe
 - Zgłoszone: 2026-11-16 (nieznane)
@@ -482,6 +475,7 @@ _(pusto)_
 - Pliki: tools/build-lib.mjs, tools/build-data.mjs; testy: tests/build-lib.test.mjs (3 nowe).
 - Niezweryfikowane: naprawa na prawdziwym buildzie. Oczekiwane: Trójmiasto, Kraków i Poznań odzyskają pole przy najbliższym odświeżeniu danych, bez osobnego kroku.
 - Obserwacja 2026-11-17: `node tools/check-data.mjs` po ręcznym przeliczeniu Łodzi i Olsztyna zgłasza ostrzeżenie o utraconych metadanych pokrycia opóźnieniami dla Trójmiasta, Krakowa i Poznania. Te trzy miasta mają budy z 2026-11-16, sprzed wdrożenia tej poprawki, więc ostrzeżenie zniknie przy następnym przeliczeniu albo po ręcznym `node tools/build-delays.mjs`.
+- Domknięcie obserwacji 2026-11-17: za zgodą właściciela uruchomiono `node tools/build-delays.mjs`; zmienione zostały wyłącznie `data/<miasto>/meta.json` wszystkich 18 miast (pole `delays`), pliki `delays.json` i rozkłady bez zmian. Pokrycie: Trójmiasto 170 z 187 linii (5052 klucze, źródło `gdansk-departures`), Poznań 155 z 213 (3965 kluczy, `gtfsrt`), Kraków 87 z 215 (2063 klucze, `gtfsrt`). Pozostałe 15 miast ma `routes: 0`, `keys: 0`; GZM i Szczecin mają `source: "gtfsrt"` przy zerowym pokryciu (to Z-019), reszta `source: null`. Bramka jakości nie zgłasza już zgubionych metadanych dla żadnego miasta. Sprawdzone w przeglądarce: stopka Trójmiasta pokazuje „170 z 187 linii (pomiary do 17.11.2026)"; przed zmianą wiersz był ukryty. Niezweryfikowane: odczyt stopki przez czytnik ekranu.
 
 ### Z-056 [P2] Wyszukiwanie przystanku po nazwie w załadowanych danych
 - Status: zrobione
@@ -501,6 +495,15 @@ _(pusto)_
 - Dowód: nieznane (zgłoszone przy wdrożeniu Z-056, 2026-11-16).
 - Wdrożone 2026-11-16: nowy `.gitattributes` w korzeniu: `* text=auto eol=lf`, z wyłączeniem konwersji dla `*.png`, `*.zip`, `*.ico`, `*.woff2`; trzy wymienione pliki przekonwertowane z CRLF na LF, treść bez zmian. Od teraz jedna konwencja w repozytorium, a checkout na Windowsie daje LF. `npm run check` po zmianie (wynik podany przez wątek główny): 269 testów, 268 pass, 0 fail, 1 skipped, lint czysty.
 - Pliki: .gitattributes (nowy), js/calendar.js, js/walkgrid.js, tests/a11y-css.test.mjs.
+- Domknięcie 2026-11-17: konwersja CRLF na LF objęła wszystkie pliki śledzone przez git, bo `tools/check-data.mjs` też miał CRLF i edycja narzędziem zakładającym LF nie trafiała we wzorzec. Zmienione (treść bez zmian): `.github/workflows/refresh-data.yml`, `CLAUDE.md`, `CURRENT_STATE.md`, `README.md`, `tools/build-bridges.mjs`, `tools/check-data.mjs`, `tools/geo.mjs`, `vendor/leaflet/leaflet.css`. Otwarty drobiazg: `.claude/agents/*.md` (sześć plików) nadal ma CRLF; `CLAUDE.md` pozwala je ruszać tylko na wyraźną prośbę właściciela, więc zostały nietknięte — do zrobienia przy najbliższej zmianie definicji agentów. `npm run check` po domknięciu: 270 testów, 269 pass, 0 fail, 1 skipped, lint czysty.
+
+### Z-052 [P2] Ostrzeżenie `overtaking` było stałym szumem
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: bramka zapala ostrzeżenie przy każdym `overtaking > 0`, gdy poprzedni build ma to pole. Czy to szum, da się ocenić dopiero na realnych wartościach po następnym buildzie — dziś nie ma ich w `meta.json`.
+- Dowód: pole `counts.days.<dzień>.overtaking` wprowadzone przy Z-005; ostrzeżenie w tools/check-data.mjs.
+- Wdrożone 2026-11-17: po przeliczeniu Łodzi bramka zgłosiła „niedziela: 1 wzorców z wyprzedzaniem kursów (było 1)" — alarm przy niezmienionej wartości. Warunek rozszerzony o `f.overtaking > b.overtaking`: ostrzeżenie tylko przy wzroście liczby wzorców z wyprzedzaniem; stała wartość i spadek są ciche. Brak pola po którejkolwiek stronie dalej oznacza pominięcie; ostrzeżenie nie blokuje publikacji. Test: nowy przypadek „niezmieniona liczba nie ostrzega (Z-052)" w `tests/check-data.test.mjs`. `node tools/check-data.mjs` na realnych danych zgłasza teraz problem w 1 z 18 miast (Opole, zgodnie z Z-051/Z-054), wcześniej w 2.
+- Pliki: tools/check-data.mjs; testy: tests/check-data.test.mjs.
 
 ## Odrzucone
 

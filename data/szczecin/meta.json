@@ -105,5 +105,12 @@
     "A": "A",
     "B": "B",
     "C": "C"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 92,
+    "keys": 0,
+    "updated": "20261117",
+    "source": "gtfsrt"
   }
 }

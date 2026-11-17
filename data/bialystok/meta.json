@@ -66,5 +66,12 @@
     "N4": "N4",
     "N5": "N5",
     "N6": "N6"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 49,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

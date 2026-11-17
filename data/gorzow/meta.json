@@ -54,5 +54,12 @@
     "2802": "107",
     "2946": "132",
     "2947": "128"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 43,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

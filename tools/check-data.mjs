@@ -131,9 +131,11 @@ export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force 
     for (const m of ['trips', 'patterns', 'bytes']) {
       compare(`${DAY_PL[day]} — ${METRIC_PL[m]}`, GATE[m], b[m], f[m]);
     }
-    // wyprzedzanie kursów: build rozbija takie wzorce sam, więc to informacja, nigdy blokada;
-    // brak pola po którejkolwiek stronie (stare meta.json) = pominięcie
-    if (f.overtaking > 0 && b.overtaking != null) {
+    // Wyprzedzanie kursów: build rozbija takie wzorce sam, więc to informacja, nigdy
+    // blokada. Ostrzegamy tylko, gdy liczba urosła — stała wartość to cecha feedu,
+    // nie zdarzenie (Z-052: Łódź zapalała ostrzeżenie co tydzień przy niezmienionym 1).
+    // Brak pola po którejkolwiek stronie (stare meta.json) = pominięcie.
+    if (f.overtaking > 0 && b.overtaking != null && f.overtaking > b.overtaking) {
       add('warn', `${DAY_PL[day]}: ${f.overtaking} wzorców z wyprzedzaniem kursów (było ${b.overtaking}) — rozbito je automatycznie, wyniki są poprawne`);
     }
   }

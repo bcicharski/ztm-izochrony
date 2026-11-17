@@ -148,5 +148,12 @@
     "D": "D",
     "K": "K",
     "N": "N"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 136,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }

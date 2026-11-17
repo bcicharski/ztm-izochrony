@@ -231,5 +231,12 @@
     "911": "911",
     "PKS": "PKS",
     "T7": "T7"
+  },
+  "delays": {
+    "routes": 155,
+    "routesTotal": 213,
+    "keys": 3965,
+    "updated": "20261117",
+    "source": "gtfsrt"
   }
 }

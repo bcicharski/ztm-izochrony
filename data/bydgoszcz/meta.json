@@ -76,5 +76,12 @@
     "36N": "36N",
     "ZaT": "ZaT",
     "ZaT6": "ZaT6"
+  },
+  "delays": {
+    "routes": 0,
+    "routesTotal": 62,
+    "keys": 0,
+    "updated": "20261117",
+    "source": null
   }
 }
