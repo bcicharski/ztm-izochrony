@@ -60,6 +60,92 @@ export const fmtDate = d => (d && /^\d{8}$/.test(d) ? `${d.slice(6, 8)}.${d.slic
 
 const DAYS = ['workday', 'saturday', 'sunday'];
 
+// --- limity przesiadek i spaceru (Z-012) ----------------------------------------
+
+/** Wartości limitu przesiadek (null = bez limitu = silnik liczy do 4 przesiadek). */
+export const TRANSFER_LIMITS = [null, 2, 1, 0];
+/** Znane wartości limitu odcinka pieszego [min]; adres może nieść dowolną z 1..89. */
+export const WALK_LIMITS_MIN = [null, 20, 15, 10, 5];
+/** Limit spaceru równy lub większy = brak limitu (dzisiejszy cap fali 90 min). */
+export const WALK_LIMIT_MAX_MIN = 90;
+
+/**
+ * Limity dla silnika (komunikat do workera). Tryb ogólny nie modeluje
+ * przesiadek (Dijkstra po krawędziach „minimalny czas między przystankami"),
+ * więc silnik nigdy nie dostaje limitu, którego nie umie spełnić. Spacer
+ * wyłączony albo „tylko pieszo" = limit spaceru bez znaczenia.
+ * @returns {{maxTransfers: number|null, maxWalkSec: number|null}}
+ */
+export function engineLimits({ maxTransfers, maxWalkMin, walk, walkOnly, mode }) {
+  const tr = Number.isInteger(maxTransfers) && maxTransfers >= 0 ? maxTransfers : null;
+  const wm = Number.isFinite(maxWalkMin) && maxWalkMin > 0 && maxWalkMin < WALK_LIMIT_MAX_MIN ? maxWalkMin : null;
+  return {
+    maxTransfers: mode === 'general' ? null : tr,
+    maxWalkSec: !walk || walkOnly || wm == null ? null : Math.round(wm * 60),
+  };
+}
+
+/** Które kontrolki limitów mają sens w bieżącym trybie (reszta jest wygaszona). */
+export const limitsEnabled = ({ mode, walk, walkOnly }) => ({
+  transfers: mode !== 'general' && !walkOnly,
+  walkMax: !!walk && !walkOnly,
+});
+
+const TRANSFER_WORDS = { 0: 'bez przesiadek', 1: 'najwyżej 1 przesiadka', 2: 'najwyżej 2 przesiadki' };
+
+/** Krótki opis aktywnych limitów (pasek statusu); pusty tekst, gdy żadnego nie ma. */
+export function limitsSummary({ maxTransfers, maxWalkMin }) {
+  const parts = [];
+  if (maxWalkMin != null) parts.push(`odcinki pieszo do ${maxWalkMin} min`);
+  if (maxTransfers != null && TRANSFER_WORDS[maxTransfers]) parts.push(TRANSFER_WORDS[maxTransfers]);
+  return parts.join(', ');
+}
+
+/**
+ * Komunikat przy zerowym zasięgu, gdy aktywny jest limit — „brak przystanków,
+ * wybierz punkt bliżej miasta" byłoby wtedy nieprawdą. null = zostaw dotychczasowy tekst
+ * (brak limitów albo zasięg niepusty).
+ */
+export function emptyResultText({ reachable, maxTransfers, maxWalkMin }) {
+  if (reachable !== 0) return null;
+  const tr = maxTransfers != null, w = maxWalkMin != null;
+  if (!tr && !w) return null;
+  if (tr && w) return 'Przy tych limitach nie ma przystanku w zasięgu — poluzuj limit przesiadek lub długość odcinka pieszo.';
+  return w
+    ? `Przy limicie odcinka pieszo do ${maxWalkMin} min nie ma przystanku w zasięgu — wydłuż limit albo wybierz inny punkt.`
+    : 'Przy tym limicie przesiadek nie ma przystanku w zasięgu — poluzuj limit albo wybierz inny punkt.';
+}
+
+/** Dystans marszu w 4,5 km/h: do 1 km co 50 m, powyżej w km z przecinkiem. */
+function walkDistText(min) {
+  const m = min * 60 * 1.25;
+  return m < 1000 ? `${Math.round(m / 50) * 50} m` : `${(Math.round(m / 100) / 10).toFixed(1).replace('.', ',')} km`;
+}
+
+/**
+ * Podpowiedzi pod grupami limitów: powód wygaszenia albo opis działania.
+ * Spacer: pusty tekst przy „bez limitu"; przesiadki: zawsze coś (mówi wprost,
+ * że „bez limitu" to cztery przesiadki).
+ */
+export function limitHints({ maxTransfers, maxWalkMin, walk, walkOnly, mode, access }) {
+  let walkHint = '';
+  if (walkOnly) walkHint = 'Bez pojazdów limit nie ma znaczenia.';
+  else if (!walk) walkHint = 'Spacer jest wyłączony, więc limit nie ma znaczenia.';
+  else if (maxWalkMin != null) {
+    walkHint = access && access !== 'foot'
+      ? `Każdy odcinek do ${maxWalkMin} min, także dojazd rowerem: dojście, przesiadka i końcówka.`
+      : `Każdy odcinek pieszo do ${maxWalkMin} min (ok. ${walkDistText(maxWalkMin)}): dojście, przesiadka i końcówka.`;
+  }
+  let trHint;
+  if (walkOnly) trHint = 'Bez pojazdów nie ma przesiadek.';
+  else if (mode === 'general') trHint = 'Tryb ogólny nie modeluje przesiadek.';
+  else if (maxTransfers === 0) trHint = 'Tylko przejazdy jedną linią, bez przesiadek.';
+  else if (maxTransfers === 1) trHint = 'Najwyżej jedna przesiadka.';
+  else if (maxTransfers === 2) trHint = 'Najwyżej dwie przesiadki.';
+  else trHint = 'Bez limitu = do 4 przesiadek.';
+  return { walk: walkHint, transfers: trHint };
+}
+
 const toParams = search => (search instanceof URLSearchParams ? search : new URLSearchParams(search));
 
 /** „lat,lng" → {lat, lng} albo null (brak, zła liczba pól, nie-liczby). */
@@ -88,6 +174,11 @@ export function parseUrlState(search, cities) {
   if (q.get('walk') === '0') out.walk = false;
   if (['bike', 'bike-onboard'].includes(q.get('acc'))) out.access = q.get('acc');
   if (q.get('mode') === 'general') out.mode = 'general';
+  // limity (Z-012): brak albo wartość spoza zakresu = bez limitu, jak dotąd
+  if (/^[012]$/.test(q.get('tr') ?? '')) out.maxTransfers = +q.get('tr');
+  if (/^\d{1,2}$/.test(q.get('wmax') ?? '') && +q.get('wmax') >= 1 && +q.get('wmax') < WALK_LIMIT_MAX_MIN) {
+    out.maxWalkMin = +q.get('wmax');
+  }
   const t = q.get('t')?.match(/^(\d{1,2}):(\d{2})$/);
   if (t) out.timeMin = Math.min(+t[1], 23) * 60 + Math.min(+t[2], 59);
   if (DAYS.includes(q.get('day'))) { out.day = q.get('day'); out.dayFromUrl = true; }
@@ -116,6 +207,9 @@ export function buildQuery(state) {
   q.set('dir', state.direction);
   q.set('walk', state.walk ? '1' : '0');
   if (state.access !== 'foot') q.set('acc', state.access);
+  // limity tylko po ustawieniu — stan domyślny daje ten sam adres co dawniej
+  if (state.maxTransfers != null) q.set('tr', String(state.maxTransfers));
+  if (state.maxWalkMin != null) q.set('wmax', String(state.maxWalkMin));
   q.set('mode', state.mode);
   if (state.mode === 'time') {
     q.set('t', fmtClock(state.timeMin));
@@ -151,7 +245,7 @@ export function accessIcons(access, direction) {
  * fragment o czasie (np. „Dzień roboczy, 08:30"), bo etykiety dni i wartość
  * pola godziny należą do wywołującego.
  */
-export function statusLine({ walkOnly, compare, direction, mode, safe, whenTime }) {
+export function statusLine({ walkOnly, compare, direction, mode, safe, whenTime, limits = '' }) {
   if (walkOnly) {
     // rozkład i godzina nie mają wpływu na sam spacer
     return compare
@@ -162,7 +256,7 @@ export function statusLine({ walkOnly, compare, direction, mode, safe, whenTime 
     ? (direction === 'from' ? 'Wspólny zasięg dwóch punktów' : 'Obszar z dojazdem do obu punktów')
     : (direction === 'from' ? 'Zasięg z punktu' : 'Obszar z dojazdem do punktu');
   const when = mode === 'time' ? whenTime : 'tryb ogólny (bez oczekiwania)';
-  return `${what} · ${when}${safe ? ' · z marginesem na opóźnienia' : ''}.`;
+  return `${what} · ${when}${safe ? ' · z marginesem na opóźnienia' : ''}${limits ? ` · ${limits}` : ''}.`;
 }
 
 /** Liczba z przecinkiem dziesiętnym (czytnik ekranu czyta „2,5", nie „2.5"). */
@@ -175,8 +269,10 @@ const plComma = (n, digits = 1) => n.toFixed(digits).replace('.', ',');
  * „Pokaż statystyki" i nie ma porównania), nazwa miasta i `statusText`.
  * `showArea` — czy w tabeli widać kolumnę „% miasta".
  */
-export function zoneSummaryText({ statusText, city, reachable, walkOnly, compare, stats, showArea }) {
-  if (reachable === 0 && !walkOnly) return 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.';
+export function zoneSummaryText({ statusText, city, reachable, walkOnly, compare, stats, showArea, maxTransfers = null, maxWalkMin = null }) {
+  if (reachable === 0 && !walkOnly) {
+    return emptyResultText({ reachable, maxTransfers, maxWalkMin }) ?? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.';
+  }
   const head = `${statusText} Miasto: ${city}.`;
   if (walkOnly) return head;
   if (stats?.length) {
@@ -685,22 +781,43 @@ export function timeSectionSummary({ mode, timeMin, day, direction }, defaults =
 const vehName = label => String(label).replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
 
 /**
- * „Dojście i środki transportu". `groups` = `cityCfg().veh`, `veh` = mapa
+ * „Dojście, przesiadki i środki". `groups` = `cityCfg().veh`, `veh` = mapa
  * kluczy → bool. Do trzech nazw wprost, powyżej „N z M środków". Przy jednym
  * środku filtr jest ukryty w panelu, więc podsumowanie mówi tylko o dojściu.
  */
-export function accessSectionSummary({ walk, access, groups, veh }) {
+export function accessSectionSummary({ walk, access, groups, veh, maxTransfers = null, maxWalkMin = null }) {
   const on = groups.filter(g => veh[g.key]);
   if (groups.length >= 2 && on.length === 0) return { text: 'tylko pieszo', changed: true };
-  const walkPart = walk ? (SUMMARY_ACCESS[access] ?? 'pieszo') : 'bez spaceru';
-  let vehPart = null;
+  // limity przychodzą już „skuteczne" (engineLimits): bez spaceru nie ma limitu spaceru
+  const wl = walk ? maxWalkMin : null;
+  const base = walk ? (SUMMARY_ACCESS[access] ?? 'pieszo') : 'bez spaceru';
+  let vehPart = null, vehShort = null;
   if (groups.length >= 2) {
     if (on.length === groups.length) vehPart = 'wszystkie środki';
     else vehPart = on.length <= 3 ? on.map(g => vehName(g.label)).join(', ') : `${on.length} z ${groups.length} środków`;
+    vehShort = on.length === groups.length ? vehPart : `${on.length} z ${groups.length} środków`;
   }
-  const changed = !walk || access !== 'foot' || (vehPart !== null && on.length !== groups.length);
-  return { text: vehPart ? `${walkPart} · ${vehPart}` : walkPart, changed };
+  const trPart = maxTransfers == null ? null
+    : maxTransfers === 0 ? 'bez przesiadek' : `do ${maxTransfers} ${maxTransfers === 1 ? 'przesiadki' : 'przesiadek'}`;
+  const join = (walkPart, veh) => [walkPart, veh, trPart].filter(Boolean).join(' · ');
+  const withLimit = word => (wl != null ? `${word} do ${wl} min` : word);
+  // wiersz nie może urosnąć do dwóch linii: najpierw bez słowa „pieszo", potem
+  // środki skrócone do licznika, na końcu przytnie CSS (text-overflow: ellipsis)
+  const tries = [
+    join(withLimit(base), vehPart),
+    wl != null && base === 'pieszo' ? join(`do ${wl} min`, vehPart) : null,
+    wl != null && base === 'pieszo' ? join(`do ${wl} min`, vehShort) : join(withLimit(base), vehShort),
+  ].filter(t => t != null);
+  // bez limitów tekst zostaje dokładnie taki jak dotąd (skracanie dotyczy tylko wierszy z limitem)
+  const text = (wl == null && maxTransfers == null) ? tries[0]
+    : (tries.find(t => t.length <= SUMMARY_BUDGET) ?? tries[tries.length - 1]);
+  const changed = !walk || access !== 'foot' || (vehPart !== null && on.length !== groups.length)
+    || maxTransfers != null || wl != null;
+  return { text, changed };
 }
+
+/** Budżet znaków podsumowania sekcji w panelu (jedna linia, bez zawijania). */
+const SUMMARY_BUDGET = 34;
 
 /** „Opóźnienia i statystyki". Statystyki liczą się tylko w trybie jednego punktu (w porównaniu przełącznik jest ukryty). */
 export function delaySectionSummary({ safe, stats, compare }) {

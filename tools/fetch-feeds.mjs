@@ -4,6 +4,8 @@
  * Obsługuje feedy o stałym URL, listingi HTML (resolve: "html-latest") oraz zbiór z API Wrocławia (resolve: "wroclaw-od2",
  * gdzie URL wskazuje dataset, a właściwy plik trzeba znaleźć przez od2-files).
  *
+ * Feed z polem format (np. "transxchange") jest po rozpakowaniu konwertowany na GTFS.
+ *
  * Użycie: node tools/fetch-feeds.mjs <miasto> <katalog-roboczy>
  */
 
@@ -13,6 +15,11 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const UA = { 'User-Agent': 'ztm-izochrony-build/1.0' };
+
+// Formaty inne niż GTFS: moduł z funkcją convertDir(dir, formatOptions), która
+// zamienia rozpakowane pliki feedu na GTFS w tym samym katalogu.
+const FORMATS = { transxchange: './transxchange-to-gtfs.mjs' };
+export const FEED_FORMATS = new Set(['gtfs', ...Object.keys(FORMATS)]);
 
 async function resolveUrl(feed) {
   if (feed.resolve === 'ckan-latest') {
@@ -119,6 +126,12 @@ async function main() {
       execFileSync('unzip', ['-oq', zipPath, '-d', dir]);
     }
     console.log(`  -> ${dir} (${(fs.statSync(zipPath).size / 1e6).toFixed(1)} MB)`);
+    if ((feed.format ?? 'gtfs') !== 'gtfs') {
+      const mod = FORMATS[feed.format];
+      if (!mod) throw new Error(`${feed.name}: nieznany format feedu "${feed.format}"`);
+      const rep = await (await import(mod)).convertDir(dir, feed.formatOptions ?? {});
+      console.log(`  konwersja ${feed.format}: ${rep.counts.trips} kursów, ${rep.counts.stops} przystanków, ${rep.dates.start}–${rep.dates.end}`);
+    }
   }
   console.log('Feedy gotowe.');
 }

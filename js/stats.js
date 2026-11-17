@@ -14,15 +14,19 @@ import { BANDS } from './isochrone.js';
  * Maksymalna odległość w linii prostej per pasmo.
  * @param {object} net      sieć (współrzędne przystanków)
  * @param {Float64Array} minutes  czasy dojazdu per przystanek
- * @param {{walk: boolean, origin: {lat, lon}, accessMps?: number, egressMps?: number}} opts
+ * @param {{walk: boolean, origin: {lat, lon}, accessMps?: number, egressMps?: number,
+ *   maxEgressSec?: number}} opts
  *   `accessMps` — tempo poruszania się od punktu (pieszo albo rowerem),
  *   `egressMps` — tempo od przystanku do celu (rower „zostaje na przystanku"
- *   daje tu tempo marszu, mimo że dojście było rowerem)
+ *   daje tu tempo marszu, mimo że dojście było rowerem),
+ *   `maxEgressSec` — limit spaceru od przystanku [s] (Z-012; domyślnie bez limitu).
+ *   Wiersz „sam spacer z punktu" go nie dotyczy — punkt jest z limitu zwolniony.
  * @returns {Array<{limit, color, label, maxKm, areaPct}>} wiersze w kolejności pasm
  */
 export function computeStats(net, minutes, opts) {
   const accessMps = opts.accessMps ?? WALK_MPS;
   const egressMps = opts.egressMps ?? WALK_MPS;
+  const maxEgressSec = opts.maxEgressSec ?? Infinity;
   const rows = BANDS.map(b => ({
     limit: b.limit, color: b.color, label: b.label,
     maxKm: 0, areaPct: null,
@@ -43,7 +47,7 @@ export function computeStats(net, minutes, opts) {
     const d = distM(opts.origin.lat, opts.origin.lon, net.lat[i], net.lon[i]);
     for (const row of rows) {
       if (t > row.limit) continue;
-      const reach = (d + (opts.walk ? (row.limit - t) * 60 * egressMps : 0)) / 1000;
+      const reach = (d + (opts.walk ? Math.min((row.limit - t) * 60, maxEgressSec) * egressMps : 0)) / 1000;
       if (reach > row.maxKm) row.maxKm = reach;
     }
   }

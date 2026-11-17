@@ -269,3 +269,138 @@ test('wyprzedzanie: losowe sieci z wyprzedzaniem — wynik ≥ wyrocznia, a po r
     }
   }
 });
+
+// --- limity przesiadek i spaceru (Z-012) ------------------------------------------
+
+test('limity domyślne (null) nie zmieniają wyniku: losowe sieci × spacer × ostrożny, i dalej = wyrocznia', () => {
+  const rand = rng(20261117);
+  let cases = 0;
+  for (let seed = 0; seed < 25; seed++) {
+    const net = makeNet(randomNetSpec(rand));
+    const origin = { lat: 50 + rand() * 0.01, lon: 20 + rand() * 0.015 };
+    for (const walk of [false, true]) {
+      for (const cautious of [false, true]) {
+        for (const mode of ['time', 'general']) {
+          const o = opts({ ...origin, walk, cautious, mode });
+          const base = computeReachability(net, o);
+          const nulls = computeReachability(net, { ...o, maxTransfers: null, maxWalkSec: null });
+          assert.deepEqual([...nulls.minutes], [...base.minutes], `seed ${seed} walk=${walk} cautious=${cautious} ${mode}`);
+          if (mode === 'time' && !cautious) {
+            const exp = oracleEarliest(net, findAccessStops(net, origin.lat, origin.lon, walk), 480 * 60, walk, false);
+            for (let i = 0; i < net.nStops; i++) assert.ok(Math.abs(nulls.minutes[i] * 60 - exp[i]) < 1e-6 || exp[i] === Infinity);
+          }
+          cases++;
+        }
+      }
+    }
+  }
+  assert.ok(cases >= 200);
+});
+
+test('limit przesiadek: maxTransfers 0/1/2 daje dokładnie tr+1 przejazdów, null dalej pięć', () => {
+  const n = 8;
+  const net = makeNet({
+    stops: line(n), routes: Array.from({ length: n - 1 }, (_, i) => ({ n: `L${i}`, t: 3 })),
+    patterns: Array.from({ length: n - 1 }, (_, i) => ({ r: i, s: [i, i + 1], p: [[60]], t: everyN(H8, H8 + 3600, 60) })),
+  });
+  for (const tr of [0, 1, 2]) {
+    const r = computeReachability(net, opts({ maxTransfers: tr }));
+    assert.ok(Number.isFinite(r.minutes[tr + 1]), `tr=${tr}: stop ${tr + 1} osiągalny`);
+    assert.equal(r.minutes[tr + 2], Infinity, `tr=${tr}: stop ${tr + 2} poza limitem`);
+  }
+  const free = computeReachability(net, opts({ maxTransfers: null }));
+  assert.ok(Number.isFinite(free.minutes[5]));
+  assert.equal(free.minutes[6], Infinity);
+  // limit dotyczy też przebiegu nocnego (24:00+)
+  const night = makeNet({
+    stops: line(3), routes: [{ n: 'N1', t: 3 }, { n: 'N2', t: 3 }],
+    patterns: [
+      { r: 0, s: [0, 1], p: [[300]], t: [[25 * 3600, 0]] },
+      { r: 1, s: [1, 2], p: [[300]], t: [[25 * 3600 + 900, 0]] },
+    ],
+  });
+  assert.ok(Number.isFinite(computeReachability(night, opts({ timeMin: 60 })).minutes[2]));
+  assert.equal(computeReachability(night, opts({ timeMin: 60, maxTransfers: 0 })).minutes[2], Infinity);
+});
+
+test('limit przesiadek 0: marsz z przystanku po wysiadce zostaje (to wyjście, nie przesiadka)', () => {
+  const net = makeNet({
+    stops: [...line(2), { name: 'S2', lat: 50.0046, lon: 20.0005 }], routes: [{ n: '1', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1], p: [[300]], t: everyN(H8, H8 + 3600, 600) }],
+    transfers: [[1, 2, 100]],
+  });
+  const r = computeReachability(net, opts({ walk: true, maxTransfers: 0, accessSec: Float64Array.from([0, Infinity, Infinity]) }));
+  assert.equal(r.minutes[1], 5);
+  assert.equal(r.minutes[2], (300 + 100) / 60);
+});
+
+/** S0 -L0-> S1, marsz `walkSec` do S2 -L1-> S3; z S1 w miejscu L2 -> S4. */
+const walkNet = walkSec => makeNet({
+  stops: [...line(4), { name: 'S4', lat: 50.03, lon: 20 }],
+  routes: [{ n: 'A', t: 3 }, { n: 'B', t: 3 }, { n: 'C', t: 3 }],
+  patterns: [
+    { r: 0, s: [0, 1], p: [[300]], t: everyN(H8, H8 + 7200, 300) },
+    { r: 1, s: [2, 3], p: [[300]], t: everyN(H8, H8 + 7200, 300) },
+    { r: 2, s: [1, 4], p: [[300]], t: everyN(H8, H8 + 7200, 300) },
+  ],
+  transfers: [[1, 2, walkSec]],
+});
+const ONLY_S0 = Float64Array.from([0, Infinity, Infinity, Infinity, Infinity]);
+
+test('limit spaceru: 240 s wycina przesiadkę piesza 300 s, zostawia przesiadkę w miejscu', () => {
+  const net = walkNet(300);
+  const free = computeReachability(net, opts({ walk: true, accessSec: ONLY_S0 }));
+  assert.ok(Number.isFinite(free.minutes[3]));
+  const lim = computeReachability(net, opts({ walk: true, accessSec: ONLY_S0, maxWalkSec: 240 }));
+  assert.equal(lim.minutes[3], Infinity, 'przesiadka 300 s > 240 s');
+  assert.ok(Number.isFinite(lim.minutes[4]), 'przesiadka w miejscu nie jest marszem');
+  assert.ok(Number.isFinite(computeReachability(net, opts({ walk: true, accessSec: ONLY_S0, maxWalkSec: 300 })).minutes[3]), 'równo na limicie przechodzi');
+});
+
+test('limit spaceru: tryb ostrożny filtruje surowy czas marszu, nie margines 240 s', () => {
+  const net = walkNet(120);
+  const r = computeReachability(net, opts({ walk: true, cautious: true, accessSec: ONLY_S0, maxWalkSec: 180 }));
+  assert.ok(Number.isFinite(r.minutes[3]), 'marsz 120 s ≤ 180 s, choć ostrożny liczy go jako 240 s');
+  const tight = computeReachability(net, opts({ walk: true, cautious: true, accessSec: ONLY_S0, maxWalkSec: 100 }));
+  assert.equal(tight.minutes[3], Infinity);
+});
+
+test('limit spaceru: bez spaceru nie rusza sameGroupAdj, tryb ogólny filtruje przejścia piesze', () => {
+  const grouped = makeNet({
+    stops: [...line(4)].map((s, i) => ({ ...s, group: i === 2 ? 1 : i })),
+    routes: [{ n: 'A', t: 3 }, { n: 'B', t: 3 }],
+    patterns: [
+      { r: 0, s: [0, 1], p: [[300]], t: everyN(H8, H8 + 7200, 300) },
+      { r: 1, s: [2, 3], p: [[300]], t: everyN(H8, H8 + 7200, 300) },
+    ],
+    transfers: [[1, 2, 300]],
+  });
+  const a = computeReachability(grouped, opts({ walk: false }));
+  const b = computeReachability(grouped, opts({ walk: false, maxWalkSec: 1 }));
+  assert.deepEqual([...b.minutes], [...a.minutes]);
+  const net = walkNet(300);
+  const g = computeReachability(net, opts({ walk: true, mode: 'general', accessSec: ONLY_S0 }));
+  assert.ok(Number.isFinite(g.minutes[3]));
+  const gl = computeReachability(net, opts({ walk: true, mode: 'general', accessSec: ONLY_S0, maxWalkSec: 240 }));
+  assert.equal(gl.minutes[3], Infinity);
+});
+
+test('findAccessStops: maxAccessSec ucina wpisy accessSec i gałąź w linii prostej', () => {
+  const net = makeNet({
+    stops: [{ name: 'A', lat: 50, lon: 20 }, { name: 'B', lat: 50.0005, lon: 20 }, { name: 'C', lat: 50.001, lon: 20 }, { name: 'D', lat: 50.01, lon: 20 }],
+    routes: [], patterns: [],
+  });
+  const idx = a => a.filter((_, i) => i % 2 === 0);
+  const acc = findAccessStops(net, 50, 20, true, Float64Array.from([100, 500, NaN, Infinity]), undefined, 300);
+  assert.deepEqual(idx(acc), [0, 2], 'B (500 s) odpada, C z linii prostej (~116 s) zostaje, D = Infinity');
+  assert.deepEqual(idx(findAccessStops(net, 50, 20, true, Float64Array.from([100, 500, NaN, Infinity]), undefined, 60)), [], 'wszystko ponad 60 s');
+  // brak grafu ulic: tylko linia prosta (~0,96 m/s → 60 s ≈ 58 m)
+  assert.deepEqual(idx(findAccessStops(net, 50, 20, true, null, undefined, 60)), [0, 1]);
+  assert.equal(findAccessStops(net, 50, 20, true).length / 2, 4, 'bez limitu bez zmian');
+});
+
+test('tryb ogólny z maxTransfers: 0 daje ten sam wynik co bez limitu (decyzja: Dijkstra nie modeluje przesiadek)', () => {
+  const net = walkNet(300);
+  const o = opts({ walk: true, mode: 'general', accessSec: ONLY_S0 });
+  assert.deepEqual([...computeReachability(net, { ...o, maxTransfers: 0 }).minutes], [...computeReachability(net, o).minutes]);
+});

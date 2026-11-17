@@ -8,6 +8,13 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## W toku
 
+### Z-004 [P1] Punkt spotkania
+- Status: w toku (zatwierdzone do wdrożenia przez właściciela 2026-11-17: „Z-004 — zrób to, to dobra zmiana". Kolejność: przed Z-010.)
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak trybu szukania miejsca spotkania dwóch osób; naturalny następny krok po trybie porównania.
+- Dowód: maxTimeGrid już liczy maksimum z dwóch fal.
+- Pliki: js/engine.js, js/app.js, index.html.
+
 ### Z-019 [P1] Brakujące profile opóźnień dla GZM i Szczecina
 - Status: w toku
 - Zgłoszone: 2026-11-16 (analityk)
@@ -36,7 +43,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: `node tools/check-data.mjs` (2026-11-16) zgłasza „rozkład kończy się za mniej niż 7 dni (16.11.2026)"; build z 2026-11-02.
 - Wdrożone 2026-11-16 (częściowo): cztery miasta (lodz, opole, olsztyn, gorzow) miały feed na `cdn.zbiorkom.live/gtfs/*.zip`; wszystkie cztery adresy zwracają 404 (strona HTML zamiast ZIP), host odpowiada, padła ścieżka. Cotygodniowe `refresh-data.yml` pomijało te miasta od co najmniej 2026-11-09; ostrzeżenie było tylko `::warning::` i wpisem z etykietą „dane". Zmienione adresy: Łódź (`https://otwarte.miasto.lodz.pl/wp-content/uploads/2025/06/GTFS.zip`, ZDiT Łódź), Olsztyn (`https://zdzit.olsztyn.eu/gtfs/` z `resolve: "html-latest"`, ZDZiT Olsztyn). Gorzów COFNIĘTY, nie podmieniony: `data/gorzow/meta.json` (build 2026-11-02) ma `feedEndDate` 2026-12-30, a feed mkuran.pl kończy się 2026-10-23, więc podmiana zamieniłaby ważne dane na ostrzeżenie. Adres `mzk-gorzow` wraca do `https://cdn.zbiorkom.live/gtfs/gorzow.zip` i jest martwy świadomie — cotygodniowe odświeżenie pomija Gorzów i zostawia dobre dane. `tools/fetch-feeds.mjs`: pętla główna w `main()` za strażnikiem `isMain`, nowa czysta funkcja `pickLatestZip` i tryb `resolve: "html-latest"` (najnowsze `.zip` z listingu po dacie z tekstu linku; wygrywa największa data <= dziś; brak linków = wyjątek z nazwą feedu). Dane w `data/<miasto>/` nietknięte; pobrania tylko do katalogu tymczasowego.
 - Wdrożone 2026-11-17 (ręczne przeliczenie za zgodą właściciela): Łódź i Olsztyn przeszły pierwsze pełne przeliczenie z nowych źródeł (`tools/fetch-feeds.mjs`, `tools/build-data.mjs`); bramka jakości (`tools/check-data.mjs`) przepuściła oba miasta bez problemów. Zadanie zostaje otwarte dla Opola.
-- Pozostaje: Opole -> Z-054 (format TransXChange, brak źródła GTFS); Gorzów -> Z-055 (termin przeglądu przed 2026-12-30).
+- Pozostaje: Opole zamknięte w Z-054 (zrobione 2026-11-17; Opole nie jest już otwartą częścią tego zadania); Gorzów -> Z-055 (termin przeglądu przed 2026-12-30).
 - Decyzja właściciela (2026-11-17): Opole zostaje widoczne na stronie ze starymi danymi i z ostrzeżeniem o nieaktualnym rozkładzie. Wariant „czasowo ukryć miasto" odrzucony. Zweryfikowano w przeglądarce 2026-11-17 (`?city=opole`): `meta.feedEndDate` 2026-11-16, `#dataWarn` widoczny z `role="alert"`, treść: „Uwaga: rozkład tego miasta jest nieaktualny (ważny do 16.11.2026). Wyniki mogą odbiegać od dzisiejszych kursów.", stopka: rozkład z 03.11.2026, ważny do 16.11.2026; blok 88 px wysokości mieści się w pierwszym ekranie panelu. Zmiana kodu nie była potrzebna. Niezweryfikowane: wygląd na prawdziwym telefonie, odczyt przez czytnik ekranu.
 - Ryzyka: Łódź — jeśli przy kolejnym wgraniu powstanie nowa ścieżka zamiast nadpisania, przełączyć na `resolve: "html-latest"` z `https://otwarte.miasto.lodz.pl/transport_komunikacja/`. Olsztyn — okno obowiązywania kończy się 2026-11-30; jeśli ZDZiT nie opublikuje pliku grudniowego na czas, `feedEndDate` w `check-data.mjs` to wyłapie. Pierwsze przeliczenie Łodzi i Gorzowa może obudzić bramkę regresji (inny namespace identyfikatorów); URL-e w stanie strony to współrzędne, więc zapisane linki użytkowników się nie psują.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs, tests/fetch-feeds.test.mjs.
@@ -79,13 +86,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: rozmiary plików w data/<miasto>/.
 - Pliki: tools/build-walknet.mjs, js/walknet.js, js/data.js.
 
-### Z-004 [P1] Punkt spotkania
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak trybu szukania miejsca spotkania dwóch osób; naturalny następny krok po trybie porównania.
-- Dowód: maxTimeGrid już liczy maksimum z dwóch fal.
-- Pliki: js/engine.js, js/app.js, index.html.
-
 ### Z-007 [P2] Znane luki modelu
 - Status: nowe
 - Zgłoszone: 2026-11-16 (analityk)
@@ -94,7 +94,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js.
 
 ### Z-010 [P2] Wizualizacja trasy z dymka na mapie
-- Status: nowe
+- Status: nowe (zatwierdzone do wdrożenia przez właściciela 2026-11-17: „Z-010 — do zrobienia w następnej kolejności". Wchodzi PO Z-004, do wdrożenia zaraz po nim.)
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: nie ma rysowania tras na mapie.
 - Dowód: brak shapes i polilinii w js/app.js i js/map.js.
@@ -106,13 +106,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: tryb ostrożny używa statystycznych profili opóźnień, nie bieżących danych GTFS-RT.
 - Dowód: nieznane.
 - Pliki: js/router.js, tools/collect-delays.mjs.
-
-### Z-012 [P2] Wielokryterialność
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak limitu przesiadek, maksymalnej długości spaceru i wyłączania pojedynczych linii.
-- Dowód: nieznane.
-- Pliki: js/router.js, js/app.js, index.html.
 
 ### Z-013 [P2] Profil pieszego
 - Status: nowe
@@ -195,30 +188,23 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: obserwacja 2026-11-16: żaden `meta.json` nie ma pól `counts` ani `grid`.
 - Pliki: tools/check-data.mjs
 
-### Z-054 [P1] Rozkład Opola: MZK publikuje TransXChange, nie GTFS
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: rozkład Opola kończy się 2026-11-16 (Z-051). Feed MZK Opole nie jest GTFS, więc nie da się go wpiąć w `fetch-feeds.mjs` bez konwertera. Decyzja właściciela (2026-11-17): Opole zostaje widoczne na stronie ze starymi danymi i z ostrzeżeniem o nieaktualnym rozkładzie; wariant „czasowo ukryć miasto" odrzucony. Zadanie pozostaje otwarte i jest jedyną drogą do naprawy Opola; po tej decyzji nie czeka na nic po stronie właściciela. Stan ostrzeżenia zweryfikowany w przeglądarce 2026-11-17, zob. Z-051.
-- Dowód: `https://www.mzkopole.pl/otwarte-dane/lib/getlatestfile.php` zwraca poprawny ZIP (2,8 MB) z `TransXChange.xml`; archiwum per data `https://www.mzkopole.pl/otwarte-dane/data/RRRR.MM.DD.zip`, najnowszy `2026.11.06.zip`. Nie wolno wpiąć tego jako feedu: `downloadZip()` go przepuści, a wywali się dopiero `build-data.mjs` na braku `stop_times.txt`. Sprawdzone i puste: mzkopole.pl, dane.gov.pl, portal miasta, mkuran.pl, mobilitydatabase, transit.land.
-- Kierunek (z diagnozy, bez projektu rozwiązywacza): konwerter `tools/transxchange-to-gtfs.mjs` wołany przez `fetch-feeds.mjs` przy nowym polu feedu `format: "transxchange"`. Node nie ma parsera XML, więc potrzebny własny parser strumieniowy albo devDependency (decyzja w projekcie). Punkt odniesienia: `MKuranowski/RzeszowGTFS` (Rzeszów publikuje TransXChange z tej samej rodziny systemów). Pierwszy krok: rozpakować plik Opola i opisać faktyczną strukturę.
-- Pliki: tools/fetch-feeds.mjs, tools/transxchange-to-gtfs.mjs (nowy), data/cities.json, tests/fetch-feeds.test.mjs (usunąć wyjątek `knownDead` dla `mzk-opole`, gdy miasto dostanie źródło).
-
 ### Z-055 [P1] Gorzów: żywe źródło rozkładu po 2026-12-30
 - Status: nowe
 - Zgłoszone: 2026-11-16 (nieznane)
 - Problem: dane Gorzowa z builda 2026-11-02 (`data/gorzow/meta.json`, `feedEndDate` 20261230) są ważne jeszcze ok. sześć tygodni. Feed mkuran.pl (`gorzow_wlkp.zip`, zakres 20261001-20261023) jest wygasły, więc nie zastępuje danych; adres `mzk-gorzow` jest świadomie martwy, żeby cotygodniowe odświeżenie zostawiało dobre dane. Jedyne żywe i oficjalne źródło (BIP MZK) wystawia rozkład w oknach siedmiodniowych, więc build z niego byłby aktualny najwyżej przez tydzień. Termin przeglądu: przed 2026-12-30.
 - Dowód: pobranie z `https://bip.mzk-gorzow.com.pl/gtfs.html` 2026-11-16: HTTP 200, 1,22 MB, poprawny ZIP z `shapes` i `transfers`; `feed_info.txt` 20261103-20261110; `calendar.txt` i 18122 wiersze `calendar_dates.txt` w tym samym oknie. `cdn.zbiorkom.live` i `api.zbiorkom.live` zwracają 404; strona główna zbiorkom to SPA bez linków do danych. Gorzowa nie ma na dane.gov.pl ani w sekcji dla deweloperów na stronie MZK.
-- Kierunki do rozważenia: częstsze odświeżanie tylko dla Gorzowa; sklejanie kolejnych tygodniowych paczek w dłuższy kalendarz; kontakt z MZK o dłuższy feed.
+- Kierunki do rozważenia: częstsze odświeżanie tylko dla Gorzowa; sklejanie kolejnych tygodniowych paczek w dłuższy kalendarz; kontakt z MZK o dłuższy feed. Uwaga (2026-11-17): rejestr formatów w `tools/fetch-feeds.mjs` i tryb `resolve: "html-latest"` są już dostępne (Z-054, Z-051), więc wpięcie BIP MZK będzie tańsze niż zakładano.
 - Wymagane rozszerzenie, gdyby wpinać BIP: `pickLatestZip` dziś tam nie trafi (tekst linku „GTFS MZK Gorzów Wlkp." bez daty, data w href w formacie `DD-MM-RRRR`). Potrzebna gałąź: gdy żadna data się nie parsuje, a na stronie jest dokładnie jeden link `.zip`, wziąć ten link; opcjonalnie rozpoznawanie `DD-MM-RRRR`. Bez nowego trybu i bez nowego pola w `cities.json`. Credits, gdyby doszło do wpięcia: `{ "label": "MZK Gorzów Wlkp. (BIP)", "url": "https://bip.mzk-gorzow.com.pl/gtfs.html" }`.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
-### Z-063 [P2] Eksport widoku mapy do PNG
+### Z-070 [P2] Nieczyszczony bufor rozlania `grid.spread` w `walkgrid.js`
 - Status: nowe
-- Zgłoszone: 2026-11-17 (kronikarz)
-- Problem: eksport wyniku do PNG nie został wdrożony. Z-008 obejmowało eksport do PNG albo GeoJSON; GeoJSON wdrożono 2026-11-17 (w Z-008), PNG nie.
-- Dowód: linia z historii Z-008 z 2026-11-16 („Pozostaje: tryb czystego widoku bez panelu; eksport PNG (nie ruszane w tej fali)."), zastąpiona przy domknięciu Z-008 odesłaniem do tego zadania.
-- Uwaga: po Z-008 zrzut ekranu zwiniętego panelu daje mapę z legendą bez osobnego trybu, więc wartość eksportu PNG jest mniejsza niż przed tą zmianą. Warto to rozważyć przed wdrożeniem.
-- Pliki: nieznane — wymaga projektu.
+- Zgłoszone: 2026-11-17 (nieznane)
+- Problem: `computeTimeGrid(grid, null, maxSpreadM)` czyta `grid.spread` w komórkach zasianych wcześniej przez `paintNetwork` i nigdy ich nie zeruje, więc zostaje stan z poprzedniego przeliczenia. Dotąd wartości były małe (do 75 m) i skutek niewidoczny. Fallback rastrowy z limitem spaceru zapisuje do ok. 288 m, więc wynik zależy od kolejności wczytywania: w przeglądarce dla `wmax=5` dawało naprzemiennie 26 albo 35 procent obszaru, deterministycznie co drugie przeładowanie.
+- Dowód: js/walkgrid.js:166 i js/walkgrid.js:248 (tworzenie bufora `grid.spread`); obserwacja w przeglądarce przy wdrożeniu Z-012. Obejście z Z-012: `grid.spread?.fill(0)` w js/engine.js:248, z testem regresji.
+- Skutek uboczny obejścia: przy pierwszym przeliczeniu po wejściu na stronę wynik bez limitów jest taki sam jak dotąd; przy kolejnych przeliczeniach jest deterministyczny i może się nieznacznie różnić od dawnego, który zależał od stanu bufora.
+- Pliki: js/walkgrid.js, js/engine.js.
+- Jak sprawdzić: nieznane (naprawa u źródła w `js/walkgrid.js` jeszcze nie zrobiona; istniejący test regresji dotyczy obejścia).
 
 ## Zrobione
 
@@ -696,6 +682,35 @@ Pułapki do wdrożenia:
 - Jak sprawdzić: `npm run check`: pass 325, fail 0, skipped 1, lint czysty (dosłowny wynik w CHANGELOG.md, sekcja 2026-11-17, Wewnętrzne). W przeglądarce (wątek główny): `?city=opole` 360 px po zwinięciu; kliknięcia przy 360 px: link banera, okno, Escape, powrót fokusu na link, „Zgoda", zapis `granted`, baner znika; nieudany zapis zgody przez nadpisanie `localStorage`.
 - Niezweryfikowane: prawdziwy tryb prywatny Safari (sprawdzono symulacją); wzrokowe przewinięcie nowych akapitów polityki do końca na ekranie (sprawdzono testem na tekst); czytnik ekranu.
 
+### Z-054 [P1] Rozkład Opola: MZK publikuje TransXChange, nie GTFS
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: rozkład Opola kończy się 2026-11-16 (Z-051). MZK Opole publikuje rozkład wyłącznie w formacie TransXChange (jeden plik XML, 87 MB po rozpakowaniu), a cały łańcuch prekompilacji czyta GTFS-CSV. Poprzednie źródło (`cdn.zbiorkom.live`) przestało odpowiadać.
+- Dowód: `https://www.mzkopole.pl/otwarte-dane/lib/getlatestfile.php` zwraca poprawny ZIP (2,8 MB) z `TransXChange.xml`; archiwum per data `https://www.mzkopole.pl/otwarte-dane/data/RRRR.MM.DD.zip`, najnowszy `2026.11.06.zip`. Sprawdzone i puste: mzkopole.pl, dane.gov.pl, portal miasta, mkuran.pl, mobilitydatabase, transit.land.
+- Wdrożone 2026-11-17: własny parser strumieniowy bez zależności (`tools/xmlstream.mjs`) i konwerter (`tools/transxchange-to-gtfs.mjs`) wpięte w `tools/fetch-feeds.mjs` przez rejestr formatów. Nowe pole feedu `format` (oraz `formatOptions`) w `data/cities.json`; nieznany format to twardy błąd. Kolejne miasto z tym samym formatem nie wymaga kodu. Parser działa w trybie strict (CDATA, nieznana encja, niedomknięty element, koniec pliku w tagu: przerwanie z offsetem bajtowym). Filtrowanie po ścieżce bezwzględnej, nie po nazwie elementu.
+- Decyzje oparte na pomiarach prawdziwego pliku (trzy tury sondowania, każda obaliła założenie):
+  1. Flaga „widoczny dla pasażerów" ma wartość `false` w 8267 z 8267 przypadków, nigdy `true`; filtr po niej odrzucony.
+  2. Pole `Activity` występuje dokładnie raz po każdej stronie kursu (`pickUp` na pierwszym ogniwie, `setDown` na ostatnim, 6450 razy); na przystankach pośrednich brak. Przyjęte: brak flagi = wolno wsiąść i wysiąść.
+  3. Flaga techniczna trasy oznacza 2676 z 6450 kursów (41,5%). Rozstrzygnął `VehicleJourneyKind`: zachowany jest wyłącznie kurs z rodzajem 0 (3774 kursy, średnio 28,6 przystanku); rodzaje 1–5 to kursy dokładnie dwuprzystankowe, czyli przejazdy służbowe.
+- Sekwencja przystanków z `VehicleJourneyStopPoints` w kolejności dokumentu; pole `Sequence` odrzucone (0 z 6450 kursów zgodnych). Zgodność dowiedziona krzyżowo: dla 104 315 ogniw mapa ogniw daje te same przystanki po obu stronach, zero niezgodności.
+- Koperta bezpieczeństwa: progi w `LIMITS`, a tam gdzie pomiar dał zero, asercje o wartości zero. Zapis wyłącznie do katalogu tymczasowego, przeniesienie po pełnej walidacji; awaria w połowie nie nadpisuje `data/opole/`.
+- Zmierzone na prawdziwym pliku: 3774 kursy, 108 089 wierszy `stop_times`, 27 tras, 521 przystanków w GTFS, zero konfliktów, zero ogniw `pass` w zachowanych kursach, okres 20261106–20261130; konwersja 1,4 s, szczyt pamięci 269 MB.
+- Przeliczenie danych Opola (pełny łańcuch): `fetch-feeds` pobrał 2,9 MB ZIP; `build-data` wybrał dni 20261117, 20261121, 20261122; 294 zespoły przystankowe; usunięty jeden przystanek bez kursów (zostaje 520). Porównanie ze starymi danymi: 520 przystanków, 225 wzorców, 1203 kursy w dniu roboczym, ten sam zbiór 27 linii; rozmiary plików dni o 1,5–2,7% mniejsze. `node tools/check-data.mjs`: „Wszystkie 18 miasta w porządku".
+- Zmiana widoczna dla użytkownika (do obserwacji): nazwy przystanków tracą numer słupka. Stare źródło podawało „1 Maja - Dworzec Główny (1)" i „1 Maja - Dworzec Główny (2)" jako dwie osobne nazwy; nowe podaje samo „1 Maja - Dworzec Główny". Przystanków nadal 520, ale różnych nazw jest 291 zamiast 520. Zbiory nazw starych i nowych nie mają ani jednej wspólnej pozycji, bo zmieniła się cała konwencja nazewnicza, a nie pojedyncze nazwy. Grupowanie w zespoły nie ucierpiało: 294 przed zmianą, 294 po. Wyszukiwarka przystanków scala duplikaty po nazwie i odległości.
+- Pliki: tools/xmlstream.mjs (nowy), tools/transxchange-to-gtfs.mjs (nowy), tools/fetch-feeds.mjs, data/cities.json, data/opole/*, README.md.
+- Testy: `tests/xmlstream.test.mjs` (10), `tests/transxchange-to-gtfs.test.mjs` (31), `tests/fixtures/transxchange-min.xml`, `tests/fetch-feeds.test.mjs` (usunięty wyjątek `mzk-opole`, asercja formatu feedu). Łącznie 41 nowych testów, w tym regresja na błąd z punktu 2 (kurs bez żadnej flagi `Activity` jest w pełni używalny) i test zgodności od końca do końca przez funkcje z `tools/build-lib.mjs`.
+- Jak sprawdzić: `npm run check` (dosłowny wynik w CHANGELOG.md, sekcja 2026-11-17); w przeglądarce `?city=opole`: izochrona, sześć pasm, brak ostrzeżenia, stopka: rozkład z 17.11.2026 ważny do 30.11.2026 (sprawdzone).
+- Niezweryfikowane: zachowanie konwertera na grudniowej wersji pliku (struktura może się zmienić; od tego są asercje); `agency.txt` z pustym adresem agencji (`build-data` tego nie czyta); tryb porównania i tryb ostrożny na nowych danych Opola.
+
+### Z-012 [P2] Wielokryterialność
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak limitu przesiadek i maksymalnej długości spaceru. Zakres tego zadania to WYŁĄCZNIE te dwie rzeczy. Wyłączanie pojedynczych linii świadomie odrzucone przez właściciela 2026-11-17 z jego uzasadnieniem: „wyłączanie pojedynczych linii chyba nie ma sensu". Nie wskrzeszać tej części jako „zapomnianej" pozycji.
+- Dowód: nieznane.
+- Pliki: js/router.js, js/walknet.js, js/engine.js, js/stats.js, js/uilogic.js, js/app.js, index.html, css/style.css, README.md, CURRENT_STATE.md.
+- Wdrożone 2026-11-17: dwie nowe grupy w sekcji „Dojście, przesiadki i środki": „Przesiadki (maks.)" (0, 1, 2 albo bez limitu) i „Maks. odcinek pieszo" (5, 10, 15 min albo bez limitu), obie domyślnie bez limitu. Limit spaceru dotyczy każdego pojedynczego odcinka pieszego przy komunikacji, nie sumy marszu. Budżet łączny odrzucono świadomie (wymagałby wielokryterialnego RAPTOR, czyli przebudowy silnika). Tryb „Ogólnie" nie modeluje przesiadek: kontrolka wygaszona z podpowiedzią „Tryb ogólny nie modeluje przesiadek.", silnik nie dostaje limitu przesiadek, parametr `tr` zostaje w adresie; limit spaceru działa. Parametry adresu: `tr` (0, 1, 2) i `wmax` (1–89 min). Szczegóły i pomiary w CHANGELOG.md (sekcja 2026-11-17).
+- Niezweryfikowane: widok mobilny i zawijanie wiersza podsumowania sekcji; okno pomocy po aktualizacji tekstu nie oglądane; ścieżka z limitem przy niewczytanym grafie ulic pokryta tylko przypadkowo.
+
 ## Odrzucone
 
 ### Z-001 [P1] Certyfikowany CMP (Consent Mode v2)
@@ -736,3 +751,12 @@ Pułapki do wdrożenia:
 - Pliki: index.html, css/style.css, js/app.js.
 - Powód odrzucenia (2026-11-17): zadanie wchłonięte przez Z-059 (zwijane sekcje). Sekcja „Więcej opcji" to podzbiór Z-059, który daje trzy sekcje zamiast jednej i działa też na desktopie. Zmiana układu została zatwierdzona przez właściciela 2026-11-17 (sam poprosił o zwijane sekcje), więc dopisek „decyzja właściciela" w tym wpisie jest nieaktualny. Drugi element, przypięty pasek wyniku, jest odłożony, a nie odrzucony: w nowym układzie legenda i status są tuż pod wyszukiwarką, w górnych ok. 290 px, więc zawsze w polu widzenia. Przypięta zostaje stopka, nie pasek wyniku (Z-059).
 - Scalone z: Z-059.
+
+### Z-063 [P2] Eksport widoku mapy do PNG
+- Status: odrzucone
+- Zgłoszone: 2026-11-17 (kronikarz)
+- Problem: eksport wyniku do PNG nie został wdrożony. Z-008 obejmowało eksport do PNG albo GeoJSON; GeoJSON wdrożono 2026-11-17 (w Z-008), PNG nie.
+- Dowód: linia z historii Z-008 z 2026-11-16 („Pozostaje: tryb czystego widoku bez panelu; eksport PNG (nie ruszane w tej fali)."), zastąpiona przy domknięciu Z-008 odesłaniem do tego zadania.
+- Uwaga: po Z-008 zrzut ekranu zwiniętego panelu daje mapę z legendą bez osobnego trybu, więc wartość eksportu PNG jest mniejsza niż przed tą zmianą. Warto to rozważyć przed wdrożeniem.
+- Pliki: nieznane — wymaga projektu.
+- Powód odrzucenia (2026-11-17, decyzja właściciela: „eksport widoku do PNG nie ma sensu, skasuj to zadanie"): po Z-008 zwinięty panel pokazuje legendę, więc zwykły zrzut ekranu daje mapę z objaśnieniem kolorów bez osobnej funkcji.

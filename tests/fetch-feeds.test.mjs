@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pickLatestZip } from '../tools/fetch-feeds.mjs';
+import { pickLatestZip, FEED_FORMATS } from '../tools/fetch-feeds.mjs';
 
 const BASE = 'https://example.pl/gtfs/';
 const TODAY = new Date('2026-11-16T12:00:00Z');
@@ -47,16 +47,16 @@ test('data/cities.json: kontrakt feedów', () => {
   const allowed = new Set(['ckan-latest', 'wroclaw-od2', 'html-latest']);
   // Wyjątki: wpisy czekające na właściwe źródło (adres jest martwy, więc miasto
   // jest świadomie pomijane przy odświeżaniu i zostaje przy ostatnich dobrych danych).
-  // mzk-opole: MZK publikuje TransXChange, nie GTFS.
   // mzk-gorzow: jedyne żywe źródło (BIP MZK) wystawia rozkład na 7 dni, a dane
   //   z poprzedniego builda są ważne do 2026-12-30 — podmiana pogorszyłaby wynik.
-  const knownDead = new Set(['mzk-opole', 'mzk-gorzow']);
+  const knownDead = new Set(['mzk-gorzow']);
   for (const [key, city] of Object.entries(cities)) {
     for (const feed of city.feeds) {
       assert.ok(feed.url, `${key}/${feed.name}: brak url`);
       if (!knownDead.has(feed.name)) {
         assert.ok(!feed.url.includes('zbiorkom.live'), `${key}/${feed.name}: martwe źródło zbiorkom.live`);
       }
+      assert.ok(FEED_FORMATS.has(feed.format ?? 'gtfs'), `${key}/${feed.name}: nieznany format ${feed.format}`);
       if (feed.resolve) assert.ok(allowed.has(feed.resolve), `${key}/${feed.name}: nieznane resolve ${feed.resolve}`);
     }
   }

@@ -100,3 +100,67 @@ test('rower: to samo w grafie, tempo 15 km/h i nakładanie dwóch fal', () => {
   assert.ok(grid.time[px] < footT, 'szybsza fala nadpisuje wolniejszą');
   assert.ok(Math.abs(grid.time[px] - 250 / NET_BIKE_MPS) < 30);
 });
+
+// --- limit marszu (Z-012) -------------------------------------------------------
+
+/** Łańcuch węzłów co 500 m (pasek na północ od 50,00 N) — czyste testy czasu bez siatki. */
+const chain = () => {
+  const ns = Array.from({ length: 6 }, (_, k) => [50 + k * dLat, 20]);
+  return decodeWalkNet(makeWalkRaw(ns, ns.slice(1).map((_, k) => [k, k + 1, 500])));
+};
+const SEC500 = Math.round(500 / NET_WALK_MPS); // 400 s
+
+test('computeNodeTimes: cap dotyczy czasu MARSZU, nie łącznego; walkOut wypełniony', () => {
+  const w = chain();
+  // przystanek: dojechano 600 s, marsz zaczyna od zera → [węzeł, 600, 0]
+  const free = computeNodeTimes(w, [[0, 600, 0]], 5400);
+  assert.equal(free[1], 600 + SEC500);
+  assert.equal(free[3], 600 + 3 * SEC500, 'bez limitu osiągalny z czasem ŁĄCZNYM 1800 s');
+  const walkOut = new Int32Array(w.n);
+  const lim = computeNodeTimes(w, [[0, 600, 0]], 5400, NET_WALK_MPS, { maxWalkSec: 2 * SEC500 + 10, walkOut });
+  assert.equal(lim[2], 600 + 2 * SEC500, 'czas łączny 1400 s > limitu 810 s, a węzeł osiągnięty — limit nie dotyczy czasu łącznego');
+  assert.equal(lim[3], -1, '3 × 400 s marszu > limit');
+  assert.deepEqual([...walkOut].slice(0, 4), [0, SEC500, 2 * SEC500, -1]);
+  // nasiono bez trzeciego elementu: marsz = czas łączny (punkt użytkownika)
+  const own = computeNodeTimes(w, [[0, 0]], 5400, NET_WALK_MPS, { maxWalkSec: SEC500 + 1 });
+  assert.equal(own[1], SEC500);
+  assert.equal(own[2], -1);
+  // nasiono z długim marszem ponad limit odpada całkowicie
+  assert.equal(computeNodeTimes(w, [[0, 900, 700]], 5400, NET_WALK_MPS, { maxWalkSec: 600 })[0], -1);
+});
+
+test('computeNodeTimes: bez limitu wynik identyczny, także z walkOut; snapSeeds niesie czas marszu', () => {
+  const w = net();
+  const a = snapEdges(w, 50, 20 + dLon * 0.2);
+  const seeds = snapSeeds(a, 300);
+  const base = computeNodeTimes(w, seeds.map(s => [s[0], s[1]]), 3600);
+  assert.deepEqual([...computeNodeTimes(w, seeds, 3600)], [...base]);
+  assert.deepEqual([...computeNodeTimes(w, seeds, 3600, NET_WALK_MPS, { maxWalkSec: Infinity, walkOut: new Int32Array(w.n) })], [...base]);
+  const s0 = seeds.find(s => s[0] === 0);
+  assert.equal(s0[1] - s0[2], 300, 'trzeci element = marsz bez czasu startu');
+});
+
+test('paintNetwork: nie maluje pikseli za progiem marszu; bez limitu jak dotąd', () => {
+  const w = chain();
+  const res = 25, W = 30, H = 120;
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos(50 * Math.PI / 180);
+  const mkGrid = () => ({ W, H, res, land: new Uint8Array(W * H).fill(1), time: new Uint16Array(W * H),
+    toX: lon => (lon - 19.9999) * mPerDegLon / res, toY: lat => (50 + 6 * dLat - lat) * M_PER_DEG_LAT / res });
+  const pixelIndex = (g, lat, lon) => { const x = Math.round(g.toX(lon)), y = Math.round(g.toY(lat)); return (x < 0 || y < 0 || x >= g.W || y >= g.H) ? -1 : y * g.W + x; };
+  const at = (g, k) => g.time[pixelIndex(g, 50 + k * dLat, 20)];
+  const walkOut = new Int32Array(w.n);
+  const limit = 2 * SEC500 + 40; // węzły 0..2 w limicie, krawędź 2–3 tylko do połowy
+  const nodeTime = computeNodeTimes(w, [[0, 600, 0]], 5400, NET_WALK_MPS, { maxWalkSec: limit, walkOut });
+  const g = mkGrid();
+  paintNetwork(w, nodeTime, g, pixelIndex, 65535, 5400, { walkTime: walkOut, maxWalkSec: limit });
+  assert.ok(at(g, 2) < 65535);
+  assert.equal(at(g, 3), 65535, 'węzeł 3 za progiem');
+  assert.equal(at(g, 4), 65535);
+  // bez limitu ten sam bufor, co przed Z-012
+  const full = computeNodeTimes(w, [[0, 600, 0]], 5400);
+  const g1 = mkGrid(), g2 = mkGrid();
+  paintNetwork(w, full, g1, pixelIndex, 65535, 5400);
+  paintNetwork(w, full, g2, pixelIndex, 65535, 5400, { walkTime: null, maxWalkSec: Infinity });
+  assert.deepEqual([...g1.time], [...g2.time]);
+  assert.ok(at(g1, 4) < 65535);
+});

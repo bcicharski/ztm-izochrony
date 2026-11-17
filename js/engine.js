@@ -133,7 +133,9 @@ export class Engine {
    * tej samej krawędzi liczona wprost wzdłuż ulicy (`sameEdgeSec`).
    *
    * @param {number} mps     tempo dojścia (pieszo albo rowerem)
-   * @param {number} capSec   horyzont dojścia — rower ma własny, krótszy
+   * @param {number} capSec   horyzont dojścia — rower ma własny, krótszy; limit
+   *   spaceru (`maxWalkSec`) obniża go dalej. Dla dojścia nie trzeba osobnego
+   *   wymiaru stanu: fala startuje od 0, więc czas łączny JEST czasem marszu.
    * @returns {Float64Array|null} sekundy per przystanek: `Infinity` = graf zna
    *   przystanek, ale nie ma do niego dojścia w horyzoncie; `NaN` = przystanek
    *   poza grafem (router zostaje przy linii prostej). `null` = grafu nie ma
@@ -170,8 +172,11 @@ export class Engine {
    * @param {{lat:number, lng:number}|null} origin  punkt użytkownika
    * @param {{accessMps:number, egressMps:number}} speeds  tempo od punktu i od
    *   przystanków; różne tempa = dwie fale nakładane na siebie (patrz niżej)
+   * @param {number} maxWalkSec  limit jednego odcinka pieszego od przystanku [s];
+   *   przy skończonym limicie punkt użytkownika idzie osobnym przebiegiem,
+   *   zwolnionym z limitu (to jego własny spacer, nie dojście do komunikacji)
    */
-  walkWaveOnNet(grid, net, mins, origin, speeds = ACCESS_MODES.foot) {
+  walkWaveOnNet(grid, net, mins, origin, speeds = ACCESS_MODES.foot, maxWalkSec = Infinity) {
     const wnet = this.walkNet;
     if (!wnet) return null;
     const { accessMps, egressMps } = speeds;
@@ -185,7 +190,7 @@ export class Engine {
         seeds.push(...snapSeeds(snaps, startSec, mps));
         for (const s of snaps) {
           const list = edgeSeeds.get(s.edge) ?? [];
-          list.push([s.t, startSec + s.perpM / mps]);
+          list.push([s.t, startSec + s.perpM / mps, s.perpM / mps]);
           edgeSeeds.set(s.edge, list);
         }
       }
@@ -215,21 +220,32 @@ export class Engine {
     // jedno tempo (pieszo albo rower w pojeździe) = jedna fala; przy rowerze
     // zostawianym na przystanku trzeba dwóch, bo od punktu jedzie się szybciej
     // niż idzie od przystanku — druga fala dokłada się do pierwszej (min per piksel)
-    const passes = accessMps === egressMps
-      ? [[[...fromOrigin, ...fromStops], accessMps]]
-      : [[fromStops, egressMps], [fromOrigin, accessMps]];
+    // Trzeci element przebiegu = limit marszu. Z limitem rozdzielamy też przebiegi
+    // o równym tempie (mechanizm ten sam co przy rowerze), bo punkt jest od limitu
+    // zwolniony, a przystanki nie; bez limitu układ przebiegów jest jak dawniej.
+    const limited = maxWalkSec < Infinity;
+    const passes = (accessMps === egressMps && !limited)
+      ? [[[...fromOrigin, ...fromStops], accessMps, Infinity]]
+      : [[fromStops, egressMps, maxWalkSec], [fromOrigin, accessMps, Infinity]];
     let painted = false;
-    for (const [sources, mps] of passes) {
+    for (const [sources, mps, passMax] of passes) {
       if (!sources.length) continue;
       const { seeds, edgeSeeds } = collect(sources, mps);
-      const nodeTime = computeNodeTimes(wnet, seeds, WALK_CAP_SEC, mps);
+      const walkOut = passMax < Infinity ? new Int32Array(wnet.n) : null;
+      const nodeTime = computeNodeTimes(wnet, seeds, WALK_CAP_SEC, mps, { maxWalkSec: passMax, walkOut });
       // paintNetwork zasiewa grid.time wprost, więc computeTimeGrid dostaje null
       paintNetwork(wnet, nodeTime, grid, pixelIndex, UNREACH, WALK_CAP_SEC,
-        { edgeSeeds, mps, reset: !painted });
+        { edgeSeeds, mps, reset: !painted, walkTime: walkOut, maxWalkSec: passMax });
       painted = true;
     }
     if (!painted) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
     for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
+    // computeTimeGrid(…, null, …) czyta `grid.spread` także w komórkach zasianych
+    // przez paintNetwork, a nigdy ich nie zeruje — zostaje tam stan z poprzedniego
+    // przebiegu. Fallback rastrowy z limitem spaceru zapisuje w tym buforze wartości
+    // do kilkuset metrów, więc bez zerowania wynik zależał od kolejności ładowania
+    // (raster przed grafem albo graf od razu).
+    grid.spread?.fill(0);
     return computeTimeGrid(grid, null, SPREAD_M);
   }
 
@@ -248,7 +264,13 @@ export class Engine {
       p.cautious ? loadDelays(p.city) : Promise.resolve(null),
     ]);
     const speeds = speedsFor(p.access ?? 'foot', p.direction);
+    // Limity (null = bez limitu; wynik wtedy identyczny jak przed Z-012).
+    // Spacer: sekundy na JEDEN odcinek pieszy przy komunikacji (dojście,
+    // przesiadka, końcówka) — bez znaczenia, gdy spaceru nie ma albo jest „tylko pieszo".
+    const maxTransfers = Number.isInteger(p.maxTransfers) ? p.maxTransfers : null;
+    const maxWalkSec = p.walk && !p.walkOnly && Number.isFinite(p.maxWalkSec) ? p.maxWalkSec : Infinity;
     const optsBase = {
+      maxTransfers, maxWalkSec,
       direction: p.direction, walk: p.walk, mode: p.mode, timeMin: p.timeMin,
       types: p.types ? new Set(p.types) : null,
       cautious: p.cautious, delays, dayType: DAY_TYPE[p.dayKey],
@@ -261,20 +283,21 @@ export class Engine {
     } else {
       res = computeReachability(net, {
         ...optsBase, lat: p.point.lat, lon: p.point.lng,
-        accessSec: p.walk ? this.accessTimesOnNet(net, p.point, speeds.accessMps, speeds.cap) : null,
+        accessSec: p.walk ? this.accessTimesOnNet(net, p.point, speeds.accessMps, Math.min(speeds.cap, maxWalkSec)) : null,
       });
       minutes = res.minutes;
       if (p.compare) {
         // wspólny zasięg: dla każdego miejsca liczy się czas wolniejszej osoby
         res2 = computeReachability(net, {
           ...optsBase, lat: p.point2.lat, lon: p.point2.lng,
-          accessSec: p.walk ? this.accessTimesOnNet(net, p.point2, speeds.accessMps, speeds.cap) : null,
+          accessSec: p.walk ? this.accessTimesOnNet(net, p.point2, speeds.accessMps, Math.min(speeds.cap, maxWalkSec)) : null,
         });
         minutes = new Float64Array(res.minutes.length);
         for (let i = 0; i < minutes.length; i++) minutes[i] = Math.max(res.minutes[i], res2.minutes[i]);
       }
     }
-    this.last = { net, res, res2, minutes, params: p, speeds, grid: null, gridTime: null };
+    // limity TEGO przeliczenia — dymek trasy ma je widzieć, nie bieżący stan UI
+    this.last = { net, res, res2, minutes, params: p, speeds, limits: { maxTransfers, maxWalkSec }, grid: null, gridTime: null };
 
     let gridTime = null, grid = null, zones = null, image = null, bbox = null;
     if (this.assets) {
@@ -298,8 +321,12 @@ export class Engine {
       };
       // fala piesza: po sieci ulic, gdy graf jest już wczytany; inaczej po rastrze
       // (mins === null w trybie „tylko pieszo" — źródłem jest sam punkt)
+      // Fallback rastrowy tnie limitem przez `maxSpreadM`; nasiona są w jednej
+      // liście, więc ucina też spacer z samego punktu (graf ulic go oszczędza) —
+      // przyjęty kompromis, bez trzeciego bufora siatki.
       const waveFor = (mins, origin) =>
-        this.walkWaveOnNet(grid, net, mins, origin, speeds) ?? computeTimeGrid(grid, seedsFor(mins, origin));
+        this.walkWaveOnNet(grid, net, mins, origin, speeds, maxWalkSec)
+        ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * WALK_MPS);
 
       // tryb porównania liczy dwie fale w tym samym buforze grid.time — pierwszą
       // trzeba odłożyć; drugi bufor trzymany przy siatce zamiast kopii .slice()
@@ -335,7 +362,9 @@ export class Engine {
           anyOutside = true;
         }
       }
-      zones = anyOutside ? buildZones(net, outside, { walk: p.walk, origin: null, maxRadiusM: OUTSIDE_MAX_RADIUS_M }) : null;
+      zones = anyOutside
+        ? buildZones(net, outside, { walk: p.walk, origin: null, maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS) })
+        : null;
     } else {
       // brak geometrii miasta: koła crow-fly. W trybie „tylko pieszo" zostają
       // same koła wokół punktu (bez przystanków), więc origin jest niezbędny
@@ -354,6 +383,7 @@ export class Engine {
         walk: p.walk || p.walkOnly,
         origin: { lat: p.point.lat, lon: p.point.lng },
         accessMps: speeds.crowAccess, egressMps: speeds.crowEgress,
+        maxEgressSec: maxWalkSec,
       });
       if (gridTime && grid) {
         const pct = areaPercents(grid, gridTime);
@@ -411,6 +441,7 @@ export class Engine {
       const d = distM(latlng.lat, latlng.lng, net.lat[i], net.lon[i]);
       if (!walk && d > 300) continue; // bez spaceru: tylko przystanek tuż obok
       const wm = walk ? d / (this.last.speeds?.crowEgress ?? WALK_MPS) / 60 : 0;
+      if (walk && wm * 60 > (this.last.limits?.maxWalkSec ?? Infinity)) continue; // dymek nie obiecuje celu spoza stref
       const total = minutes[i] + wm;
       if (total < bestTotal) { bestTotal = total; best = i; bestWalkMin = wm; }
     }

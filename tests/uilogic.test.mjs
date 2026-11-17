@@ -953,3 +953,117 @@ test('app.js: stan sekcji w jednym kluczu localStorage, nie w adresie URL', () =
   const build = src.slice(src.indexOf('export function buildQuery'), src.indexOf('export const reducedMotionFrom'));
   assert.ok(!/sec[A-Z]|panel-sections/.test(build), 'buildQuery nie może znać sekcji');
 });
+
+// --- limity przesiadek i spaceru (Z-012) ------------------------------------------
+
+import {
+  engineLimits, limitsEnabled, limitsSummary, emptyResultText, limitHints,
+  TRANSFER_LIMITS, WALK_LIMITS_MIN,
+} from '../js/uilogic.js';
+
+test('limity: stan domyślny — adres znakowo taki jak dawniej, stary adres nie ustawia limitów', () => {
+  assert.equal(buildQuery(baseState()),
+    '?city=trojmiasto&p=54.35200%2C18.64660&dir=from&walk=1&mode=time&t=08%3A05&day=workday');
+  assert.equal(buildQuery({ ...baseState(), maxTransfers: null, maxWalkMin: null }), buildQuery(baseState()));
+  const u = parseUrlState('?city=gzm&p=50.25,19.02&dir=to&walk=1&mode=time&t=08:05&day=workday', CITIES);
+  assert.equal('maxTransfers' in u, false);
+  assert.equal('maxWalkMin' in u, false);
+});
+
+test('limity: parseUrlState — tr 0..2 i wmax 1..89, reszta = bez limitu', () => {
+  assert.equal(parseUrlState('?tr=0', CITIES).maxTransfers, 0);
+  assert.equal(parseUrlState('?tr=2', CITIES).maxTransfers, 2);
+  for (const bad of ['3', 'x', '', '-1', '1.5']) assert.equal(parseUrlState(`?tr=${bad}`, CITIES).maxTransfers, undefined, `tr=${bad}`);
+  assert.equal(parseUrlState('?wmax=10', CITIES).maxWalkMin, 10);
+  assert.equal(parseUrlState('?wmax=89', CITIES).maxWalkMin, 89);
+  for (const bad of ['0', '90', '150', 'abc', '', '-5', '7.5']) assert.equal(parseUrlState(`?wmax=${bad}`, CITIES).maxWalkMin, undefined, `wmax=${bad}`);
+});
+
+test('limity: buildQuery emituje tylko ustawione, round-trip zachowuje stan', () => {
+  const st = { ...baseState(), maxTransfers: 1, maxWalkMin: 10 };
+  const q = new URLSearchParams(buildQuery(st));
+  assert.equal(q.get('tr'), '1');
+  assert.equal(q.get('wmax'), '10');
+  const zero = new URLSearchParams(buildQuery({ ...baseState(), maxTransfers: 0 }));
+  assert.equal(zero.get('tr'), '0', '0 przesiadek to wartość, nie brak');
+  assert.equal(zero.has('wmax'), false);
+  const u = parseUrlState(buildQuery(st), CITIES);
+  assert.equal(u.maxTransfers, 1);
+  assert.equal(u.maxWalkMin, 10);
+});
+
+test('engineLimits: tabela trybów', () => {
+  const on = { maxTransfers: 1, maxWalkMin: 10, walk: true, walkOnly: false, mode: 'time' };
+  assert.deepEqual(engineLimits(on), { maxTransfers: 1, maxWalkSec: 600 });
+  assert.deepEqual(engineLimits({ ...on, mode: 'general' }), { maxTransfers: null, maxWalkSec: 600 }, 'ogólny: bez limitu przesiadek');
+  assert.deepEqual(engineLimits({ ...on, walk: false }), { maxTransfers: 1, maxWalkSec: null });
+  assert.deepEqual(engineLimits({ ...on, walkOnly: true }), { maxTransfers: 1, maxWalkSec: null });
+  assert.deepEqual(engineLimits({ ...on, maxWalkMin: 90 }), { maxTransfers: 1, maxWalkSec: null });
+  assert.deepEqual(engineLimits({ ...on, maxTransfers: 0 }), { maxTransfers: 0, maxWalkSec: 600 });
+  assert.deepEqual(engineLimits({ ...on, maxTransfers: null, maxWalkMin: null }), { maxTransfers: null, maxWalkSec: null });
+  assert.deepEqual(engineLimits({ ...on, maxTransfers: 'x', maxWalkMin: 0 }), { maxTransfers: null, maxWalkSec: null });
+  assert.deepEqual(TRANSFER_LIMITS, [null, 2, 1, 0]);
+  assert.deepEqual(WALK_LIMITS_MIN, [null, 20, 15, 10, 5]);
+});
+
+test('limitsEnabled: wygaszanie kontrolek', () => {
+  assert.deepEqual(limitsEnabled({ mode: 'time', walk: true, walkOnly: false }), { transfers: true, walkMax: true });
+  assert.deepEqual(limitsEnabled({ mode: 'general', walk: true, walkOnly: false }), { transfers: false, walkMax: true });
+  assert.deepEqual(limitsEnabled({ mode: 'time', walk: false, walkOnly: false }), { transfers: true, walkMax: false });
+  assert.deepEqual(limitsEnabled({ mode: 'time', walk: true, walkOnly: true }), { transfers: false, walkMax: false });
+});
+
+test('limitsSummary i statusLine: pusty bez limitów, z limitami dopisek', () => {
+  assert.equal(limitsSummary({ maxTransfers: null, maxWalkMin: null }), '');
+  assert.equal(limitsSummary({ maxTransfers: 0, maxWalkMin: 10 }), 'odcinki pieszo do 10 min, bez przesiadek');
+  assert.equal(limitsSummary({ maxTransfers: 2, maxWalkMin: null }), 'najwyżej 2 przesiadki');
+  const base = { walkOnly: false, compare: false, direction: 'from', mode: 'time', safe: false, whenTime: 'Dzień roboczy, 08:30' };
+  assert.equal(statusLine(base), 'Zasięg z punktu · Dzień roboczy, 08:30.');
+  assert.equal(statusLine({ ...base, limits: '' }), statusLine(base));
+  assert.equal(statusLine({ ...base, limits: 'bez przesiadek' }), 'Zasięg z punktu · Dzień roboczy, 08:30 · bez przesiadek.');
+});
+
+test('emptyResultText: null bez limitów i przy niepustym zasięgu, inaczej o limicie', () => {
+  assert.equal(emptyResultText({ reachable: 0, maxTransfers: null, maxWalkMin: null }), null);
+  assert.equal(emptyResultText({ reachable: 5, maxTransfers: 0, maxWalkMin: 5 }), null);
+  assert.match(emptyResultText({ reachable: 0, maxTransfers: 0, maxWalkMin: null }), /limicie przesiadek/);
+  assert.match(emptyResultText({ reachable: 0, maxTransfers: null, maxWalkMin: 5 }), /do 5 min/);
+  assert.match(emptyResultText({ reachable: 0, maxTransfers: 1, maxWalkMin: 5 }), /limitach/);
+  // zoneSummaryText (kanał czytnika) mówi to samo, a bez limitów zostaje dawny tekst
+  const z = { statusText: 's', city: 'c', reachable: 0, walkOnly: false, compare: false, stats: null, showArea: false };
+  assert.equal(zoneSummaryText(z), 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.');
+  assert.equal(zoneSummaryText({ ...z, maxWalkMin: 5 }), emptyResultText({ reachable: 0, maxTransfers: null, maxWalkMin: 5 }));
+});
+
+test('limitHints: opis, powody wygaszenia, uczciwe „bez limitu = do 4 przesiadek"', () => {
+  const s = { maxTransfers: null, maxWalkMin: null, walk: true, walkOnly: false, mode: 'time', access: 'foot' };
+  assert.equal(limitHints(s).walk, '');
+  assert.equal(limitHints(s).transfers, 'Bez limitu = do 4 przesiadek.');
+  assert.equal(limitHints({ ...s, maxTransfers: 0 }).transfers, 'Tylko przejazdy jedną linią, bez przesiadek.');
+  assert.equal(limitHints({ ...s, maxTransfers: 1 }).transfers, 'Najwyżej jedna przesiadka.');
+  assert.equal(limitHints({ ...s, maxTransfers: 2 }).transfers, 'Najwyżej dwie przesiadki.');
+  assert.equal(limitHints({ ...s, maxWalkMin: 5 }).walk, 'Każdy odcinek pieszo do 5 min (ok. 400 m): dojście, przesiadka i końcówka.');
+  assert.match(limitHints({ ...s, maxWalkMin: 10 }).walk, /ok\. 750 m/);
+  assert.match(limitHints({ ...s, maxWalkMin: 15 }).walk, /ok\. 1,1 km/);
+  assert.match(limitHints({ ...s, maxWalkMin: 10, access: 'bike' }).walk, /także dojazd rowerem/);
+  assert.equal(limitHints({ ...s, walk: false, maxWalkMin: 5 }).walk, 'Spacer jest wyłączony, więc limit nie ma znaczenia.');
+  assert.equal(limitHints({ ...s, walkOnly: true }).transfers, 'Bez pojazdów nie ma przesiadek.');
+  assert.equal(limitHints({ ...s, mode: 'general', maxTransfers: 1 }).transfers, 'Tryb ogólny nie modeluje przesiadek.');
+});
+
+test('accessSectionSummary: limity w tekście i w changed, skracanie przy ~34 znakach, bez limitów bez zmian', () => {
+  const all = { walk: true, access: 'foot', groups: GROUPS5, veh: allOn(GROUPS5) };
+  assert.deepEqual(accessSectionSummary({ ...all, maxTransfers: null, maxWalkMin: null }),
+    { text: 'pieszo · wszystkie środki', changed: false });
+  // „pieszo do 10 min · wszystkie środki" to 35 znaków → bez słowa „pieszo"
+  assert.deepEqual(accessSectionSummary({ ...all, maxWalkMin: 10 }), { text: 'do 10 min · wszystkie środki', changed: true });
+  const veh2 = { ...allOn(GROUPS5), trol: false, rail: false, metro: false };
+  assert.equal(accessSectionSummary({ ...all, veh: { ...veh2, bus: false }, maxWalkMin: 10 }).text, 'pieszo do 10 min · tramwaj');
+  assert.equal(accessSectionSummary({ ...all, maxTransfers: 0 }).changed, true);
+  assert.match(accessSectionSummary({ ...all, maxTransfers: 0 }).text, /bez przesiadek$/);
+  assert.match(accessSectionSummary({ ...all, maxTransfers: 1 }).text, /do 1 przesiadki$/);
+  assert.match(accessSectionSummary({ ...all, maxTransfers: 2 }).text, /do 2 przesiadek$/);
+  assert.match(accessSectionSummary({ ...all, access: 'bike', maxWalkMin: 5 }).text, /^rowerem do 5 min/);
+  // bez spaceru limit spaceru nie istnieje
+  assert.deepEqual(accessSectionSummary({ ...all, walk: false, maxWalkMin: 10 }), { text: 'bez spaceru · wszystkie środki', changed: true });
+});

@@ -1,9 +1,9 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Engine } from '../js/engine.js';
-import { buildWalkGrid } from '../js/walkgrid.js';
+import { buildWalkGrid, pixelIndex } from '../js/walkgrid.js';
 import { NET_WALK_MPS, NET_BIKE_MPS } from '../js/walknet.js';
-import { WALK_MPS, BIKE_MPS } from '../js/data.js';
+import { WALK_MPS, BIKE_MPS, M_PER_DEG_LAT } from '../js/data.js';
 import { makeRaw, makeWalkRaw, everyN } from './helpers.mjs';
 
 /*
@@ -236,4 +236,98 @@ test('dropGrid przy zmianie miasta: siatka lądu budowana od nowa po powrocie', 
   } finally {
     if (!hadImageData) delete globalThis.ImageData;
   }
+});
+
+// --- limity przesiadek i spaceru (Z-012) ------------------------------------------
+
+test('limity domyślne: run({}) i run({maxTransfers:null, maxWalkSec:null}) dają identyczne strefy', async () => {
+  const e = await makeEngine('tstLimDefault');
+  for (const extra of [{}, { access: 'bike' }, { walk: false }, { mode: 'general' }]) {
+    const a = await run(e, extra);
+    const b = await run(e, { ...extra, maxTransfers: null, maxWalkSec: null });
+    assert.deepEqual(b.zones.zones, a.zones.zones, JSON.stringify(extra));
+    assert.equal(b.zones.reachable, a.zones.reachable);
+    assert.deepEqual(b.zones.stats, a.zones.stats);
+  }
+});
+
+test('limit spaceru: dojście do S0 (~44 min pieszo) odpada przy 40 min, zostaje przy 60 min; limity zapamiętane w last', async () => {
+  const e = await makeEngine('tstLimAccess');
+  await run(e, {});
+  assert.ok(Number.isFinite(mins(e)[0]));
+  await run(e, { maxWalkSec: 3600 });
+  assert.ok(Number.isFinite(mins(e)[0]));
+  assert.equal(e.last.limits.maxWalkSec, 3600);
+  await run(e, { maxWalkSec: 2400, maxTransfers: 1 });
+  assert.equal(mins(e)[0], Infinity, 'dojście 44 min > limit 40 min');
+  assert.deepEqual(e.last.limits, { maxTransfers: 1, maxWalkSec: 2400 });
+  // bez spaceru i „tylko pieszo" limit spaceru nie ma znaczenia
+  await run(e, { maxWalkSec: 2400, walk: false });
+  assert.equal(e.last.limits.maxWalkSec, Infinity);
+  await run(e, { maxWalkSec: 2400, walkOnly: true });
+  assert.equal(e.last.limits.maxWalkSec, Infinity);
+});
+
+test('limit spaceru: dymek (pickTargetStop, linia prosta) nie obiecuje celu spoza limitu', async () => {
+  const e = await makeEngine('tstLimPick');
+  const target = { lat: 50.0465, lng: 20 }; // ok. 1,8 km od S0 i od S1
+  await run(e, { access: 'bike', maxWalkSec: 1700 });
+  assert.ok(Number.isFinite(mins(e)[1]), 'S1 rowerem w limicie');
+  assert.equal(e.pickTargetStop(target), null, 'marsz ~31 min z najbliższego przystanku > limit 28 min');
+  await run(e, { access: 'bike' });
+  assert.ok(e.pickTargetStop(target), 'bez limitu cel istnieje');
+});
+
+test('walkWaveOnNet: limit tnie falę od przystanków, ale nie spacer z punktu', async () => {
+  const e = await makeEngine('tstLimWave');
+  await run(e, {});
+  const net = e.last.net;
+  const res = 25, W = 40, H = 450;
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos(50 * Math.PI / 180);
+  const grid = { W, H, res, land: new Uint8Array(W * H).fill(1), time: new Uint16Array(W * H),
+    toX: lon => (lon - 19.999) * mPerDegLon / res, toY: lat => (50.1 - lat) * M_PER_DEG_LAT / res };
+  const px = lat => pixelIndex(grid, lat, 20);
+  const stopsMins = new Float64Array(net.nStops).fill(Infinity);
+  stopsMins[1] = 10; // S1 (50,063) osiągnięty po 10 min jazdy
+  const wave = (origin, max) => { const t = e.walkWaveOnNet(grid, net, stopsMins, origin, undefined, max); return [px(50.065), px(50.072), px(50.02)].map(i => t[i]); };
+
+  const [nearFree, farFree] = wave(null, Infinity);
+  assert.ok(nearFree < 65535 && farFree < 65535, 'bez limitu fala sięga 1 km od S1');
+  const [nearLim, farLim, originOnlyLim] = wave(null, 300);
+  assert.ok(nearLim < 65535, 'blisko przystanku mieści się w 5 min marszu');
+  assert.equal(farLim, 65535, '1 km od przystanku > 5 min marszu');
+  assert.equal(originOnlyLim, 65535);
+  // z punktem użytkownika w 50,00: jego spacer (2,2 km do 50,02) jest zwolniony z limitu
+  const [, farWithOrigin, nearOrigin] = wave({ lat: 50, lng: 20 }, 300);
+  assert.equal(farWithOrigin, 65535, 'limit dalej tnie falę od przystanków');
+  assert.ok(nearOrigin < 65535, 'punkt idzie dalej niż limit — zwolniony');
+  assert.ok(nearOrigin > 1500 && nearOrigin < 1900, `~2,2 km pieszo ≈ 1780 s, jest ${nearOrigin}`);
+});
+
+test('walkWaveOnNet: wynik nie zależy od starego bufora spread siatki (np. po fallbacku rastrowym z limitem)', async () => {
+  const e = await makeEngine('tstSpreadStale');
+  await run(e, {});
+  const net = e.last.net;
+  const res = 25, W = 40, H = 450;
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos(50 * Math.PI / 180);
+  const mk = () => ({ W, H, res, land: new Uint8Array(W * H).fill(1), time: new Uint16Array(W * H),
+    toX: lon => (lon - 19.999) * mPerDegLon / res, toY: lat => (50.1 - lat) * M_PER_DEG_LAT / res });
+  const mins = new Float64Array(net.nStops).fill(Infinity);
+  mins[1] = 10;
+  const clean = mk();
+  const a = [...e.walkWaveOnNet(clean, net, mins, null, undefined, 300)];
+  const dirty = mk();
+  dirty.spread = new Uint16Array(W * H).fill(60000); // pozostałość po dużym rozlewie
+  const b = [...e.walkWaveOnNet(dirty, net, mins, null, undefined, 300)];
+  assert.deepEqual(b, a);
+});
+
+test('limit spaceru przy rowerze: dojazd do przystanku też podlega limitowi (5 min ≈ 1,25 km)', async () => {
+  const e = await makeEngine('tstLimBike');
+  await run(e, { access: 'bike' });
+  assert.ok(Number.isFinite(mins(e)[0]), 'S0 (3,3 km) rowerem osiągalny bez limitu');
+  await run(e, { access: 'bike', maxWalkSec: 300 });
+  assert.equal(mins(e)[0], Infinity, 'przy limicie 5 min dojazd sięga ok. 1,25 km');
+  await run(e, { access: 'bike', maxWalkSec: 900 });
+  assert.ok(Number.isFinite(mins(e)[0]), 'limit 15 min (3,75 km) mieści S0');
 });

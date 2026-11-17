@@ -102,7 +102,10 @@
   "opole": {
     "name": "Opole",
     "feeds": [
-      { "name": "mzk-opole", "url": "https://cdn.zbiorkom.live/gtfs/opole.zip" }
+      { "name": "mzk-opole",
+        "url": "https://www.mzkopole.pl/otwarte-dane/lib/getlatestfile.php",
+        "format": "transxchange",
+        "formatOptions": { "routeType": 3, "agencyId": "MZK Opole", "agencyName": "MZK Opole" } }
     ],
     "bbox": [50.6, 17.85, 50.74, 18.02],
     "gridBbox": [50.56, 17.77, 50.79, 18.02],
@@ -116,7 +119,7 @@
       { "key": "bus", "label": "🚌 Autobus", "types": [3, 700] }
     ],
     "credits": [
-      { "label": "MZK Opole (via zbiorkom.live)", "url": "https://zbiorkom.live" }
+      { "label": "MZK Opole (otwarte dane)", "url": "https://www.mzkopole.pl/o-firmie/otwarte-dane/" }
     ]
   },
   "zielonagora": {

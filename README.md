@@ -51,7 +51,7 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
 - **Ogólnie** — suma czasów przejazdu i przejść, bez czekania na pojazdy
   (algorytm Dijkstry na minimalnych czasach odcinków).
 - **O godzinie** — rzeczywisty rozkład z oczekiwaniem na przesiadki
-  (algorytm RAPTOR, maks. 4 przesiadki) + wybór typu dnia
+  (algorytm RAPTOR, domyślnie do 4 przesiadek) + wybór typu dnia
   (roboczy / sobota / niedziela).
 - **Porównanie dwóch punktów** — drugi znacznik; strefa pokazuje miejsca
   osiągalne przez obie osoby (czas = wolniejsza z nich). Przy kierunku
@@ -78,9 +78,20 @@ miasta). Można też użyć przyciskiem geolokalizacji. Bieżący widok
 (punkt i wszystkie opcje) jest zapisywany w adresie URL — przycisk „Kopiuj
 link" pozwala go udostępnić.
 
+**Limity trasy.** W sekcji „Dojście, przesiadki i środki" są dwie grupy:
+*Przesiadki (maks.)* — `0`, `1`, `2` albo bez limitu (URL `tr=`), oraz
+*Maks. odcinek pieszo* — `5`, `10`, `15` minut albo bez limitu (URL `wmax=`,
+minuty 1–89; `0` i `≥90` znaczą brak limitu). Limit spaceru dotyczy **każdego
+pojedynczego odcinka pieszego przy komunikacji** — dojścia do przystanku,
+przesiadki i dojścia z przystanku do celu — a nie sumy marszu w podróży. Sam
+spacer z punktu startowego, bez wsiadania, nie jest ograniczony. Obie wartości
+domyślne to „bez limitu", więc adresy sprzed tej zmiany dają identyczny wynik.
+W trybie „Ogólnie" limit przesiadek jest wygaszony: ten tryb liczy minimalne
+czasy odcinków, więc liczba zmian linii nie jest w nim modelowana.
+
 Panel jest zwijany: miasto, tryb, wyszukiwarka i wynik (legenda, status)
 zawsze widać, a rzadziej zmieniane ustawienia siedzą w sekcjach „Czas
-i kierunek", „Dojście i środki transportu" oraz „Opóźnienia i statystyki"
+i kierunek", „Dojście, przesiadki i środki" oraz „Opóźnienia i statystyki"
 (natywne `<details>`, domyślnie zamknięte, z bieżącym podsumowaniem w nagłówku
 i kropką przy ustawieniach odbiegających od domyślnych). „Dane i kontakt"
 (źródła, daty rozkładu, link do wsparcia) jest przypięte na dole panelu;
@@ -174,7 +185,11 @@ przebiegu punkt odniesienia przesuwa się na nowe dane. Bramka nie dotyczy
 `data/delays`.
 
 `fetch-feeds.mjs` pobiera i rozpakowuje wszystkie feedy miasta (w tym
-dwustopniowe API Wrocławia). `build-data.mjs` łączy feedy (prefiksując
+dwustopniowe API Wrocławia). Feed z polem `format` w `data/cities.json`
+(dziś `"transxchange"`, MZK Opole) jest po rozpakowaniu zamieniany na GTFS
+przez `tools/transxchange-to-gtfs.mjs` (opcje w `formatOptions`); konwerter
+przerywa pracę, gdy dane nie przechodzą kontroli krzyżowej, więc `build-data`
+nie dostaje wtedy niepełnego feedu. `build-data.mjs` łączy feedy (prefiksując
 identyfikatory), odrzuca przystanki bez kursów (feedy zbiorcze wnoszą tysiące
 stacji z całej Polski), obsługuje kursowanie przez `calendar_dates`, pełny
 `calendar.txt` z flagami dni oraz kursy częstotliwościowe `frequencies.txt`
@@ -204,6 +219,7 @@ js/map.js              Leaflet + warstwa canvas: obrysy wektorowe stref (raster 
 js/stats.js            statystyka maks. zasięgu (% powierzchni liczy walkgrid.js)
 data/cities.json       konfiguracja miast (feedy, granice, pojazdy, punkty)
 tools/fetch-feeds.mjs  pobieranie i rozpakowanie feedów miasta
+tools/transxchange-to-gtfs.mjs konwerter TransXChange -> GTFS (Opole), parser: tools/xmlstream.mjs
 tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/<miasto>/*.json
 tools/build-walknet.mjs graf dróg pieszych z OSM -> data/<miasto>/walknet.json
 tools/build-water.mjs  maska wody z OSM/Overpass -> data/<miasto>/water.json

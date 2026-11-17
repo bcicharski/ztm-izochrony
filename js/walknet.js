@@ -251,12 +251,22 @@ export function snapEdges(net, lat, lon, maxM = SNAP_MAX_M, tolM = SNAP_TOL_M) {
   return out.length > SNAP_MAX_CAND ? out.slice(0, SNAP_MAX_CAND) : out;
 }
 
-/** Źródła fali dla `computeNodeTimes` z punktu przyłączonego do sieci (oba końce każdej kandydatki). */
+/**
+ * Źródła fali dla `computeNodeTimes` z punktu przyłączonego do sieci (oba końce
+ * każdej kandydatki). Trzeci element nasiona to czas MARSZU od samego punktu
+ * (bez `startSec`, który może być czasem jazdy) — potrzebny limitowi spaceru.
+ * Starsi konsumenci czytają dwa pierwsze pola.
+ * @returns {Array<[number, number, number]>} [węzeł, sekundy łącznie, sekundy marszu]
+ */
 export function snapSeeds(snaps, startSec, mps = NET_WALK_MPS) {
   const seeds = [];
   for (const s of snaps) {
-    const base = startSec + s.perpM / mps;
-    seeds.push([s.a, Math.round(base + s.mA / mps)], [s.b, Math.round(base + s.mB / mps)]);
+    const w0 = s.perpM / mps;
+    const base = startSec + w0;
+    seeds.push(
+      [s.a, Math.round(base + s.mA / mps), Math.round(w0 + s.mA / mps)],
+      [s.b, Math.round(base + s.mB / mps), Math.round(w0 + s.mB / mps)],
+    );
   }
   return seeds;
 }
@@ -297,25 +307,51 @@ export function sameEdgeSec(snapsA, snapsB, mps = NET_WALK_MPS) {
 /**
  * Multi-source Dijkstra po sieci, kolejka kubełkowa po sekundach.
  * @param {object} net    sieć z `decodeWalkNet`
- * @param {Array<[number, number]>} seeds  [indeksWęzła, sekundyStartu]
+ * @param {Array<[number, number]|[number, number, number]>} seeds
+ *   [indeksWęzła, sekundyStartu] albo [indeksWęzła, sekundyStartu, sekundyMarszu];
+ *   brak trzeciego elementu = źródło zaczyna marsz od zera, czyli walkSec === sec
+ *   (punkt użytkownika). Przystanek, do którego dojechano pojazdem, ma sec > walkSec.
  * @param {number} capSec  horyzont [s]
  * @param {number} mps     tempo [m/s] — `NET_WALK_MPS` albo `NET_BIKE_MPS`
+ * @param {object} [opts]
+ * @param {number} [opts.maxWalkSec]  odcięcie czasu MARSZU od źródła [s] (nie czasu
+ *   łącznego); domyślnie bez odcięcia
+ * @param {Int32Array|null} [opts.walkOut]  tablica `net.n` wypełniana czasem marszu
+ *   zwycięskiej etykiety węzła (−1 = brak); używa jej `paintNetwork`
  * @returns {Int32Array} czas w każdym węźle (−1 = nieosiągalny)
+ *
+ * Odcięcie jest ZACHOWAWCZE, nie Pareto-dokładne: węzeł pamięta czas marszu
+ * etykiety o najkrótszym czasie ŁĄCZNYM. Etykieta wolniejsza, ale z mniejszym
+ * marszem, mogłaby sięgnąć dalej — więc zasięg bywa nieznacznie ZANIŻONY, nigdy
+ * zawyżony. To ten sam kompromis co `spread`/`maxSpreadM` w js/walkgrid.js.
  */
-export function computeNodeTimes(net, seeds, capSec, mps = NET_WALK_MPS) {
+export function computeNodeTimes(net, seeds, capSec, mps = NET_WALK_MPS, opts = {}) {
+  const { maxWalkSec = Infinity, walkOut = null } = opts;
   const time = new Int32Array(net.n).fill(-1);
+  const track = walkOut != null || maxWalkSec < Infinity;
+  const walk = track ? (walkOut ?? new Int32Array(net.n)) : null;
+  if (walk) walk.fill(-1);
   const buckets = new Array(capSec + 1);
   let pending = 0;
-  const push = (node, t) => {
-    if (t > capSec) return;
+  const push = (node, t, w) => {
+    if (t > capSec || w > maxWalkSec) return;
     const cur = time[node];
-    if (cur >= 0 && cur <= t) return;
+    if (cur >= 0 && cur <= t) {
+      // remis w czasie łącznym: zostaje etykieta z krótszym marszem (węzeł jeszcze
+      // nie jest przetwarzany — jego kubełek czeka, a krawędzie mają ≥ 1 s)
+      if (walk && cur === t && w < walk[node]) walk[node] = w;
+      return;
+    }
     time[node] = t;
+    if (walk) walk[node] = w;
     (buckets[t] ??= []).push(node);
     pending++;
   };
-  for (const [node, sec] of seeds) {
-    if (node >= 0 && node < net.n) push(node, Math.max(0, Math.min(sec, capSec)));
+  for (const [node, sec, walkSec = sec] of seeds) {
+    if (node >= 0 && node < net.n) {
+      const t = Math.max(0, Math.min(sec, capSec));
+      push(node, t, Math.min(walkSec, t));
+    }
   }
   for (let t = 0; t <= capSec && pending > 0; t++) {
     const bucket = buckets[t];
@@ -323,8 +359,10 @@ export function computeNodeTimes(net, seeds, capSec, mps = NET_WALK_MPS) {
     for (const node of bucket) {
       pending--;
       if (time[node] !== t) continue; // nieaktualny wpis
+      const w = walk ? walk[node] : 0;
       for (let k = net.off[node]; k < net.off[node + 1]; k++) {
-        push(net.adjTo[k], t + Math.max(1, Math.round(net.adjLen[k] / mps)));
+        const dt = Math.max(1, Math.round(net.adjLen[k] / mps));
+        push(net.adjTo[k], t + dt, w + dt);
       }
     }
     buckets[t] = undefined;
@@ -362,9 +400,14 @@ export function computeNodeTimes(net, seeds, capSec, mps = NET_WALK_MPS) {
  * @param {boolean} [opts.reset] czy wyczyścić bufor przed malowaniem; `false`
  *        dokłada falę do już namalowanej (min per piksel) — tak łączy się
  *        dojazd rowerem od punktu z dojściem pieszo od przystanków
+ * @param {Int32Array|null} [opts.walkTime]  `walkOut` z `computeNodeTimes`
+ * @param {number} [opts.maxWalkSec]  limit marszu [s]: wnętrze krawędzi też go
+ *        respektuje (węzeł w limicie nie czyni całej krawędzi osiągalną).
+ *        Wpisy `edgeSeeds` mogą nieść trzeci element — marsz w punkcie rzutu.
  */
 export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec, opts = {}) {
-  const { edgeSeeds = null, mps = NET_WALK_MPS, reset = true } = opts;
+  const { edgeSeeds = null, mps = NET_WALK_MPS, reset = true, walkTime = null, maxWalkSec = Infinity } = opts;
+  const lim = walkTime != null && maxWalkSec < Infinity;
   const time = grid.time;
   if (reset) time.fill(unreach);
   // krok próbkowania poniżej boku piksela, żeby kolejne próbki trafiały
@@ -387,17 +430,20 @@ export function paintNetwork(net, nodeTime, grid, pixelIndex, unreach, capSec, o
       if (idx < 0) continue;
       // czas krótszy z dwóch kierunków dojścia wzdłuż krawędzi
       let t = Infinity;
-      if (ta >= 0) t = ta + lenSec * f;
-      if (tb >= 0) {
+      if (ta >= 0 && (!lim || walkTime[a] + lenSec * f <= maxWalkSec)) t = ta + lenSec * f;
+      if (tb >= 0 && (!lim || walkTime[b] + lenSec * (1 - f) <= maxWalkSec)) {
         const viaB = tb + lenSec * (1 - f);
         if (viaB < t) t = viaB;
       }
       if (inner) {
-        for (const [ts, sec] of inner) {
-          const direct = sec + Math.abs(f - ts) * lenSec;
+        for (const [ts, sec, walkSec = sec] of inner) {
+          const dist = Math.abs(f - ts) * lenSec;
+          if (lim && walkSec + dist > maxWalkSec) continue;
+          const direct = sec + dist;
           if (direct < t) t = direct;
         }
       }
+      if (t === Infinity) continue;
       if (t > capSec) continue;
       const v = t | 0;
       if (v < time[idx]) time[idx] = v;

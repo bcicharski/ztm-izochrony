@@ -51,12 +51,23 @@ const P_NONE = 0, P_ACCESS = 1, P_RIDE = 2, P_FOOT = 3;
  *                       accessMps?:number (tempo dojścia w linii prostej —
  *                       WALK_MPS albo BIKE_MPS; dotyczy przystanków spoza grafu),
  *                       accessSec?:Float64Array (czasy dojścia po sieci ulic —
- *                       patrz findAccessStops; brak = liczenie w linii prostej)}
+ *                       patrz findAccessStops; brak = liczenie w linii prostej),
+ *                       maxTransfers?:number|null (limit przesiadek: liczba rund
+ *                       RAPTOR = maxTransfers + 1; null/brak = MAX_ROUNDS),
+ *                       maxWalkSec?:number|null (limit JEDNEGO odcinka pieszego
+ *                       przy komunikacji: dojście, przesiadka piesza; null/brak =
+ *                       bez limitu). Tryb ogólny (Dijkstra) ignoruje limit przesiadek —
+ *                       jego krawędzie „min. czas między przystankami" nie niosą
+ *                       liczby zmian linii.}
  * @returns {{minutes: Float64Array, journeyTo: (stop:number)=>Array|null}}
  */
 export function computeReachability(net, opts) {
   const g = opts.direction === 'to' ? net.reversed : net;
-  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec, opts.accessMps ?? WALK_MPS);
+  const lim = {
+    rounds: Number.isInteger(opts.maxTransfers) ? Math.max(1, Math.min(MAX_ROUNDS, opts.maxTransfers + 1)) : MAX_ROUNDS,
+    maxWalkSec: Number.isFinite(opts.maxWalkSec) ? opts.maxWalkSec : Infinity,
+  };
+  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec, opts.accessMps ?? WALK_MPS, lim.maxWalkSec);
   if (sources.length === 0) {
     return { minutes: new Float64Array(g.nStops).fill(Infinity), journeyTo: () => null };
   }
@@ -69,11 +80,11 @@ export function computeReachability(net, opts) {
   if (opts.mode === 'time') {
     t0 = opts.timeMin * 60;
     if (opts.direction === 'to') t0 = REV_C - t0;
-    run = raptor(g, sources, t0, opts.walk, opts.types, opts.cautious, delays, opts.dayType);
+    run = raptor(g, sources, t0, opts.walk, opts.types, opts.cautious, delays, opts.dayType, lim);
     // pora nocna: kursy "po północy" zapisane są jako 24:00+ dnia poprzedniego
     if (opts.timeMin < 300) {
       const t0b = opts.direction === 'to' ? REV_C - (opts.timeMin + 1440) * 60 : t0 + 86400;
-      const second = raptor(g, sources, t0b, opts.walk, opts.types, opts.cautious, delays, opts.dayType);
+      const second = raptor(g, sources, t0b, opts.walk, opts.types, opts.cautious, delays, opts.dayType, lim);
       // scal: dla każdego przystanku wygrywa szybszy przebieg
       for (let i = 0; i < run.seconds.length; i++) {
         if (second.seconds[i] < run.seconds[i]) {
@@ -85,7 +96,7 @@ export function computeReachability(net, opts) {
       run.second = second;
     }
   } else {
-    run = dijkstra(g, sources, opts.walk, opts.types, opts.cautious);
+    run = dijkstra(g, sources, opts.walk, opts.types, opts.cautious, lim.maxWalkSec);
   }
 
   const minutes = new Float64Array(g.nStops);
@@ -114,14 +125,21 @@ export function computeReachability(net, opts) {
  *       w linii prostej z ryczałtem krętości.
  *   Bez tego przystanek za wodą był startem podróży w kilka minut marszu.
  * @param {number} accessMps  tempo dla przystanków spoza grafu (pieszo/rower).
+ * @param {number} maxAccessSec  limit dojścia do przystanku [s] (Infinity = brak).
+ *   Obcina i wpisy z `accessSec`, i gałąź w linii prostej — ta druga jest
+ *   jedynym miejscem, gdzie limit da się wymusić, gdy graf ulic się jeszcze
+ *   nie wczytał (`accessSec === null`).
  */
-export function findAccessStops(g, lat, lon, walk, accessSec = null, accessMps = WALK_MPS) {
+export function findAccessStops(g, lat, lon, walk, accessSec = null, accessMps = WALK_MPS, maxAccessSec = Infinity) {
   const out = [];
   if (walk) {
-    const maxDist = HORIZON_S * accessMps; // i tak przycięte horyzontem
+    const maxDist = Math.min(HORIZON_S, maxAccessSec) * accessMps; // i tak przycięte horyzontem
     for (let i = 0; i < g.nStops; i++) {
       const net = accessSec ? accessSec[i] : NaN;
-      if (Number.isFinite(net)) { out.push(i, Math.round(net)); continue; }
+      if (Number.isFinite(net)) {
+        if (net <= maxAccessSec) out.push(i, Math.round(net));
+        continue;
+      }
       if (net === Infinity) continue;
       const d = distM(lat, lon, g.lat[i], g.lon[i]);
       if (d <= maxDist) out.push(i, Math.round(d / accessMps));
@@ -155,8 +173,9 @@ function newParents(n) {
 
 // --- RAPTOR -----------------------------------------------------------------
 
-function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
+function raptor(g, sources, t0, walk, types, cautious, delays, dayType, lim) {
   const n = g.nStops;
+  const { rounds, maxWalkSec } = lim;
   const INF = Infinity;
   const best = new Float64Array(n).fill(INF);      // najlepszy znany czas przyjazdu
   const arrPrev = new Float64Array(n).fill(INF);   // przyjazdy z poprzedniej rundy
@@ -191,7 +210,10 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
   // dwa razy: 2 min zamiast 1, a w trybie ostrożnym 8 min zamiast 4.
   const buffer = cautious ? CAUTIOUS_TRANSFER_S : MIN_TRANSFER_S;
 
-  for (let round = 1; round <= MAX_ROUNDS; round++) {
+  // Runda = jedno wsiadanie, więc `rounds` = maxTransfers + 1. Krok 3 (marsz
+  // z przystanku) zostaje w ostatniej rundzie: to wyjście z przystanku, nie
+  // przesiadka — nikt już po nim nie wsiada.
+  for (let round = 1; round <= rounds; round++) {
     // 1. wzorce obsługujące oznaczone przystanki
     const qList = [];
     for (const s of marked) {
@@ -267,6 +289,10 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType) {
     for (const s of newlyByRide) {
       const adj = footAdj[s];
       for (let k = 0; k < adj.length; k += 2) {
+        // limit spaceru dotyczy surowego czasu marszu, nie marginesu na opóźnienia
+        // (inaczej tryb ostrożny skasowałby przesiadki przy limicie < 4 min);
+        // sameGroupAdj (bez spaceru) nie jest filtrowany nigdy
+        if (walk && adj[k + 1] > maxWalkSec) continue;
         const sec = cautious ? Math.max(adj[k + 1], CAUTIOUS_TRANSFER_S) : adj[k + 1];
         const to = adj[k], t = best[s] + sec;
         if (t < best[to] && t <= cap) {
@@ -361,7 +387,7 @@ function rideAdjacency(g, types, cautious) {
   return adj;
 }
 
-function dijkstra(g, sources, walk, types, cautious) {
+function dijkstra(g, sources, walk, types, cautious, maxWalkSec = Infinity) {
   const n = g.nStops;
   const rideAdj = rideAdjacency(g, types, cautious);
   const footAdj = walk ? g.transferAdj : g.sameGroupAdj;
@@ -427,6 +453,7 @@ function dijkstra(g, sources, walk, types, cautious) {
     }
     const fa = footAdj[u];
     for (let k = 0; k < fa.length; k += 2) {
+      if (walk && fa[k + 1] > maxWalkSec) continue; // surowy czas marszu, jak w RAPTOR-ze
       const sec = cautious ? Math.max(fa[k + 1], CAUTIOUS_TRANSFER_S) : fa[k + 1];
       const v = fa[k], nt = t + sec;
       if (nt < dist[v]) {

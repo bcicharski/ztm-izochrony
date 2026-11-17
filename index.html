@@ -204,6 +204,7 @@
       </div>
 
       <p class="status" id="status" role="status" aria-live="off"></p>
+      <button type="button" class="link-btn" id="clearLimits" hidden>Zdejmij limity</button>
       <p class="sr-only" id="zoneSummary" role="status" aria-live="polite" aria-atomic="true"></p>
 
       <section class="diag" id="diagBox" role="group" aria-labelledby="diagTitle" hidden>
@@ -263,7 +264,7 @@
       <details class="sec" id="secAccess">
         <summary>
           <span class="sec-text">
-            <span class="sec-title">Dojście i środki transportu</span>
+            <span class="sec-title">Dojście, przesiadki i środki</span>
             <span class="sec-line"><span class="sec-dot" aria-hidden="true" hidden></span><span class="sec-sum" id="secAccessSum"></span></span>
           </span>
           <span class="sec-chev" aria-hidden="true"></span>
@@ -282,6 +283,36 @@
               <option value="bike">🚲 rowerem, zostaje na przystanku</option>
               <option value="bike-onboard">🚲 rowerem, jedzie z tobą</option>
             </select>
+          </fieldset>
+
+          <fieldset class="control" id="walkMaxField" aria-describedby="walkMaxHint">
+            <legend>Maks. odcinek pieszo</legend>
+            <div class="segmented seg-limit">
+              <input type="radio" name="walkmax" id="wmax5" value="5">
+              <label for="wmax5">5 min</label>
+              <input type="radio" name="walkmax" id="wmax10" value="10">
+              <label for="wmax10">10 min</label>
+              <input type="radio" name="walkmax" id="wmax15" value="15">
+              <label for="wmax15">15 min</label>
+              <input type="radio" name="walkmax" id="wmaxOff" value="" checked>
+              <label for="wmaxOff">bez limitu</label>
+            </div>
+            <p class="hint" id="walkMaxHint"></p>
+          </fieldset>
+
+          <fieldset class="control" id="trField" aria-describedby="trHint">
+            <legend>Przesiadki (maks.)</legend>
+            <div class="segmented seg-limit">
+              <input type="radio" name="transfers" id="tr0" value="0">
+              <label for="tr0">0<span class="sr-only"> przesiadek (jedna linia)</span></label>
+              <input type="radio" name="transfers" id="tr1" value="1">
+              <label for="tr1">1<span class="sr-only"> przesiadka</span></label>
+              <input type="radio" name="transfers" id="tr2" value="2">
+              <label for="tr2">2<span class="sr-only"> przesiadki</span></label>
+              <input type="radio" name="transfers" id="trOff" value="" checked>
+              <label for="trOff">bez limitu</label>
+            </div>
+            <p class="hint" id="trHint"></p>
           </fieldset>
 
           <fieldset class="control">
@@ -411,7 +442,8 @@
       <h3>Czas</h3>
       <p><strong>O godzinie</strong> (domyślnie: najbliższe minuty) — liczone
         według rzeczywistego rozkładu jazdy dla wskazanej godziny i typu dnia,
-        z oczekiwaniem na odjazdy i przesiadki (maks. 4 przesiadki).
+        z oczekiwaniem na odjazdy i przesiadki (domyślnie do 4 przesiadek;
+        limit można zmniejszyć w sekcji „Dojście, przesiadki i środki").
         Przy kierunku „do miejsca" wskazana godzina oznacza czas przyjazdu.
         <strong>Ogólnie</strong> — suma czasów przejazdu i przejść, bez czekania
         na pojazdy; obraz „ile się jedzie", niezależny od rozkładu (wynik
@@ -430,6 +462,15 @@
         <strong>wyłączone</strong>, podróż zaczyna się od najbliższego zespołu
         przystankowego, przesiadki możliwe są tylko w ramach tego samego zespołu,
         a na mapie kolorowane są wyłącznie osiągnięte przystanki.</p>
+      <p><strong>Maks. odcinek pieszo</strong> (5, 10 albo 15 minut) ogranicza
+        każdy pojedynczy spacer przy komunikacji: dojście do przystanku,
+        przesiadkę pieszą i drogę z przystanku do celu. To nie jest limit
+        łączny na całą podróż, a sam spacer z punktu (bez wsiadania) nie jest
+        ograniczony. Przy dojeździe rowerem limit obejmuje też dojazd.
+        <strong>Przesiadki (maks.)</strong> (0, 1 albo 2) ograniczają liczbę
+        przesiadek; „0" to przejazdy jedną linią. Przy „bez limitu" liczy się
+        do 4 przesiadek. Tryb ogólny nie modeluje przesiadek, więc limit
+        przesiadek jest w nim wygaszony.</p>
       <p><strong>Rowerem</strong> (15 km/h, po tej samej sieci ulic) dojazd do
         przystanku liczony jest do 30 minut. Wariant „zostaje na przystanku" to
         klasyczne <em>bike &amp; ride</em>: rower czeka w stojaku, więc od

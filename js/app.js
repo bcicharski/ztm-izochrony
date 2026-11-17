@@ -9,6 +9,7 @@ import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateContro
 import {
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
+  engineLimits, limitsEnabled, limitsSummary, limitHints, emptyResultText,
   geoErrorMessage, locateUnavailableReason, ADDRESS_QUERY_MIN, ADDRESS_QUERY_HINT, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
   esc, optionId, createAsyncCache, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
@@ -55,6 +56,8 @@ const state = {
   day: todayDay,
   stats: false,
   safe: false,   // tryb ostrożny: margines na opóźnienia
+  maxTransfers: null, // limit przesiadek 0|1|2 (null = bez limitu, do 4) — Z-012
+  maxWalkMin: null,   // limit JEDNEGO odcinka pieszo przy komunikacji [min] (null = bez limitu)
   veh: {},       // klucze zależne od miasta
 };
 
@@ -93,7 +96,7 @@ let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dn
 
   if (u.point) { state.point = L.latLng(u.point.lat, u.point.lng); pointFromUrl = true; }
   if (u.point2) state.point2 = L.latLng(u.point2.lat, u.point2.lng);
-  for (const k of ['compare', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe']) {
+  for (const k of ['compare', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe', 'maxTransfers', 'maxWalkMin']) {
     if (k in u) state[k] = u[k];
   }
   dayFromUrl = u.dayFromUrl;
@@ -171,6 +174,7 @@ for (const el of document.querySelectorAll('input[name="mode"]')) {
   el.addEventListener('change', () => {
     state.mode = el.value;
     $('timeRow').hidden = state.mode !== 'time';
+    syncLimits();
     recompute();
   });
 }
@@ -179,7 +183,55 @@ $('walkToggle').addEventListener('change', e => {
   syncWalkToggle();
   recompute();
 });
-$('accessSelect').addEventListener('change', e => { state.access = e.target.value; recompute(); });
+$('accessSelect').addEventListener('change', e => { state.access = e.target.value; syncLimits(); recompute(); });
+
+// --- limity przesiadek i spaceru (Z-012) ---------------------------------------
+
+/** Kontekst dla czystych funkcji z uilogic.js. */
+const limitCtx = () => ({
+  maxTransfers: state.maxTransfers, maxWalkMin: state.maxWalkMin,
+  walk: state.walk, walkOnly: isWalkOnly(), mode: state.mode, access: state.access,
+});
+
+/** Limity SKUTECZNE w bieżącym trybie, w jednostkach interfejsu (minuty). */
+function uiLimits() {
+  const e = engineLimits(limitCtx());
+  return { maxTransfers: e.maxTransfers, maxWalkMin: e.maxWalkSec == null ? null : e.maxWalkSec / 60 };
+}
+
+/**
+ * Stan kontrolek limitów: zaznaczone radia, wygaszenie (fieldset `disabled` +
+ * `.dimmed`, wartość zostaje zapamiętana) i podpowiedzi z powodem.
+ */
+function syncLimits() {
+  const en = limitsEnabled(limitCtx());
+  const hints = limitHints(limitCtx());
+  const wmax = $('walkMaxField'), tr = $('trField');
+  wmax.disabled = !en.walkMax;
+  wmax.classList.toggle('dimmed', !en.walkMax);
+  tr.disabled = !en.transfers;
+  tr.classList.toggle('dimmed', !en.transfers);
+  for (const el of document.querySelectorAll('input[name="walkmax"]')) {
+    el.checked = el.value === (state.maxWalkMin == null ? '' : String(state.maxWalkMin));
+  }
+  for (const el of document.querySelectorAll('input[name="transfers"]')) {
+    el.checked = el.value === (state.maxTransfers == null ? '' : String(state.maxTransfers));
+  }
+  $('walkMaxHint').textContent = hints.walk;
+  $('trHint').textContent = hints.transfers;
+}
+for (const el of document.querySelectorAll('input[name="walkmax"]')) {
+  el.addEventListener('change', () => { state.maxWalkMin = el.value === '' ? null : +el.value; syncLimits(); recompute(); });
+}
+for (const el of document.querySelectorAll('input[name="transfers"]')) {
+  el.addEventListener('change', () => { state.maxTransfers = el.value === '' ? null : +el.value; syncLimits(); recompute(); });
+}
+$('clearLimits').addEventListener('click', () => {
+  state.maxTransfers = null;
+  state.maxWalkMin = null;
+  syncLimits();
+  recompute();
+});
 
 /** Buduje checkboxy środków transportu dla bieżącego miasta. */
 function renderVehControls() {
@@ -220,6 +272,7 @@ function syncWalkToggle() {
   const sel = $('accessSelect');
   sel.value = state.access;
   sel.disabled = walkOnly || !state.walk;
+  syncLimits();
 }
 
 $('safeToggle').addEventListener('change', e => { state.safe = e.target.checked; renderSafeNote(); recompute(); });
@@ -613,6 +666,8 @@ $('exportBtn').addEventListener('click', async () => {
       access: state.access,
       vehicles: Object.keys(state.veh).filter(k => state.veh[k]),
       cautious: state.safe,
+      max_transfers: uiLimits().maxTransfers ?? undefined, // pominięte, gdy bez limitu
+      max_walk_min: uiLimits().maxWalkMin ?? undefined,
       feed_date: cityMeta?.dates?.[dayKey] ?? null,
       generated: new Date().toISOString(),
     });
@@ -731,7 +786,7 @@ let feedStale = false;  // rozkład po terminie ważności
 function renderSections() {
   const views = {
     secTime: timeSectionSummary(state, initialDefaults),
-    secAccess: accessSectionSummary({ walk: state.walk, access: state.access, groups: cityCfg().veh, veh: state.veh }),
+    secAccess: accessSectionSummary({ walk: state.walk, access: state.access, groups: cityCfg().veh, veh: state.veh, ...uiLimits() }),
     secDelay: delaySectionSummary(state),
     secData: dataSectionSummary({ feedDate: feedYmd, stale: feedStale }),
   };
@@ -1029,6 +1084,7 @@ function announce(text) {
 function statusText(walkOnly) {
   return statusLine({
     walkOnly, compare: state.compare, direction: state.direction, mode: state.mode, safe: state.safe,
+    limits: limitsSummary(uiLimits()),
     whenTime: `${DAY_LABELS[state.day]}, ${$('timeInput').value}`,
   });
 }
@@ -1049,7 +1105,9 @@ async function recompute() {
   const status = $('status');
   cancelAnnounce(); // nie ogłaszamy „Obliczam zasięg…" ani wyniku poprzedniego przeliczenia
   status.textContent = 'Obliczam zasięg…';
+  $('clearLimits').hidden = true;
   const walkOnly = isWalkOnly();
+  const lim = engineLimits(limitCtx());
   const types = allowedTypes();
   const params = {
     city: state.city,
@@ -1061,6 +1119,8 @@ async function recompute() {
     timeMin: state.timeMin,
     types: types ? [...types] : null,
     cautious: state.safe,
+    maxTransfers: lim.maxTransfers,
+    maxWalkSec: lim.maxWalkSec,
     walkOnly,
     compare: state.compare,
     point: { lat: state.point.lat, lng: state.point.lng },
@@ -1077,12 +1137,17 @@ async function recompute() {
           contours: null,
         });
         if (msg.stats) renderStats(msg.stats, state.walk || walkOnly);
-        status.textContent = (msg.reachable === 0 && !walkOnly)
-          ? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.'
+        // pusta izochrona przy limicie to poprawny wynik (kanał #status, nie diagnostyka)
+        const ul = uiLimits();
+        const empty = msg.reachable === 0 && !walkOnly;
+        const limitText = empty ? emptyResultText({ reachable: 0, ...ul }) : null;
+        status.textContent = empty
+          ? (limitText ?? 'Brak przystanków w zasięgu — wybierz punkt bliżej miasta.')
           : statusText(walkOnly);
+        $('clearLimits').hidden = !limitText;
         announce(zoneSummaryText({
           statusText: statusText(walkOnly), city: cityCfg().name, reachable: msg.reachable,
-          walkOnly, compare: state.compare, stats: msg.stats, showArea: state.walk || walkOnly,
+          walkOnly, compare: state.compare, stats: msg.stats, showArea: state.walk || walkOnly, ...ul,
         }));
         refreshJourneyPopup();
         if (shouldVibrate({
@@ -1315,6 +1380,7 @@ $('statsToggle').checked = state.stats;
 $('safeToggle').checked = state.safe;
 syncModeUi();
 renderSafeNote();
+syncLimits();
 renderSections();
 refreshIntro();
 // animate:false — animowany zoom bywa przerywany przez invalidateSize

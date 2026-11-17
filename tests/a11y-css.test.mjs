@@ -38,6 +38,7 @@ const SIZED = [
   '.share-btn',
   '.coffee-btn',
   '#dayNote button', // „Pokaż niedzielę" (Z-022)
+  '#clearLimits',    // „Zdejmij limity" (Z-012)
   '#diagCopy',       // „Kopiuj raport diagnostyczny" (Z-025)
   '.sec > summary',  // sekcje panelu (Z-059)
   '.diag summary',   // rozwijane szczegóły diagnostyki (Z-025)

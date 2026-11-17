@@ -454,6 +454,10 @@ html, body {
   outline-offset: 1px;
 }
 
+/* limity (Z-012): „bez limitu" nie mieści się w równym podziale (1 : 1 : 1 : 1,6) */
+.seg-limit label:last-of-type { flex: 1.6; }
+fieldset.control:disabled label { cursor: default; }
+
 /* przełącznik spaceru */
 .switch {
   display: flex;
@@ -697,6 +701,29 @@ html, body {
   min-height: 1em;
   font-size: 12.5px;
   color: var(--muted);
+}
+
+/* „Zdejmij limity" pod komunikatem pustego wyniku — przycisk wyglądający jak link */
+#clearLimits {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin: -4px 0 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#clearLimits[hidden] { display: none; }
+#clearLimits:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .share-btn {

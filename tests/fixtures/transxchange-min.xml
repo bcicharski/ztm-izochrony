@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TransXChange xmlns:apd="http://www.govtalk.gov.uk/people/AddressAndPersonalDetail" xmlns="http://www.transxchange.org.uk/" SchemaVersion="2.5">
+  <JourneyPatternSections>
+    <JourneyPatternSection id="1">
+      <JourneyPatternTimingLink id="L1">
+        <From><StopPointRef>A1</StopPointRef></From>
+        <To><StopPointRef>A2</StopPointRef></To>
+        <RouteLinkRef>L1</RouteLinkRef>
+        <RunTime>PT0H5M</RunTime>
+      </JourneyPatternTimingLink>
+      <JourneyPatternTimingLink id="L2">
+        <From><StopPointRef>A2</StopPointRef></From>
+        <To><StopPointRef>A3</StopPointRef></To>
+        <RouteLinkRef>L2</RouteLinkRef>
+        <RunTime>PT0H10M</RunTime>
+      </JourneyPatternTimingLink>
+      <JourneyPatternTimingLink id="L3">
+        <From><StopPointRef>A3</StopPointRef></From>
+        <To><StopPointRef>A4</StopPointRef></To>
+        <RouteLinkRef>L3</RouteLinkRef>
+        <RunTime>PT0H1M</RunTime>
+      </JourneyPatternTimingLink>
+      <JourneyPatternTimingLink id="L4">
+        <From><StopPointRef>A4</StopPointRef></From>
+        <To><StopPointRef>A5</StopPointRef></To>
+        <RouteLinkRef>L4</RouteLinkRef>
+        <RunTime>PT0H4M</RunTime>
+      </JourneyPatternTimingLink>
+      <JourneyPatternTimingLink id="L9">
+        <From><StopPointRef>A1</StopPointRef></From>
+        <To><StopPointRef>A5</StopPointRef></To>
+        <RouteLinkRef>L9</RouteLinkRef>
+        <RunTime>PT0H15M</RunTime>
+      </JourneyPatternTimingLink>
+    </JourneyPatternSection>
+  </JourneyPatternSections>
+  <StopPoints>
+    <StopPoint id="A1">
+      <AtcoCode>A1</AtcoCode>
+      <Descriptor><CommonName>Rynek</CommonName></Descriptor>
+      <Place><Location><Longitude>17.92</Longitude><Latitude>50.67</Latitude></Location></Place>
+    </StopPoint>
+    <StopPoint id="A2">
+      <AtcoCode>A2</AtcoCode>
+      <Descriptor><CommonName>Dworzec</CommonName></Descriptor>
+      <Place><Location><Longitude>17.925</Longitude><Latitude>50.671</Latitude></Location></Place>
+    </StopPoint>
+    <StopPoint id="A3">
+      <AtcoCode>A3</AtcoCode>
+      <Descriptor><CommonName>Szpital</CommonName></Descriptor>
+      <Place><Location><Longitude>17.93</Longitude><Latitude>50.672</Latitude></Location></Place>
+    </StopPoint>
+    <StopPoint id="A4">
+      <AtcoCode>A4</AtcoCode>
+      <Descriptor><CommonName>Uniwersytet</CommonName></Descriptor>
+      <Place><Location><Longitude>17.935</Longitude><Latitude>50.673</Latitude></Location></Place>
+    </StopPoint>
+    <StopPoint id="A5">
+      <AtcoCode>A5</AtcoCode>
+      <Descriptor><CommonName>Zajezdnia</CommonName></Descriptor>
+      <Place><Location><Longitude>17.9</Longitude><Latitude>50.66</Latitude></Location></Place>
+    </StopPoint>
+  </StopPoints>
+  <StopAreas><StopArea id="SA"><Name>Rynek &amp; Dworzec</Name></StopArea></StopAreas>
+  <RouteSections>
+    <RouteSection id="L1"><RouteLink id="L1"><From><StopPointRef>A1</StopPointRef></From><To><StopPointRef>A2</StopPointRef></To><Track><Mapping><Location id="1"><Longitude>17.9</Longitude><Latitude>50.6</Latitude></Location></Mapping></Track></RouteLink></RouteSection>
+    <RouteSection id="L2"><RouteLink id="L2"><From><StopPointRef>A2</StopPointRef></From><To><StopPointRef>A3</StopPointRef></To><Track><Mapping><Location id="1"><Longitude>17.9</Longitude><Latitude>50.6</Latitude></Location></Mapping></Track></RouteLink></RouteSection>
+    <RouteSection id="L3"><RouteLink id="L3"><From><StopPointRef>A3</StopPointRef></From><To><StopPointRef>A4</StopPointRef></To><Track><Mapping><Location id="1"><Longitude>17.9</Longitude><Latitude>50.6</Latitude></Location></Mapping></Track></RouteLink></RouteSection>
+    <RouteSection id="L4"><RouteLink id="L4"><From><StopPointRef>A4</StopPointRef></From><To><StopPointRef>A5</StopPointRef></To><Track><Mapping><Location id="1"><Longitude>17.9</Longitude><Latitude>50.6</Latitude></Location></Mapping></Track></RouteLink></RouteSection>
+    <RouteSection id="L9"><RouteLink id="L9"><From><StopPointRef>A1</StopPointRef></From><To><StopPointRef>A5</StopPointRef></To><Track><Mapping><Location id="1"><Longitude>17.9</Longitude><Latitude>50.6</Latitude></Location></Mapping></Track></RouteLink></RouteSection>
+  </RouteSections>
+  <Routes>
+    <Route id="R1"><RouteSectionRef>L1</RouteSectionRef><Extensions><IsTechnical>false</IsTechnical></Extensions></Route>
+    <Route id="R2"><RouteSectionRef>L9</RouteSectionRef><Extensions><IsTechnical>true</IsTechnical></Extensions></Route>
+  </Routes>
+  <Services>
+    <Service>
+      <ServiceCode>100</ServiceCode>
+      <Lines><Line id="1"><LineName>10</LineName><Extensions><LineType>3</LineType></Extensions></Line></Lines>
+      <OperatingPeriod><StartDate>2026-11-02</StartDate><EndDate>2026-11-08</EndDate></OperatingPeriod>
+      <OperatingProfile><DaysOfNonOperation><DateRange><StartDate>2026-11-04</StartDate><EndDate>2026-11-05</EndDate></DateRange></DaysOfNonOperation><RegularDayType><DaysOfWeek><MondayToFriday /></DaysOfWeek></RegularDayType></OperatingProfile>
+      <StandardService><Origin>x</Origin></StandardService>
+    </Service>
+    <Service>
+      <ServiceCode>200</ServiceCode>
+      <Lines><Line id="1"><LineName>N1</LineName><Extensions><LineType>3</LineType></Extensions></Line></Lines>
+      <OperatingPeriod><StartDate>2026-11-02</StartDate><EndDate>2026-11-06</EndDate></OperatingPeriod>
+      <OperatingProfile><RegularDayType><DaysOfWeek><Monday /><Tuesday /><Friday /></DaysOfWeek></RegularDayType></OperatingProfile>
+      <StandardService><Origin>x</Origin></StandardService>
+    </Service>
+    <Service>
+      <ServiceCode>300</ServiceCode>
+      <Lines><Line id="1"><LineName>10</LineName><Extensions><LineType>3</LineType></Extensions></Line></Lines>
+      <OperatingPeriod><StartDate>2026-11-07</StartDate><EndDate>2026-11-08</EndDate></OperatingPeriod>
+      <OperatingProfile><RegularDayType><DaysOfWeek><Saturday /></DaysOfWeek></RegularDayType></OperatingProfile>
+      <StandardService><Origin>x</Origin></StandardService>
+    </Service>
+  </Services>
+  <VehicleJourneys>
+    <VehicleJourney>
+      <VehicleJourneyCode>V1</VehicleJourneyCode>
+      <ServiceRef>100</ServiceRef>
+      <LineRef>1</LineRef>
+      <JourneyPatternRef>R1</JourneyPatternRef>
+      <DepartureTime>23:50:00</DepartureTime>
+      <VehicleJourneyTimingLink id="L1"><JourneyPatternTimingLinkRef>L1</JourneyPatternTimingLinkRef><RunTime>PT0H5M</RunTime><From><Activity>pickUp</Activity></From><To></To></VehicleJourneyTimingLink>
+      <VehicleJourneyTimingLink id="L2"><JourneyPatternTimingLinkRef>L2</JourneyPatternTimingLinkRef><RunTime>PT0H10M</RunTime><From><WaitTime>PT0H3M</WaitTime></From><To></To></VehicleJourneyTimingLink>
+      <VehicleJourneyTimingLink id="L3"><JourneyPatternTimingLinkRef>L3</JourneyPatternTimingLinkRef><RunTime>PT0H1M</RunTime><From></From><To><Activity>setDown</Activity></To></VehicleJourneyTimingLink>
+      <Extensions><VehicleJourneyKind>0</VehicleJourneyKind><VehicleJourneyStopPoints><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A1</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A2</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A3</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A4</StopPointRef></VehicleJourneyStopPoint></VehicleJourneyStopPoints></Extensions>
+    </VehicleJourney>
+    <VehicleJourney>
+      <VehicleJourneyCode>V2</VehicleJourneyCode>
+      <ServiceRef>200</ServiceRef>
+      <LineRef>1</LineRef>
+      <JourneyPatternRef>R1</JourneyPatternRef>
+      <DepartureTime>06:00:00</DepartureTime>
+      <VehicleJourneyTimingLink id="L1"><JourneyPatternTimingLinkRef>L1</JourneyPatternTimingLinkRef><RunTime>PT0H5M</RunTime><From><Activity>pickUp</Activity></From><To></To></VehicleJourneyTimingLink>
+      <VehicleJourneyTimingLink id="L2"><JourneyPatternTimingLinkRef>L2</JourneyPatternTimingLinkRef><RunTime>PT0H10M</RunTime><From></From><To><Activity>setDown</Activity></To></VehicleJourneyTimingLink>
+      <Extensions><VehicleJourneyKind>0</VehicleJourneyKind><VehicleJourneyStopPoints><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A1</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A2</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A3</StopPointRef></VehicleJourneyStopPoint></VehicleJourneyStopPoints></Extensions>
+    </VehicleJourney>
+    <VehicleJourney>
+      <VehicleJourneyCode>V3</VehicleJourneyCode>
+      <ServiceRef>100</ServiceRef>
+      <LineRef>1</LineRef>
+      <JourneyPatternRef>R2</JourneyPatternRef>
+      <DepartureTime>05:00:00</DepartureTime>
+      <VehicleJourneyTimingLink id="L9"><JourneyPatternTimingLinkRef>L9</JourneyPatternTimingLinkRef><RunTime>PT0H15M</RunTime><From><Activity>pickUp</Activity></From><To><Activity>setDown</Activity></To></VehicleJourneyTimingLink>
+      <Extensions><VehicleJourneyKind>5</VehicleJourneyKind><VehicleJourneyStopPoints><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A1</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A5</StopPointRef></VehicleJourneyStopPoint></VehicleJourneyStopPoints></Extensions>
+    </VehicleJourney>
+    <VehicleJourney>
+      <VehicleJourneyCode>V4</VehicleJourneyCode>
+      <ServiceRef>300</ServiceRef>
+      <LineRef>1</LineRef>
+      <JourneyPatternRef>R1</JourneyPatternRef>
+      <DepartureTime>10:00:00</DepartureTime>
+      <VehicleJourneyTimingLink id="L3"><JourneyPatternTimingLinkRef>L3</JourneyPatternTimingLinkRef><RunTime>PT0H1M</RunTime><From></From><To></To></VehicleJourneyTimingLink>
+      <VehicleJourneyTimingLink id="L4"><JourneyPatternTimingLinkRef>L4</JourneyPatternTimingLinkRef><RunTime>PT0H4M</RunTime><From></From><To></To></VehicleJourneyTimingLink>
+      <Extensions><VehicleJourneyKind>0</VehicleJourneyKind><VehicleJourneyStopPoints><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A3</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A4</StopPointRef></VehicleJourneyStopPoint><VehicleJourneyStopPoint><Sequence>0</Sequence><StopPointRef>A5</StopPointRef></VehicleJourneyStopPoint></VehicleJourneyStopPoints></Extensions>
+    </VehicleJourney>
+  </VehicleJourneys>
+  <Operators><LicensedOperator id="1"><OperatorCode>TST</OperatorCode><OperatorShortName>Test MZK</OperatorShortName></LicensedOperator></Operators>
+  <Garages><Garage><VehicleJourneys><VehicleJourney id="V1"/><VehicleJourney><VehicleJourneyCode>GHOST</VehicleJourneyCode></VehicleJourney></VehicleJourneys></Garage></Garages>
+</TransXChange>
