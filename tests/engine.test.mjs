@@ -331,3 +331,35 @@ test('limit spaceru przy rowerze: dojazd do przystanku też podlega limitowi (5 
   await run(e, { access: 'bike', maxWalkSec: 900 });
   assert.ok(Number.isFinite(mins(e)[0]), 'limit 15 min (3,75 km) mieści S0');
 });
+
+test('meet (Z-004): włączenie nie zmienia stref, statystyk ani zasięgu — tylko dokłada pole meet', async () => {
+  const e = await makeEngine('tstMeetReg');
+  const point2 = { lat: 50.063, lng: 20 };
+  for (const extra of [{}, { access: 'bike' }, { walk: false }, { mode: 'general' }, { maxWalkSec: 900 }]) {
+    const a = await run(e, { compare: true, point2, ...extra });
+    const b = await run(e, { compare: true, point2, ...extra, meet: true });
+    assert.deepEqual(b.zones.zones, a.zones.zones, JSON.stringify(extra));
+    assert.equal(b.zones.reachable, a.zones.reachable, JSON.stringify(extra));
+    assert.deepEqual(b.zones.stats, a.zones.stats, JSON.stringify(extra));
+    assert.equal(a.zones.meet, null);
+  }
+});
+
+test('meet (Z-004): bez porównania i w trybie „tylko pieszo" pole meet jest null', async () => {
+  const e = await makeEngine('tstMeetNull');
+  const point2 = { lat: 50.063, lng: 20 };
+  assert.equal((await run(e, { meet: true })).zones.meet, null);
+  assert.equal((await run(e, { compare: true, walkOnly: true, point2, meet: true })).zones.meet, null);
+});
+
+test('meet (Z-004): ranking spójny z czasami silnika i mieszczący się w oknie', async () => {
+  const e = await makeEngine('tstMeetRank');
+  const r = await run(e, { compare: true, meet: true, point2: { lat: 50.063, lng: 20 } });
+  const meet = r.zones.meet;
+  assert.ok(meet && meet.bothCount > 0, 'jest wspólny przystanek');
+  const top = meet.fair[0];
+  assert.equal(top.aMin, e.last.res.minutes[top.stop]);
+  assert.equal(top.bMin, e.last.res2.minutes[top.stop]);
+  assert.ok(top.meetMin <= meet.windowMin);
+  assert.ok(meet.sum.length > 0 && typeof top.name === 'string');
+});

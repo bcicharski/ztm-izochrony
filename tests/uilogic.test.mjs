@@ -1067,3 +1067,74 @@ test('accessSectionSummary: limity w tekście i w changed, skracanie przy ~34 zn
   // bez spaceru limit spaceru nie istnieje
   assert.deepEqual(accessSectionSummary({ ...all, walk: false, maxWalkMin: 10 }), { text: 'bez spaceru · wszystkie środki', changed: true });
 });
+
+// --- miejsce spotkania (Z-004) -------------------------------------------------
+import {
+  MEET_CRITERIA, meetHeading, meetCriterionLabel, meetRowText, meetFasterNote,
+  meetWindowNote, meetEmptyText, meetSummaryText,
+} from '../js/uilogic.js';
+
+test('meet: adres — stan bez meet daje adres jak dawniej, parseUrlState nie dodaje pól', () => {
+  assert.equal(buildQuery({ ...baseState(), meet: false, meetCrit: 'sum' }), buildQuery(baseState()));
+  const u = parseUrlState('', CITIES);
+  assert.deepEqual(u, { dayFromUrl: false, pointFromUrl: false, veh: null });
+});
+
+test('meet: adres — meet=1 włącza porównanie, mcrit tylko „sum", rundka zachowuje oba', () => {
+  const u = parseUrlState('?city=gzm&meet=1', CITIES);
+  assert.equal(u.meet, true);
+  assert.equal(u.compare, true);
+  assert.equal('meetCrit' in parseUrlState('?mcrit=fair', CITIES), false);
+  assert.equal('meetCrit' in parseUrlState('?mcrit=xyz', CITIES), false);
+  assert.equal(parseUrlState('?mcrit=sum', CITIES).meetCrit, 'sum');
+  const st = { ...baseState(), compare: true, meet: true, meetCrit: 'sum' };
+  const q = new URLSearchParams(buildQuery(st));
+  assert.equal(q.get('meet'), '1');
+  assert.equal(q.get('mcrit'), 'sum');
+  const back = parseUrlState(buildQuery(st), CITIES);
+  assert.equal(back.meet, true);
+  assert.equal(back.meetCrit, 'sum');
+  const fair = new URLSearchParams(buildQuery({ ...st, meetCrit: 'fair' }));
+  assert.equal(fair.has('mcrit'), false);
+  assert.equal(new URLSearchParams(buildQuery({ ...baseState(), meetCrit: 'sum' })).has('mcrit'), false);
+});
+
+test('meet: statusLine — domyślnie bez zmian, z meet nowy opis', () => {
+  const base = { walkOnly: false, compare: true, direction: 'from', mode: 'time', safe: false, whenTime: 'Dzień roboczy, 08:30' };
+  assert.equal(statusLine(base), 'Wspólny zasięg dwóch punktów · Dzień roboczy, 08:30.');
+  assert.equal(statusLine({ ...base, meet: true }), 'Miejsce spotkania — dojazd z dwóch punktów · Dzień roboczy, 08:30.');
+  assert.equal(statusLine({ ...base, meet: true, direction: 'to' }), 'Miejsce spotkania — dojazd do dwóch punktów · Dzień roboczy, 08:30.');
+});
+
+test('meet: teksty karty', () => {
+  assert.deepEqual(MEET_CRITERIA, ['fair', 'sum']);
+  assert.equal(meetCriterionLabel('fair'), 'Po równo');
+  assert.equal(meetCriterionLabel('sum'), 'Najkrócej razem');
+  assert.match(meetHeading('from'), /na spotkanie/);
+  assert.match(meetHeading('to'), /do punktów/);
+  const c = { name: 'Politechnika', aMin: 13.2, bMin: 11.6, meetMin: 13.2, sumMin: 24.8, diffMin: 1.6 };
+  assert.deepEqual(meetRowText(c, { mode: 'time', crit: 'fair' }),
+    { line: 'A 13 min · B 12 min', sub: 'różnica 2 min', head: 'spotkanie po 13 min', label: 'Politechnika: A 13 min · B 12 min, różnica 2 min' });
+  assert.equal(meetRowText(c, { crit: 'sum' }).sub, 'razem 25 min');
+  assert.match(meetRowText(c, { mode: 'general' }).head, /bez czekania/);
+});
+
+test('meet: nota o szybszym miejscu i oknie', () => {
+  assert.equal(meetFasterNote({ meetMin: 13, bestMaxMin: 10, bestName: 'Politechnika' }),
+    'Najszybciej spotkalibyście się po 10 min (Politechnika), ale po równo wychodzi tutaj.');
+  assert.equal(meetFasterNote({ meetMin: 11, bestMaxMin: 10, bestName: 'X' }), '');
+  assert.match(meetWindowNote({ windowMin: 15, crit: 'fair' }), /15 min/);
+  assert.equal(meetWindowNote({ windowMin: 15, crit: 'sum' }), '');
+});
+
+test('meet: stany puste i zdanie dla czytnika', () => {
+  assert.match(meetEmptyText({ bothCount: 0, walkOnly: false }), /przesuń jeden z punktów/);
+  assert.match(meetEmptyText({ bothCount: 0, walkOnly: false, maxTransfers: 0 }), /poluzuj limit/);
+  assert.match(meetEmptyText({ bothCount: 0, walkOnly: false, maxWalkMin: 5 }), /poluzuj limit/);
+  assert.match(meetEmptyText({ bothCount: 0, walkOnly: true }), /Bez pojazdów/);
+  assert.equal(meetEmptyText({ bothCount: 3, walkOnly: false }), '');
+  const list = [{ name: 'Politechnika', aMin: 13, bMin: 12 }];
+  assert.equal(meetSummaryText({ heading: 'H', list, bothCount: 7 }),
+    'H: najlepszy Politechnika, A 13 min, B 12 min. Wspólnych przystanków: 7.');
+  assert.equal(meetSummaryText({ heading: 'H', list: [], bothCount: 0 }), '');
+});

@@ -8,13 +8,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## W toku
 
-### Z-004 [P1] Punkt spotkania
-- Status: w toku (zatwierdzone do wdrożenia przez właściciela 2026-11-17: „Z-004 — zrób to, to dobra zmiana". Kolejność: przed Z-010.)
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak trybu szukania miejsca spotkania dwóch osób; naturalny następny krok po trybie porównania.
-- Dowód: maxTimeGrid już liczy maksimum z dwóch fal.
-- Pliki: js/engine.js, js/app.js, index.html.
-
 ### Z-019 [P1] Brakujące profile opóźnień dla GZM i Szczecina
 - Status: w toku
 - Zgłoszone: 2026-11-16 (analityk)
@@ -205,6 +198,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Skutek uboczny obejścia: przy pierwszym przeliczeniu po wejściu na stronę wynik bez limitów jest taki sam jak dotąd; przy kolejnych przeliczeniach jest deterministyczny i może się nieznacznie różnić od dawnego, który zależał od stanu bufora.
 - Pliki: js/walkgrid.js, js/engine.js.
 - Jak sprawdzić: nieznane (naprawa u źródła w `js/walkgrid.js` jeszcze nie zrobiona; istniejący test regresji dotyczy obejścia).
+
+### Z-071 [P2] Dymek przystanku spotkania z trasami obu osób i kopiowanie zaproszenia
+- Status: nowe
+- Zgłoszone: 2026-11-19 (nieznane; etap drugi Z-004 wskazany przez właściciela)
+- Problem: dymek wybranego przystanku na spotkanie jest statyczny (nazwa i dwa czasy); brak tras obu osób i przycisku „Kopiuj zaproszenie" z gotowym tekstem do wysłania.
+- Dowód: wdrożenie Z-004 (2026-11-19), dymek przystanku spotkania.
+- Pliki: nieznane.
+- Jak sprawdzić: nieznane. Łączy się naturalnie z rysowaniem trasy na mapie z Z-010.
 
 ## Zrobione
 
@@ -710,6 +711,18 @@ Pułapki do wdrożenia:
 - Pliki: js/router.js, js/walknet.js, js/engine.js, js/stats.js, js/uilogic.js, js/app.js, index.html, css/style.css, README.md, CURRENT_STATE.md.
 - Wdrożone 2026-11-17: dwie nowe grupy w sekcji „Dojście, przesiadki i środki": „Przesiadki (maks.)" (0, 1, 2 albo bez limitu) i „Maks. odcinek pieszo" (5, 10, 15 min albo bez limitu), obie domyślnie bez limitu. Limit spaceru dotyczy każdego pojedynczego odcinka pieszego przy komunikacji, nie sumy marszu. Budżet łączny odrzucono świadomie (wymagałby wielokryterialnego RAPTOR, czyli przebudowy silnika). Tryb „Ogólnie" nie modeluje przesiadek: kontrolka wygaszona z podpowiedzią „Tryb ogólny nie modeluje przesiadek.", silnik nie dostaje limitu przesiadek, parametr `tr` zostaje w adresie; limit spaceru działa. Parametry adresu: `tr` (0, 1, 2) i `wmax` (1–89 min). Szczegóły i pomiary w CHANGELOG.md (sekcja 2026-11-17).
 - Niezweryfikowane: widok mobilny i zawijanie wiersza podsumowania sekcji; okno pomocy po aktualizacji tekstu nie oglądane; ścieżka z limitem przy niewczytanym grafie ulic pokryta tylko przypadkowo.
+
+### Z-004 [P1] Punkt spotkania
+- Status: zrobione (wdrożone 2026-11-19; zatwierdzone do wdrożenia przez właściciela 2026-11-17: „Z-004 — zrób to, to dobra zmiana". Kolejność: przed Z-010.)
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak trybu szukania miejsca spotkania dwóch osób; naturalny następny krok po trybie porównania.
+- Dowód: maxTimeGrid już liczy maksimum z dwóch fal.
+- Pliki: js/stats.js, js/engine.js, js/uilogic.js, js/app.js, index.html, css/style.css, README.md, CURRENT_STATE.md.
+- Wdrożone 2026-11-19: trzeci tryb „Spotkanie" (adres `meet=1`, opcjonalnie `mcrit=sum`). Po ustawieniu dwóch punktów karta z przystankami na spotkanie: nazwa, czas dojazdu każdej osoby i różnica; pozycja pierwsza wyróżniona, pozostałe cztery za przyciskiem z licznikiem; ponumerowane pinezki na mapie. Kandydaci to zespoły przystankowe z istniejącego grupowania, bez nowych danych i bez przeliczania miast. Okno dopuszczalności: najkrótszy czas spotkania plus min(10 min, połowa tego czasu); dopiero wśród miejsc w oknie szukana jest najmniejsza różnica. Kryterium domyślne „obie osoby jadą tyle samo", drugie „najmniejsza suma czasów" (bez okna). Zmiana kryterium nie przelicza niczego. Nota, gdy proponowane miejsce nie jest najszybsze. Teksty mówią „przystanki na spotkanie", nie „najlepsze miejsce".
+- Odstępstwa od projektu: alternatywy rozwija przycisk z licznikiem zamiast zagnieżdżonego elementu zwijanego (tylko tak pozycja pierwsza i przełącznik mieszczą się w jednym wierszu); nagłówki skrócono do „Przystanki na spotkanie" i „Przystanki — dojazd do punktów", bo dłuższe zawijały się do pięciu linii.
+- Budżet panelu niedotrzymany: w trybie spotkania panel przewija się wewnętrznie o 68 px przy oknie 1280x800 (714 px treści przy 646 px widocznych). Karta ma 102 px (budżet 120 px); przekroczenie bierze się głównie z trybu dwóch punktów (618 px przez drugie pole adresu). Karta jest na górze panelu i widoczna bez przewijania. Tryb domyślny nadal 548 px, bez przewijania. Dalsze skrócenie wymagałoby decyzji, co ustąpi.
+- Niezweryfikowane: wygląd pinezek i dymka po ostatnich poprawkach stylów; czytnik ekranu przy zmianie kryterium; tryb „ogólnie" i kierunek „do miejsca" sprawdzone tylko testami, nie w przeglądarce.
+- Etap drugi: przeniesiony do Z-071 (osobne zadanie, do zrobienia po Z-010).
 
 ## Odrzucone
 

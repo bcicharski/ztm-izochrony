@@ -170,6 +170,9 @@ export function parseUrlState(search, cities) {
   const p2 = parsePoint(q.get('p2'));
   if (p2) out.point2 = p2;
   if (q.get('cmp') === '1') out.compare = true;
+  // miejsce spotkania (Z-004) wymaga dwóch punktów; „fair" to domyślne kryterium i nie trafia do adresu
+  if (q.get('meet') === '1') { out.meet = true; out.compare = true; }
+  if (q.get('mcrit') === 'sum') out.meetCrit = 'sum';
   if (q.get('dir') === 'to') out.direction = 'to';
   if (q.get('walk') === '0') out.walk = false;
   if (['bike', 'bike-onboard'].includes(q.get('acc'))) out.access = q.get('acc');
@@ -204,6 +207,8 @@ export function buildQuery(state) {
     q.set('cmp', '1');
     q.set('p2', `${state.point2.lat.toFixed(5)},${state.point2.lng.toFixed(5)}`);
   }
+  if (state.meet) q.set('meet', '1');
+  if (state.meet && state.meetCrit === 'sum') q.set('mcrit', 'sum');
   q.set('dir', state.direction);
   q.set('walk', state.walk ? '1' : '0');
   if (state.access !== 'foot') q.set('acc', state.access);
@@ -245,18 +250,78 @@ export function accessIcons(access, direction) {
  * fragment o czasie (np. „Dzień roboczy, 08:30"), bo etykiety dni i wartość
  * pola godziny należą do wywołującego.
  */
-export function statusLine({ walkOnly, compare, direction, mode, safe, whenTime, limits = '' }) {
+export function statusLine({ walkOnly, compare, direction, mode, safe, whenTime, limits = '', meet = false }) {
   if (walkOnly) {
     // rozkład i godzina nie mają wpływu na sam spacer
     return compare
       ? 'Wspólny zasięg pieszo dwóch punktów.'
       : (direction === 'from' ? 'Zasięg pieszo z punktu.' : 'Obszar z dojściem pieszo do punktu.');
   }
-  const what = compare
+  const what = compare && meet
+    ? (direction === 'from' ? 'Miejsce spotkania — dojazd z dwóch punktów' : 'Miejsce spotkania — dojazd do dwóch punktów')
+    : compare
     ? (direction === 'from' ? 'Wspólny zasięg dwóch punktów' : 'Obszar z dojazdem do obu punktów')
     : (direction === 'from' ? 'Zasięg z punktu' : 'Obszar z dojazdem do punktu');
   const when = mode === 'time' ? whenTime : 'tryb ogólny (bez oczekiwania)';
   return `${what} · ${when}${safe ? ' · z marginesem na opóźnienia' : ''}${limits ? ` · ${limits}` : ''}.`;
+}
+
+// --- miejsce spotkania (Z-004) ---------------------------------------------------
+
+/** Kryteria listy miejsc spotkania; pierwsze jest domyślne i nie trafia do adresu. */
+export const MEET_CRITERIA = ['fair', 'sum'];
+
+/** Nagłówek karty. Kierunek „do" zmienia tylko znaczenie czasów, nie ranking. */
+export const meetHeading = direction =>
+  direction === 'to' ? 'Przystanki — dojazd do punktów' : 'Przystanki na spotkanie';
+
+export const meetCriterionLabel = crit => (crit === 'sum' ? 'Najkrócej razem' : 'Po równo');
+
+const minText = n => `${Math.round(n)} min`;
+
+/**
+ * Teksty jednej pozycji: `line` („A 13 min · B 12 min"), `sub` (druga linia
+ * pod nazwą zależna od kryterium), `head` (nagłówek dymka) i `label` (pełne
+ * zdanie dla czytnika). W trybie ogólnym dymek mówi „bez czekania".
+ */
+export function meetRowText(cand, { mode = 'time', crit = 'fair' } = {}) {
+  const line = `A ${minText(cand.aMin)} · B ${minText(cand.bMin)}`;
+  const sub = crit === 'sum' ? `razem ${minText(cand.sumMin)}` : `różnica ${minText(cand.diffMin)}`;
+  const head = `spotkanie po ${minText(cand.meetMin)}${mode === 'time' ? '' : ' (bez czekania)'}`;
+  return { line, sub, head, label: `${cand.name}: ${line}, ${sub}` };
+}
+
+/**
+ * Nota o szybszym miejscu — tylko gdy kryterium „po równo" wybrało miejsce
+ * wyraźnie dalsze niż najszybsze spotkanie (różnica co najmniej 2 min); bez niej
+ * kolor mapy i pinezka wyglądałyby na sprzeczne. '' = bez noty.
+ */
+export function meetFasterNote({ meetMin, bestMaxMin, bestName }) {
+  if (!(meetMin - bestMaxMin >= 2) || !bestName) return '';
+  return `Najszybciej spotkalibyście się po ${minText(bestMaxMin)} (${bestName}), ale po równo wychodzi tutaj.`;
+}
+
+/** Objaśnienie okna kryterium „po równo"; dla „najkrócej razem" okna nie ma. */
+export function meetWindowNote({ windowMin, crit }) {
+  if (crit === 'sum' || !(windowMin > 0)) return '';
+  return `Wybieramy spośród przystanków, do których żadne z Was nie jedzie dłużej niż ${minText(windowMin)}.`;
+}
+
+/** Karta przy braku wspólnego przystanku — poprawny wynik, nie błąd. */
+export function meetEmptyText({ bothCount, walkOnly, maxTransfers = null, maxWalkMin = null }) {
+  if (walkOnly) return 'Bez pojazdów nie ma przystanków na spotkanie — strefa pokazuje wspólny obszar pieszy.';
+  if (bothCount > 0) return '';
+  const base = 'Nie ma przystanku, do którego dojedziecie oboje w 90 minut — ';
+  return maxTransfers != null || maxWalkMin != null
+    ? base + 'poluzuj limit przesiadek lub długość odcinka pieszo.'
+    : base + 'przesuń jeden z punktów bliżej albo zmień godzinę.';
+}
+
+/** Zdanie dla czytnika ekranu (#zoneSummary) po policzeniu listy. */
+export function meetSummaryText({ heading, list, bothCount }) {
+  if (!list?.length) return '';
+  const top = list[0];
+  return `${heading}: najlepszy ${top.name}, A ${minText(top.aMin)}, B ${minText(top.bMin)}. Wspólnych przystanków: ${bothCount}.`;
 }
 
 /** Liczba z przecinkiem dziesiętnym (czytnik ekranu czyta „2,5", nie „2.5"). */

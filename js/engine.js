@@ -16,7 +16,7 @@ import { loadDay, loadWater, loadCity, loadBridges, loadWalkNet, loadDelays, dro
 import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, paintNetwork, SPREAD_M, NET_WALK_MPS, NET_BIKE_MPS } from './walknet.js';
 import { computeReachability } from './router.js';
 import { buildZones, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
-import { computeStats } from './stats.js';
+import { computeStats, rankMeetingPlaces } from './stats.js';
 import { buildStopIndex } from './uilogic.js';
 import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, buildContours, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
 
@@ -252,7 +252,7 @@ export class Engine {
   /**
    * Pełne przeliczenie.
    * @param {object} p  { city, dayKey, direction, walk, mode, timeMin, types (tablica|null),
-   *   cautious, walkOnly, compare, point:{lat,lng}, point2:{lat,lng}, stats:boolean,
+   *   cautious, walkOnly, compare, meet (Z-004; liczone tylko z compare), point:{lat,lng}, point2:{lat,lng}, stats:boolean,
    *   access:'foot'|'bike'|'bike-onboard' }
    * @param {(msg:object)=>void} emit  fazy: 'zones' (raster + koła + statystyki),
    *   'contours' (obrysy wektorowe)
@@ -400,7 +400,13 @@ export class Engine {
     let reachable = 0;
     for (let i = 0; i < minutes.length; i++) if (minutes[i] <= 90) reachable++;
 
-    emit({ phase: 'zones', image, bbox, zones, stats, reachable });
+    // miejsce spotkania (Z-004): tylko porównanie z pojazdami; oba kryteria naraz,
+    // żeby przełączenie w UI nie wymagało przeliczenia
+    const meet = p.compare && p.meet && res && res2
+      ? rankMeetingPlaces(net, res.minutes, res2.minutes)
+      : null;
+
+    emit({ phase: 'zones', image, bbox, zones, stats, reachable, meet });
     if (grid && gridTime) emit({ phase: 'contours', contours: buildContours(grid, gridTime) });
   }
 

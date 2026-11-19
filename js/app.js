@@ -14,6 +14,7 @@ import {
   esc, optionId, createAsyncCache, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
   zonesToGeoJSON, exportFileName, shouldShowIntro,
+  meetHeading, meetRowText, meetFasterNote, meetWindowNote, meetEmptyText, meetSummaryText,
   PANEL_SECTIONS_KEY, PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
   timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary,
 } from './uilogic.js';
@@ -48,6 +49,8 @@ const state = {
   point: null,   // ustawiane z konfiguracji miasta poniżej
   point2: null,
   compare: false,
+  meet: false,       // tryb „Spotkanie" (Z-004): porównanie + lista przystanków na spotkanie
+  meetCrit: 'fair',  // 'fair' (po równo) | 'sum' (najkrócej razem)
   direction: 'from',
   walk: true,
   access: 'foot', // 'foot' | 'bike' (zostaje na przystanku) | 'bike-onboard'
@@ -86,6 +89,7 @@ const isWalkOnly = () => cityCfg().veh.every(g => !state.veh[g.key]);
 // --- stan z adresu URL (linki do udostępniania) -----------------------------
 
 let pointFromUrl = false;
+let point2Chosen = false; // drugi punkt ustawiony przez użytkownika albo adres (tryb spotkania czeka na niego)
 let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dnia
 {
   const u = parseUrlState(location.search, CITIES);
@@ -95,8 +99,8 @@ let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dn
   state.veh = defaultVeh();
 
   if (u.point) { state.point = L.latLng(u.point.lat, u.point.lng); pointFromUrl = true; }
-  if (u.point2) state.point2 = L.latLng(u.point2.lat, u.point2.lng);
-  for (const k of ['compare', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe', 'maxTransfers', 'maxWalkMin']) {
+  if (u.point2) { state.point2 = L.latLng(u.point2.lat, u.point2.lng); point2Chosen = true; }
+  for (const k of ['compare', 'meet', 'meetCrit', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe', 'maxTransfers', 'maxWalkMin']) {
     if (k in u) state[k] = u[k];
   }
   dayFromUrl = u.dayFromUrl;
@@ -151,6 +155,7 @@ function setPoint(latlng, pan = false) {
 function setPoint2(latlng, pan = false) {
   dismissIntro();
   state.point2 = latlng;
+  point2Chosen = true;
   marker2.setLatLng(latlng);
   if (pan) map.setView(latlng, Math.max(map.getZoom(), 13), { animate: !prefersReducedMotion() });
   recompute();
@@ -162,7 +167,8 @@ const $ = id => document.getElementById(id);
 
 for (const el of document.querySelectorAll('input[name="appmode"]')) {
   el.addEventListener('change', () => {
-    state.compare = el.value === 'compare';
+    state.compare = el.value !== 'single';
+    state.meet = el.value === 'meet';
     syncModeUi();
     recompute();
   });
@@ -298,9 +304,14 @@ function syncModeUi() {
   }
   $('statsToggleRow').hidden = state.compare;
   $('statsBox').hidden = state.compare || !state.stats;
-  $('hint').innerHTML = (state.compare
-    ? 'Strefa pokazuje, dokąd dotrzecie <strong>oboje</strong>. Klik na mapie przesuwa bliższy znacznik.'
-    : 'Kliknij punkt na mapie albo przeciągnij znacznik.')
+  // tryb spotkania: jedna linia (karta zajmuje miejsce podpowiedzi)
+  $('hint').innerHTML = state.meet
+    ? (point2Chosen
+      ? 'Klik przesuwa bliższy znacznik. Prawy klik — trasa.'
+      : 'Ustaw drugi punkt — kliknij mapę albo wpisz adres — a podpowiemy, gdzie się spotkać.')
+    : (state.compare
+      ? 'Strefa pokazuje, dokąd dotrzecie <strong>oboje</strong>. Klik na mapie przesuwa bliższy znacznik.'
+      : 'Kliknij punkt na mapie albo przeciągnij znacznik.')
     + ' Prawy klik / przytrzymanie pokazuje trasę.';
   if (state.compare) marker2.addTo(map);
   else marker2.remove();
@@ -1059,6 +1070,130 @@ function journeyHtml(j) {
   return `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(j.total)} min</h4>${parts.join('')}</div>`;
 }
 
+// --- miejsce spotkania (Z-004) -------------------------------------------------
+
+/**
+ * Wynik fazy „zones" z obu rankingami (jak `exportContours`): zmiana kryterium
+ * tylko przerysowuje kartę i pinezki, bez przeliczania.
+ */
+let lastMeet = null;
+let meetSel = 0; // indeks zaznaczonej pozycji na bieżącej liście
+const meetLayer = L.layerGroup().addTo(map);
+
+function meetPinIcon(n, selected, name) {
+  return L.divIcon({
+    className: 'meet-pin-wrap',
+    iconSize: [44, 44], // pole trafienia 44x44 (var(--tap)); widoczny kwadrat 26 px
+    iconAnchor: [22, 22],
+    html: `<span class="meet-pin${selected ? ' selected' : ''}">${n}</span>`
+      + (selected ? `<span class="meet-pin-label">${esc(name)}</span>` : ''),
+  });
+}
+
+/** Stan komunikatu karty (liczenie / błąd / brak wyniku); pinezki znikają. */
+function showMeetMsg(text, busy = false) {
+  meetLayer.clearLayers();
+  $('meetBox').hidden = false;
+  $('meetBox').setAttribute('aria-busy', String(busy));
+  $('meetMsg').textContent = text;
+  $('meetMsg').hidden = false;
+  $('meetMain').hidden = true;
+  $('meetNote').hidden = true;
+  $('meetRest').hidden = true;
+  $('meetMoreBtn').hidden = true;
+}
+
+function meetRowHtml(c, i, crit) {
+  const t = meetRowText(c, { mode: state.mode, crit });
+  return `<button type="button" class="meet-row" data-i="${i}" aria-label="${esc(t.label)}"${i === meetSel ? ' aria-current="true"' : ''}>`
+    + `<span class="meet-num" aria-hidden="true">${i + 1}</span>`
+    + `<span class="meet-name"><b>${esc(c.name)}</b><span class="meet-sub">${esc(t.sub)}</span></span>`
+    + `<span class="meet-times" aria-hidden="true"><span><i class="dot dot-a"></i>${Math.round(c.aMin)} min</span><span><i class="dot dot-b"></i>${Math.round(c.bMin)} min</span></span></button>`;
+}
+
+/** Rysuje kartę i pinezki z `lastMeet` dla `state.meetCrit`; bez wyniku chowa kartę. */
+function renderMeet() {
+  meetLayer.clearLayers();
+  const box = $('meetBox');
+  if (!state.meet || !state.compare || !point2Chosen) { box.hidden = true; return; }
+  if (isWalkOnly()) { showMeetMsg(meetEmptyText({ walkOnly: true })); return; }
+  const meet = lastMeet;
+  if (!meet) { box.hidden = true; return; }
+  const crit = state.meetCrit;
+  const list = meet[crit] ?? [];
+  if (!meet.bothCount || !list.length) {
+    showMeetMsg(meetEmptyText({ bothCount: 0, walkOnly: false, ...uiLimits() }));
+    return;
+  }
+  if (meetSel >= list.length) meetSel = 0;
+  box.hidden = false;
+  box.setAttribute('aria-busy', 'false');
+  $('meetTitle').textContent = meetHeading(state.direction);
+  $('meetMsg').hidden = true;
+  $('meetMain').hidden = false;
+  $('meetTop').innerHTML = `<li>${meetRowHtml(list[0], 0, crit)}</li>`;
+  const rest = list.slice(1);
+  $('meetRestList').innerHTML = rest.map((c, k) => `<li>${meetRowHtml(c, k + 1, crit)}</li>`).join('');
+  const more = $('meetMoreBtn');
+  more.hidden = !rest.length;
+  more.textContent = `+${rest.length}`;
+  more.setAttribute('aria-label', `Pokaż pozostałe miejsca: ${rest.length}`);
+  if (!rest.length) $('meetRest').hidden = true;
+  more.setAttribute('aria-expanded', String(!$('meetRest').hidden));
+  $('meetWindow').textContent = meetWindowNote({ windowMin: meet.windowMin, crit });
+  const note = crit === 'fair' ? meetFasterNote({
+    meetMin: list[0].meetMin, bestMaxMin: meet.bestMaxMin, bestName: meet.fastest?.name,
+  }) : '';
+  $('meetNote').textContent = note;
+  $('meetNote').hidden = !note;
+  list.forEach((c, i) => {
+    const pin = L.marker([c.lat, c.lon], {
+      icon: meetPinIcon(i + 1, i === meetSel, c.name), title: c.name, alt: c.name,
+      keyboard: true, riseOnHover: true, zIndexOffset: i === meetSel ? 1000 : 500,
+    });
+    pin.on('click', () => selectMeet(i, true));
+    meetLayer.addLayer(pin);
+  });
+}
+
+/** Zaznacza pozycję; `go` przesuwa mapę na przystanek i otwiera dymek (statyczny). */
+function selectMeet(i, go) {
+  const list = lastMeet?.[state.meetCrit];
+  if (!list?.[i]) return;
+  meetSel = i;
+  renderMeet();
+  if (!go) return;
+  const c = list[i];
+  map.setView([c.lat, c.lon], Math.max(map.getZoom(), 14), { animate: !prefersReducedMotion() });
+  const t = meetRowText(c, { mode: state.mode, crit: state.meetCrit });
+  L.popup({ maxWidth: 300 }).setLatLng([c.lat, c.lon])
+    .setContent(`<div class="journey"><h4>${esc(c.name)}</h4>${esc(t.head)}<br><span class="muted">${esc(t.line)}</span></div>`)
+    .openOn(map);
+}
+
+$('meetBox').addEventListener('click', e => {
+  const row = e.target.closest('.meet-row');
+  if (!row) return;
+  selectMeet(+row.dataset.i, true);
+  // przerysowanie podmienia przyciski — focus wraca na wybraną pozycję
+  $('meetBox').querySelector('.meet-row[aria-current="true"]')?.focus();
+});
+$('meetMoreBtn').addEventListener('click', () => {
+  const rest = $('meetRest');
+  rest.hidden = !rest.hidden;
+  $('meetMoreBtn').setAttribute('aria-expanded', String(!rest.hidden));
+});
+for (const el of document.querySelectorAll('input[name="mcrit"]')) {
+  el.addEventListener('change', () => {
+    state.meetCrit = el.value === 'sum' ? 'sum' : 'fair';
+    meetSel = 0;
+    updateUrl(); // recompute tu nie wołamy, a adres ma pamiętać kryterium
+    renderMeet();
+    const list = lastMeet?.[state.meetCrit];
+    if (list?.length) announce(meetSummaryText({ heading: meetHeading(state.direction), list, bothCount: lastMeet.bothCount }));
+  });
+}
+
 // --- przeliczanie -------------------------------------------------------------
 
 let computeSeq = 0;
@@ -1084,6 +1219,7 @@ function announce(text) {
 function statusText(walkOnly) {
   return statusLine({
     walkOnly, compare: state.compare, direction: state.direction, mode: state.mode, safe: state.safe,
+    meet: state.meet && point2Chosen,
     limits: limitsSummary(uiLimits()),
     whenTime: `${DAY_LABELS[state.day]}, ${$('timeInput').value}`,
   });
@@ -1107,6 +1243,10 @@ async function recompute() {
   status.textContent = 'Obliczam zasięg…';
   $('clearLimits').hidden = true;
   const walkOnly = isWalkOnly();
+  const wantMeet = state.meet && state.compare && point2Chosen;
+  lastMeet = null;
+  if (wantMeet && !walkOnly) showMeetMsg('Szukamy miejsca spotkania…', true); else renderMeet();
+  syncModeUi();
   const lim = engineLimits(limitCtx());
   const types = allowedTypes();
   const params = {
@@ -1123,6 +1263,7 @@ async function recompute() {
     maxWalkSec: lim.maxWalkSec,
     walkOnly,
     compare: state.compare,
+    meet: wantMeet,
     point: { lat: state.point.lat, lng: state.point.lng },
     point2: { lat: state.point2.lat, lng: state.point2.lng },
     stats: state.stats && !state.compare,
@@ -1149,6 +1290,15 @@ async function recompute() {
           statusText: statusText(walkOnly), city: cityCfg().name, reachable: msg.reachable,
           walkOnly, compare: state.compare, stats: msg.stats, showArea: state.walk || walkOnly, ...ul,
         }));
+        if (wantMeet) {
+          lastMeet = msg.meet;
+          meetSel = 0;
+          renderMeet();
+          // brak wspólnego przystanku przy limitach: jedyne wyjście to ich zdjęcie
+          if (msg.meet && !msg.meet.bothCount && (ul.maxTransfers != null || ul.maxWalkMin != null)) $('clearLimits').hidden = false;
+          const line = msg.meet ? meetSummaryText({ heading: meetHeading(state.direction), list: msg.meet[state.meetCrit], bothCount: msg.meet.bothCount }) : '';
+          if (line) announce(`${statusText(walkOnly)} ${line}`);
+        }
         refreshJourneyPopup();
         if (shouldVibrate({
           supported: typeof navigator.vibrate === 'function',
@@ -1166,6 +1316,7 @@ async function recompute() {
     console.error(err);
     if (seq === computeSeq) {
       status.textContent = loadErrorMessage(navigator.onLine, 'Błąd wczytywania danych rozkładowych.');
+      if (wantMeet) showMeetMsg('Nie udało się wyznaczyć miejsca spotkania. Spróbuj ponownie.');
       announce(status.textContent);
     }
   }
@@ -1334,6 +1485,10 @@ function switchCity(key) {
   state.point2 = L.latLng(...cityCfg().pointB);
   marker.setLatLng(state.point);
   marker2.setLatLng(state.point2);
+  point2Chosen = false;
+  lastMeet = null;
+  renderMeet();
+  syncModeUi();
   for (const id of ['searchInput', 'searchInput2']) $(id).value = '';
   for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
   map.closePopup();
@@ -1366,7 +1521,10 @@ function switchCity(key) {
 
 // odtworzenie stanu kontrolek (domyślne wartości albo stan z linku)
 $('appSingle').checked = !state.compare;
-$('appCompare').checked = state.compare;
+$('appCompare').checked = state.compare && !state.meet;
+$('appMeet').checked = state.meet;
+$('mcritSum').checked = state.meetCrit === 'sum';
+$('mcritFair').checked = state.meetCrit !== 'sum';
 $('dirFrom').checked = state.direction === 'from';
 $('dirTo').checked = state.direction === 'to';
 $('walkToggle').checked = state.walk;

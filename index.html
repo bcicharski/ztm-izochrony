@@ -161,9 +161,11 @@
 
       <div class="segmented app-mode" role="group" aria-label="Tryb analizy">
         <input type="radio" name="appmode" id="appSingle" value="single" checked>
-        <label for="appSingle">Zasięg transportu</label>
+        <label for="appSingle">Zasięg</label>
         <input type="radio" name="appmode" id="appCompare" value="compare">
         <label for="appCompare">Dwa punkty</label>
+        <input type="radio" name="appmode" id="appMeet" value="meet">
+        <label for="appMeet">Spotkanie</label>
       </div>
 
       <div class="search-row">
@@ -183,6 +185,28 @@
       </div>
       <ul class="search-results" id="searchResults2" role="listbox" aria-label="Wyniki wyszukiwania drugiego punktu" hidden></ul>
       <p class="hint" id="searchStatus2" role="status"></p>
+
+      <section class="meet" id="meetBox" aria-labelledby="meetTitle" aria-busy="false" hidden>
+        <div class="meet-head">
+          <h2 id="meetTitle">Przystanki na spotkanie</h2>
+          <div class="segmented seg-meet" role="group" aria-label="Kryterium wyboru przystanku">
+            <input type="radio" name="mcrit" id="mcritFair" value="fair" checked>
+            <label for="mcritFair">Po równo</label>
+            <input type="radio" name="mcrit" id="mcritSum" value="sum">
+            <label for="mcritSum">Najkrócej razem</label>
+          </div>
+        </div>
+        <p class="meet-msg" id="meetMsg" hidden></p>
+        <div class="meet-main" id="meetMain" hidden>
+          <ol class="meet-list meet-top" id="meetTop"></ol>
+          <button type="button" class="meet-more" id="meetMoreBtn" aria-expanded="false" aria-controls="meetRest" hidden></button>
+        </div>
+        <p class="meet-note" id="meetNote" hidden></p>
+        <div id="meetRest" hidden>
+          <ol class="meet-list" id="meetRestList"></ol>
+          <p class="meet-note" id="meetWindow"></p>
+        </div>
+      </section>
 
       <p class="hint" id="hint">Kliknij punkt na mapie albo przeciągnij znacznik.</p>
       <section class="intro" id="intro" aria-label="Jak zacząć" hidden>
@@ -425,7 +449,7 @@
         (punkty i wszystkie opcje) w adresie strony — możesz go wysłać innym.</p>
 
       <h3>Tryby</h3>
-      <p><strong>Zasięg transportu</strong> — analiza jednego punktu.
+      <p><strong>Zasięg</strong> — analiza jednego punktu.
         <strong>Porównaj dwa punkty</strong> — na mapie pojawia się drugi,
         pomarańczowy znacznik (z własną wyszukiwarką adresu), a strefa pokazuje
         miejsca, do których <strong>obie osoby</strong> dotrą w danym czasie —
@@ -433,6 +457,11 @@
         spotkania albo mieszkania „pomiędzy". Kliknięcie na mapie przesuwa
         znacznik bliższy miejscu kliknięcia. Przy kierunku „do miejsca":
         obszar, z którego da się dojechać do obu punktów.</p>
+      <p><strong>Spotkanie</strong> — jak „Dwa punkty”, a do tego karta z pięcioma
+        przystankami na spotkanie. „Po równo” wybiera takie, do których obie osoby
+        jadą mniej więcej tyle samo (bez absurdów: żadna nie jedzie dużo dłużej niż
+        do najszybszego spotkania); „Najkrócej razem” — najmniejsza suma czasów.
+        To propozycje przystanków, nie „najlepsze miejsce w mieście”.</p>
 
       <h3>Kierunek</h3>
       <p><strong>Z miejsca</strong> — strefy pokazują, dokąd dotrzesz, wyruszając
@@ -515,7 +544,7 @@
         jest wycinana ze stref.</p>
 
       <h3>Statystyki</h3>
-      <p>W trybie „Zasięg transportu" przełącznik <strong>„Pokaż statystyki"</strong>
+      <p>W trybie „Zasięg" przełącznik <strong>„Pokaż statystyki"</strong>
         otwiera tabelę: <strong>zasięg</strong> — największa odległość w linii
         prostej od punktu, osiągalna w danym czasie;
         <strong>% miasta</strong> — odsetek powierzchni lądowej miasta

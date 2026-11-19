@@ -14,7 +14,7 @@ const mapJs = read('js/map.js');
 // lokalizacji z Z-002 (.locate-btn min-width/min-height, .locate-set). Zabezpiecza pola
 // dotykowe 44 px: zagęszczanie marginesów ani porządki w CSS nie mogą usunąć
 // żadnej deklaracji wysokości. Podnoś tę stałą, gdy dochodzi kolejna kontrolka.
-const TAP_USES_MIN = 26; // 26 po #clearLimits (Z-012)
+const TAP_USES_MIN = 28; // 26 po #clearLimits (Z-012), 28 po karcie spotkania (Z-004: .meet-row, .meet-more)
 
 test('offset kontrolek mapy podąża za --panel-h, bez reguły zerującej', () => {
   assert.ok(css.includes('bottom: calc(var(--panel-h, 62vh) + 8px)'));
@@ -91,4 +91,16 @@ test('zwinięty panel: #dataWarn i #diagBox zostają widoczne, #status jest ukry
   assert.ok(css.includes('.warn[hidden] { display: none; }'));
   assert.match(html, /<p class="warn" id="dataWarn"[^>]* hidden>/);
   assert.match(html, /<section class="diag" id="diagBox"[^>]* hidden>/);
+});
+
+test('karta spotkania (Z-004): trzeci segment trybu, karta bez aria-live, pola dotykowe', () => {
+  assert.match(html, /<input type="radio" name="appmode" id="appMeet" value="meet">/);
+  const card = html.match(/<section class="meet" id="meetBox"[^>]*>/)[0];
+  assert.ok(!card.includes('aria-live'), 'komunikat dla czytnika idzie przez #zoneSummary');
+  assert.ok(card.includes('aria-busy') && card.includes('hidden'));
+  assert.ok(/\.meet-row\s*\{[^}]*min-height:\s*var\(--tap\)/.test(css));
+  assert.ok(/\.meet-more\s*\{[^}]*min-height:\s*var\(--tap\)/.test(css));
+  // pinezki bez koloru na sztywno: tylko tokeny
+  const pins = css.slice(css.indexOf('.meet-pin {'), css.indexOf('/* ---------- wyszukiwarka'));
+  assert.ok(!/#[0-9a-f]{3,6}\b/i.test(pins));
 });

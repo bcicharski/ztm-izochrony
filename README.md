@@ -30,9 +30,14 @@ przez przeglądarkę). Strona pokazuje wówczas stosowny komunikat.
 
 ## Opcje na stronie
 
-Na górze panelu wybiera się tryb: **Zasięg transportu** (jeden punkt) albo
-**Porównaj dwa punkty** (drugi znacznik z własną wyszukiwarką; strefa = czas
-wolniejszej osoby, klik na mapie przesuwa bliższy znacznik). Domyślnie aktywne
+Na górze panelu wybiera się tryb: **Zasięg** (jeden punkt), **Dwa punkty**
+(drugi znacznik z własną wyszukiwarką; strefa = czas wolniejszej osoby, klik na
+mapie przesuwa bliższy znacznik) albo **Spotkanie** (to samo co „Dwa punkty",
+plus karta z do pięciu przystanków na spotkanie: „Po równo" — obie osoby jadą
+mniej więcej tyle samo, ale żadna nie dłużej niż o okno ponad najszybsze
+spotkanie; „Najkrócej razem" — najmniejsza suma czasów. Adres: `meet=1`,
+opcjonalnie `mcrit=sum`). Przystanki pochodzą z zespołów `group` z prekompilacji,
+więc słupki jednego dworca to jedna propozycja. Domyślnie aktywne
 są „O godzinie" (bieżąca godzina i dzisiejszy typ dnia) oraz „Uwzględnij
 spacer". Legenda kolorów jest zawsze widoczna; tabela statystyk (tylko w trybie
 jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
