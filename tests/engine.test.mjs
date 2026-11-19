@@ -363,3 +363,57 @@ test('meet (Z-004): ranking spójny z czasami silnika i mieszczący się w oknie
   assert.ok(top.meetMin <= meet.windowMin);
   assert.ok(meet.sum.length > 0 && typeof top.name === 'string');
 });
+
+// --- schematyczna linia trasy (Z-010) -------------------------------------------
+
+test('journey: kind single ma anchors i shape (dojście + przejazd), legi niosą współrzędne', async () => {
+  const e = await makeEngine('tstShape');
+  await run(e, { walk: false }); // start na przystanku S0 (50,03; 20), bez dojścia
+  const target = { lat: 50.03, lng: 20.05 };    // przystanek S3
+  const j = e.journey(target);
+  assert.equal(j.kind, 'single');
+  assert.deepEqual(j.anchors, { start: [50, 20], end: [50.03, 20.05] });
+  const ride = j.legs.find(l => l.kind === 'ride');
+  assert.deepEqual(ride.path, [[50.03, 20], [50.03, 20.05]]);
+  assert.deepEqual(j.legs.find(l => l.kind === 'access').pt, [50.03, 20]);
+  // dojście (punkt → S0) i przejazd; koniec trasy leży na kliknięciu, więc bez dodatkowego spaceru
+  assert.deepEqual(j.shape.map(s => s.kind), ['foot', 'ride']);
+  assert.deepEqual(j.shape[0].pts[0], j.anchors.start);
+  assert.deepEqual(j.shape.at(-1).pts.at(-1), j.anchors.end);
+});
+
+test('journey: kierunek „do miejsca" — shape zaczyna się w kliknięciu, kończy przy punkcie', async () => {
+  const e = await makeEngine('tstShapeTo');
+  await run(e, { walk: false, direction: 'to', point: { lat: 50.03, lng: 20.05 } });
+  const click = { lat: 50.03, lng: 20 };
+  const j = e.journey(click);
+  assert.equal(j.kind, 'single');
+  assert.deepEqual(j.anchors, { start: [50.03, 20], end: [50.03, 20.05] });
+  assert.deepEqual(j.shape[0].pts[0], j.anchors.start);
+  assert.deepEqual(j.shape.at(-1).pts.at(-1), j.anchors.end);
+  assert.equal(j.shape.find(s => s.kind === 'ride').pts.length, 2);
+});
+
+test('journey: walkOnly i unreach nie mają shape', async () => {
+  const e = await makeEngine('tstShapeNone');
+  await run(e, { walkOnly: true });
+  const w = e.journey({ lat: 50.01, lng: 20 });
+  assert.equal(w.kind, 'walkOnly');
+  assert.equal('shape' in w, false);
+  await run(e, { walk: false });
+  const u = e.journey({ lat: 50.09, lng: 20.2 }); // żaden przystanek w pobliżu
+  assert.equal(u.kind, 'unreach');
+  assert.equal('shape' in u, false);
+});
+
+test('journey: compare daje shape obu osobom, z ich własnymi kotwicami', async () => {
+  const e = await makeEngine('tstShapeCmp');
+  const point2 = { lat: 50.03, lng: 20.0001 };
+  await run(e, { walk: false, compare: true, point2 });
+  const j = e.journey({ lat: 50.03, lng: 20.05 });
+  assert.equal(j.kind, 'compare');
+  assert.equal(j.persons.length, 2);
+  for (const p of j.persons) assert.ok(p.shape.some(s => s.kind === 'ride'));
+  assert.deepEqual(j.persons[0].anchors.start, [50, 20]);
+  assert.deepEqual(j.persons[1].anchors.start, [50.03, 20.0001]);
+});

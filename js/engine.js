@@ -17,7 +17,7 @@ import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNode
 import { computeReachability } from './router.js';
 import { buildZones, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
 import { computeStats, rankMeetingPlaces } from './stats.js';
-import { buildStopIndex } from './uilogic.js';
+import { buildStopIndex, journeyShape } from './uilogic.js';
 import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, buildContours, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
 
 /** Cap fali pieszej [s] — jak CAP_SEC w walkgrid.js (pasmo „ponad 60" do 90 min). */
@@ -454,14 +454,30 @@ export class Engine {
     return best < 0 ? null : { stop: best, total: bestTotal, walkMin: bestWalkMin };
   }
 
-  /** Etapy trasy z nazwami przystanków (do przesłania do UI). */
+  /**
+   * Etapy trasy z nazwami przystanków (do przesłania do UI) i współrzędnymi
+   * [lat, lon] (5 miejsc ≈ 1 m) do schematycznej linii na mapie (Z-010).
+   */
   describeLegs(legs) {
-    const names = this.last.net.stopName;
+    const { stopName: names, lat, lon } = this.last.net;
+    const pt = i => [Math.round(lat[i] * 1e5) / 1e5, Math.round(lon[i] * 1e5) / 1e5];
     return legs.map(l => l.kind === 'access'
-      ? { kind: 'access', durSec: l.durSec, stopName: names[l.stop] }
+      ? { kind: 'access', durSec: l.durSec, stopName: names[l.stop], pt: pt(l.stop) }
       : l.kind === 'walk'
-        ? { kind: 'walk', durSec: l.durSec, fromName: names[l.fromStop], toName: names[l.toStop] }
-        : { kind: 'ride', durSec: l.durSec, route: l.route, fromName: names[l.fromStop], toName: names[l.toStop], depSec: l.depSec, arrSec: l.arrSec });
+        ? { kind: 'walk', durSec: l.durSec, fromName: names[l.fromStop], toName: names[l.toStop], path: [pt(l.fromStop), pt(l.toStop)] }
+        : {
+          kind: 'ride', durSec: l.durSec, route: l.route, fromName: names[l.fromStop], toName: names[l.toStop],
+          depSec: l.depSec, arrSec: l.arrSec, path: (l.stops ?? [l.fromStop, l.toStop]).map(pt),
+        });
+  }
+
+  /** Linia trasy dla jednej osoby: kotwice = rzeczywisty początek i koniec podróży. */
+  shapeFor(legs, origin, latlng) {
+    const o = [Math.round(origin.lat * 1e5) / 1e5, Math.round(origin.lng * 1e5) / 1e5];
+    const c = [Math.round(latlng.lat * 1e5) / 1e5, Math.round(latlng.lng * 1e5) / 1e5];
+    const direction = this.last.params.direction;
+    const anchors = direction === 'to' ? { start: c, end: o } : { start: o, end: c };
+    return { anchors, shape: journeyShape(legs, { anchors, direction }) };
   }
 
   /**
@@ -503,11 +519,19 @@ export class Engine {
     const targetName = this.last.net.stopName[target.stop];
     if (!p.compare) {
       const legs = this.last.res.journeyTo(target.stop);
-      return { kind: 'single', total: target.total, walkMin: target.walkMin, targetName, legs: legs ? this.describeLegs(legs) : null };
+      const desc = legs ? this.describeLegs(legs) : null;
+      return {
+        kind: 'single', total: target.total, walkMin: target.walkMin, targetName, legs: desc,
+        ...(desc ? this.shapeFor(desc, p.point, latlng) : {}),
+      };
     }
-    const persons = [this.last.res, this.last.res2].map(res => {
+    const persons = [this.last.res, this.last.res2].map((res, i) => {
       const legs = res.journeyTo(target.stop);
-      return { totalMin: res.minutes[target.stop] + target.walkMin, legs: legs ? this.describeLegs(legs) : null };
+      const desc = legs ? this.describeLegs(legs) : null;
+      return {
+        totalMin: res.minutes[target.stop] + target.walkMin, legs: desc,
+        ...(desc ? this.shapeFor(desc, i === 0 ? p.point : p.point2, latlng) : {}),
+      };
     });
     return { kind: 'compare', total: target.total, walkMin: target.walkMin, targetName, persons };
   }

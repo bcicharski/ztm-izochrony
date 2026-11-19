@@ -11,6 +11,7 @@ import {
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine,
   buildQuery, reducedMotionFrom, accessIcons, statusLine, dayInfoView, createLatestQueue,
   geoErrorMessage, nearestCity, shouldVibrate, loadErrorMessage, inBbox, zoneSummaryText, NEAREST_CITY_MAX_KM,
+  journeyShape,
 } from '../js/uilogic.js';
 
 const CITIES = { trojmiasto: {}, gzm: {} };
@@ -1137,4 +1138,67 @@ test('meet: stany puste i zdanie dla czytnika', () => {
   assert.equal(meetSummaryText({ heading: 'H', list, bothCount: 7 }),
     'H: najlepszy Politechnika, A 13 min, B 12 min. Wspólnych przystanków: 7.');
   assert.equal(meetSummaryText({ heading: 'H', list: [], bothCount: 0 }), '');
+});
+
+// --- journeyShape (Z-010) -----------------------------------------------------
+
+const A = [50, 20], S1 = [50.01, 20], S2 = [50.02, 20], S3 = [50.03, 20], B = [50.04, 20];
+const ride = (path, t = 1) => ({ kind: 'ride', route: { n: 'X', t }, path });
+const footLeg = (a, b) => ({ kind: 'walk', path: [a, b] });
+const access = pt => ({ kind: 'access', pt });
+
+test('journeyShape: „z miejsca" — pierwszy punkt = start, ostatni = koniec; dojście i spacer jako foot', () => {
+  const legs = [access(S1), ride([S1, S2, S3])];
+  const segs = journeyShape(legs, { anchors: { start: A, end: B }, direction: 'from' });
+  assert.deepEqual(segs.map(s => s.kind), ['foot', 'ride', 'foot']);
+  assert.deepEqual(segs[0].pts, [A, S1]);
+  assert.deepEqual(segs[1].pts, [S1, S2, S3]);
+  assert.equal(segs[1].vt, 1);
+  assert.deepEqual(segs.at(-1).pts, [S3, B]);
+  assert.deepEqual(segs[0].pts[0], A);
+  assert.deepEqual(segs.at(-1).pts.at(-1), B);
+});
+
+test('journeyShape: „do miejsca" — dojście na końcu, kliknięcie na początku', () => {
+  // kolejność podróży: kliknięcie B → S1 → przejazd → S3 → punkt A (etap access na końcu)
+  const legs = [ride([S1, S2, S3]), access(S3)];
+  const segs = journeyShape(legs, { anchors: { start: B, end: A }, direction: 'to' });
+  assert.deepEqual(segs.map(s => s.kind), ['foot', 'ride', 'foot']);
+  assert.deepEqual(segs[0].pts, [B, S1]);
+  assert.deepEqual(segs.at(-1).pts, [S3, A]);
+});
+
+test('journeyShape: „do miejsca" daje kolejność odwrotną do „z miejsca" dla tych samych etapów', () => {
+  const from = journeyShape([access(S1), ride([S1, S2, S3])], { anchors: { start: A, end: B }, direction: 'from' });
+  const to = journeyShape([ride([S3, S2, S1]), access(S1)], { anchors: { start: B, end: A }, direction: 'to' });
+  // ta sama łamana, przebyta w przeciwną stronę
+  const rev = segs => segs.map(s => ({ kind: s.kind, pts: s.pts.slice().reverse() })).reverse();
+  assert.deepEqual(rev(from).map(s => s.pts), to.map(s => s.pts));
+});
+
+test('journeyShape: przesiadka w miejscu (odcinek < 10 m) jest pomijana, spacer przesiadkowy zostaje', () => {
+  const same = [50.02, 20];
+  const legs = [access(S1), ride([S1, same]), footLeg(same, [50.02, 20.00002]), ride([[50.02, 20.00002], S3])];
+  const segs = journeyShape(legs, { anchors: { start: A, end: S3 }, direction: 'from' });
+  assert.deepEqual(segs.map(s => s.kind), ['foot', 'ride', 'ride']);
+  const longer = [access(S1), ride([S1, S2]), footLeg(S2, [50.0205, 20]), ride([[50.0205, 20], S3])];
+  assert.deepEqual(journeyShape(longer, { anchors: { start: A, end: S3 }, direction: 'from' }).map(s => s.kind),
+    ['foot', 'ride', 'foot', 'ride']);
+});
+
+test('journeyShape: kotwica bliżej niż 10 m od końca nie dodaje spaceru, tylko przyciąga koniec', () => {
+  const near = [50.03004, 20];
+  const segs = journeyShape([access(S1), ride([S1, S3])], { anchors: { start: A, end: near }, direction: 'from' });
+  assert.deepEqual(segs.map(s => s.kind), ['foot', 'ride']);
+  assert.deepEqual(segs.at(-1).pts.at(-1), near);
+});
+
+test('journeyShape: etapy bez geometrii albo bez kotwic zwracają []', () => {
+  const anchors = { start: A, end: B };
+  assert.deepEqual(journeyShape(null, { anchors, direction: 'from' }), []);
+  assert.deepEqual(journeyShape([{ kind: 'ride', route: { t: 3 } }], { anchors, direction: 'from' }), []);
+  assert.deepEqual(journeyShape([{ kind: 'walk' }], { anchors, direction: 'from' }), []);
+  assert.deepEqual(journeyShape([access(null)], { anchors, direction: 'from' }), []);
+  assert.deepEqual(journeyShape([ride([S1, S2])], { direction: 'from' }), []);
+  assert.deepEqual(journeyShape([], { anchors, direction: 'from' }), []);
 });

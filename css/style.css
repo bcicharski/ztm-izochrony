@@ -1399,3 +1399,13 @@ fieldset.control:disabled label { cursor: default; }
 }
 .locate-set:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .leaflet-bar a.locate-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Schematyczna linia trasy na mapie (Z-010). Kolory wyłącznie z tokenów;
+   grubości i promienie to stałe w js/map.js (JOURNEY_STYLE). */
+.jl-halo { stroke: var(--ink); }
+.jl-core { stroke: var(--surface); }
+.jl-core-a { stroke: var(--dot-a); }
+.jl-core-b { stroke: var(--dot-b); }
+.jl-dot { fill: var(--surface); stroke: var(--ink); }
+.jl-dot-a { fill: var(--dot-a); }
+.journey .journey-note { margin: 6px 0 0; font-size: 0.85em; }

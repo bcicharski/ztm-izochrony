@@ -168,6 +168,12 @@ function newParents(n) {
     route: new Int32Array(n),
     dep: new Int32Array(n),   // ride: odjazd z przystanku wsiadania; foot/access: czas przejścia [s]
     arr: new Int32Array(n),   // czas dotarcia do przystanku w chwili ustawienia rodzica
+    // ride (tylko RAPTOR): wzorzec i POZYCJE wsiadania/wysiadania w p.stops —
+    // z nich buildJourney odtwarza przystanki pośrednie (pozycje, nie szukanie
+    // przystanku: wzorzec z pętlą odwiedza ten sam przystanek dwa razy)
+    pat: new Int32Array(n),
+    fromPos: new Int32Array(n),
+    toPos: new Int32Array(n),
   };
 }
 
@@ -256,6 +262,9 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType, lim) {
             par.route[stop] = p.route;
             par.dep[stop] = boardDep;
             par.arr[stop] = arrT;
+            par.pat[stop] = pi;
+            par.fromPos[stop] = boardPos;
+            par.toPos[stop] = pos;
             mark(stop);
           }
         }
@@ -497,6 +506,10 @@ function buildJourney(g, run, target, opts) {
         depAbs: timed ? par.dep[cur] : null,
         arrAbs: timed ? par.arr[cur] : null,
         durSec: timed ? par.arr[cur] - par.dep[cur] : par.dep[cur],
+        // przystanki w kolejności sieci (w odwróconej: odwrotnej do podróży)
+        netStops: timed
+          ? Array.from(g.patterns[par.pat[cur]].stops.slice(par.fromPos[cur], par.toPos[cur] + 1))
+          : null,
       });
     } else { // P_FOOT
       raw.push({ kind: 'walk', a: prev, b: cur, durSec: par.dep[cur] });
@@ -520,6 +533,8 @@ function buildJourney(g, run, target, opts) {
         depSec: leg.depAbs == null ? null : toReal(reversedNet ? leg.arrAbs : leg.depAbs),
         arrSec: leg.arrAbs == null ? null : toReal(reversedNet ? leg.depAbs : leg.arrAbs),
         durSec: leg.durSec,
+        // indeksy przystanków od wsiadania do wysiadania, w kolejności podróży
+        stops: leg.netStops ? (reversedNet ? leg.netStops.reverse() : leg.netStops) : null,
       });
     } else {
       legs.push({
@@ -544,11 +559,12 @@ function buildJourney(g, run, target, opts) {
           last.toStop === leg.fromStop) {
         last.toStop = leg.toStop;
         last.durSec += leg.durSec;
+        last.stops.push(leg.toStop);
       } else if (leg.kind === 'walk' && last?.kind === 'walk' && last.toStop === leg.fromStop) {
         last.toStop = leg.toStop;
         last.durSec += leg.durSec;
       } else {
-        merged.push({ ...leg });
+        merged.push(leg.kind === 'ride' ? { ...leg, stops: [leg.fromStop, leg.toStop] } : { ...leg });
       }
     }
     return merged;

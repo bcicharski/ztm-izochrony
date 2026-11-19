@@ -5,7 +5,7 @@
 
 import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, distM } from './data.js';
 import { BANDS } from './isochrone.js';
-import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateControl } from './map.js';
+import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateControl, createJourneyPane, createJourneyLayer } from './map.js';
 import {
   warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
@@ -115,6 +115,8 @@ function updateUrl() {
 
 const map = createMap('map', cityCfg().center, cityCfg().zoom);
 const zoneLayer = new ZoneLayer().addTo(map);
+createJourneyPane(map);
+const journeyLayer = createJourneyLayer(map); // linia trasy żyje razem z dymkiem trasy
 
 const marker = L.marker(state.point, { draggable: true, autoPan: true }).addTo(map);
 marker.on('dragend', () => setPoint(marker.getLatLng()));
@@ -968,7 +970,28 @@ map.on('contextmenu', async e => {
   if (!j) return;
   const popup = L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(journeyHtml(j)).openOn(map);
   journeyPopup = { popup, latlng };
+  journeyLayer.setShapes(journeyShapes(j));
 });
+
+// Linia jest graficznym odpowiednikiem dymka, więc ginie razem z nim (zamknięcie
+// Esc, klik w mapę, otwarcie innego dymka). Otwarcie nowego dymka trasy zamyka
+// poprzedni PRZED ustawieniem journeyPopup, więc czyści starą linię, a nową
+// rysuje dopiero po tym.
+map.on('popupclose', e => {
+  if (journeyPopup && e.popup === journeyPopup.popup) {
+    journeyPopup = null;
+    journeyLayer.clear();
+  }
+});
+
+/** Linie do narysowania z wyniku `Engine.journey`: A/B w porównaniu, inaczej jedna. */
+function journeyShapes(j) {
+  if (j.kind === 'single') return j.shape?.length ? [{ shape: j.shape, variant: 'single' }] : [];
+  if (j.kind === 'compare') {
+    return j.persons.map((p, i) => ({ shape: p.shape, variant: i === 0 ? 'a' : 'b' })).filter(it => it.shape?.length);
+  }
+  return []; // „tylko pieszo" i poza zasięgiem: nic nie rysujemy
+}
 
 /**
  * Po przeliczeniu otwarty dymek dostaje świeżą trasę zamiast znikać —
@@ -981,10 +1004,12 @@ async function refreshJourneyPopup() {
   let j = null;
   try { j = await engine.journey(jp.latlng); } catch { /* bez dymka */ }
   if (journeyPopup !== jp || !jp.popup.isOpen()) return;
-  if (!j) { map.closePopup(); journeyPopup = null; return; }
+  if (!j) { map.closePopup(); journeyPopup = null; journeyLayer.clear(); return; }
   jp.popup.setContent(journeyHtml(j));
+  journeyLayer.setShapes(journeyShapes(j));
 }
 
+const JOURNEY_NOTE = 'Linia jest uproszczona: łączy przystanki w linii prostej i nie pokazuje dokładnego przebiegu ulic.';
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
 /**
@@ -1049,6 +1074,12 @@ function journeyHeader(totalMin) {
   return `<h4>≈ ${Math.round(totalMin)} min${extra}</h4>`;
 }
 
+/** Zastrzeżenie pod listą etapów, gdy na mapie jest schematyczna linia. */
+function shapeNote(has) {
+  return (Array.isArray(has) ? has.length : has)
+    ? `<p class="muted journey-note">${JOURNEY_NOTE}</p>` : '';
+}
+
 /** HTML dymka z wyniku `Engine.journey`. */
 function journeyHtml(j) {
   const unreach = why => `<div class="journey"><h4>Poza zasięgiem</h4><span class="muted">${esc(why)}</span></div>`;
@@ -1060,14 +1091,14 @@ function journeyHtml(j) {
   }
   if (j.kind === 'unreach') return unreach(j.reason);
   if (j.kind === 'single') {
-    return `<div class="journey">${journeyHeader(j.total)}${j.legs ? legsHtml(j.legs, j.walkMin, j.targetName) : ''}</div>`;
+    return `<div class="journey">${journeyHeader(j.total)}${j.legs ? legsHtml(j.legs, j.walkMin, j.targetName) : ''}${shapeNote(j.shape)}</div>`;
   }
   const parts = j.persons.map((p, i) => {
     const [cls, name] = i === 0 ? ['dot-a', 'Punkt niebieski'] : ['dot-b', 'Punkt pomarańczowy'];
     return `<div class="person"><span class="dot ${cls}"></span>${name} · ≈ ${Math.round(p.totalMin)} min</div>`
       + (p.legs ? legsHtml(p.legs, j.walkMin, j.targetName) : '<span class="muted">brak trasy</span>');
   });
-  return `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(j.total)} min</h4>${parts.join('')}</div>`;
+  return `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(j.total)} min</h4>${parts.join('')}${shapeNote(j.persons.some(p => p.shape?.length))}</div>`;
 }
 
 // --- miejsce spotkania (Z-004) -------------------------------------------------
@@ -1492,6 +1523,7 @@ function switchCity(key) {
   for (const id of ['searchInput', 'searchInput2']) $(id).value = '';
   for (const id of ['searchResults', 'searchResults2']) $(id).hidden = true;
   map.closePopup();
+  journeyLayer.clear();
   map.setView(cityCfg().center, cityCfg().zoom, { animate: !prefersReducedMotion() });
   // zasoby poprzedniego miasta zwalnia silnik (setCity); tu tylko cache
   // meta/wody wątku głównego i warstwa stref

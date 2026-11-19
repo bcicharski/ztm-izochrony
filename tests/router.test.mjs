@@ -404,3 +404,94 @@ test('tryb ogólny z maxTransfers: 0 daje ten sam wynik co bez limitu (decyzja: 
   const o = opts({ walk: true, mode: 'general', accessSec: ONLY_S0 });
   assert.deepEqual([...computeReachability(net, { ...o, maxTransfers: 0 }).minutes], [...computeReachability(net, o).minutes]);
 });
+
+// --- przystanki pośrednie etapu przejazdu (Z-010) ---------------------------------
+
+const rides = legs => legs.filter(l => l.kind === 'ride');
+/** Każda kolejna para z `stops` jest parą sąsiadów w którymś wzorcu (w danej kolejności). */
+const adjacentInSomePattern = (net, a, b) => net.patterns.some(p => {
+  for (let i = 0; i + 1 < p.stops.length; i++) if (p.stops[i] === a && p.stops[i + 1] === b) return true;
+  return false;
+});
+
+test('stops: etap przejazdu zaczyna się od fromStop, kończy na toStop, pary to sąsiedzi we wzorcu', () => {
+  const net = makeNet({
+    stops: line(5), routes: [{ n: '1', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1, 2, 3, 4], p: [[60, 60, 60, 60]], t: everyN(H8, H8 + 3600, 600) }],
+  });
+  const r = computeReachability(net, opts());
+  const [ride] = rides(r.journeyTo(3));
+  assert.deepEqual(ride.stops, [0, 1, 2, 3]);
+  assert.equal(ride.stops[0], ride.fromStop);
+  assert.equal(ride.stops.at(-1), ride.toStop);
+  for (let i = 0; i + 1 < ride.stops.length; i++) assert.ok(adjacentInSomePattern(net, ride.stops[i], ride.stops[i + 1]));
+});
+
+test('stops: dwa przejazdy z przesiadką mają własne, rozłączne ciągi', () => {
+  const net = makeNet({
+    stops: line(6), routes: [{ n: '1', t: 3 }, { n: '2', t: 3 }],
+    patterns: [
+      { r: 0, s: [0, 1, 2], p: [[60, 60]], t: [[H8, 0]] },
+      { r: 1, s: [2, 3, 4, 5], p: [[60, 60, 60]], t: [[H8 + 600, 0]] },
+    ],
+  });
+  const legs = computeReachability(net, opts()).journeyTo(5);
+  assert.deepEqual(rides(legs).map(l => l.stops), [[0, 1, 2], [2, 3, 4, 5]]);
+});
+
+test('stops: kierunek „do miejsca" daje przystanki w rzeczywistej kolejności podróży (nie sieci odwróconej)', () => {
+  const net = makeNet({
+    stops: line(4), routes: [{ n: '1', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1, 2, 3], p: [[60, 60, 60]], t: everyN(H8, H8 + 7200, 600) }],
+  });
+  const to = computeReachability(net, opts({ direction: 'to', lat: 50 + 3 * 0.0045, lon: 20, timeMin: 500 }));
+  const [ride] = rides(to.journeyTo(0));
+  assert.equal(ride.fromStop, 0);
+  assert.equal(ride.toStop, 3);
+  assert.deepEqual(ride.stops, [0, 1, 2, 3], 'od wsiadania do wysiadania, nie odwrotnie');
+  // ta sama trasa „z miejsca" daje identyczny ciąg
+  const from = computeReachability(net, opts());
+  assert.deepEqual(rides(from.journeyTo(3))[0].stops, ride.stops);
+});
+
+test('stops: wzorzec z pętlą daje wycinek wg pozycji, a nie wg pierwszego wystąpienia przystanku', () => {
+  // przystanek 1 odwiedzany dwa razy: pozycje 1 i 3
+  const net = makeNet({
+    stops: line(4), routes: [{ n: 'L', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1, 2, 1, 3], p: [[60, 60, 60, 60]], t: [[H8, 0]] }],
+  });
+  const r = computeReachability(net, opts());
+  assert.deepEqual(rides(r.journeyTo(3))[0].stops, [0, 1, 2, 1, 3]);
+  assert.deepEqual(rides(r.journeyTo(2))[0].stops, [0, 1, 2]);
+});
+
+test('stops: tryb ogólny (Dijkstra) — scalone odcinki tej samej linii dają pełny ciąg, w obu kierunkach', () => {
+  const net = makeNet({
+    stops: line(4), routes: [{ n: '1', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1, 2, 3], p: [[60, 60, 60]], t: [[H8, 0]] }],
+  });
+  const from = computeReachability(net, opts({ mode: 'general', timeMin: 999 }));
+  const legs = from.journeyTo(3);
+  assert.equal(rides(legs).length, 1);
+  assert.deepEqual(rides(legs)[0].stops, [0, 1, 2, 3]);
+  const to = computeReachability(net, opts({ mode: 'general', direction: 'to', lat: 50 + 3 * 0.0045, lon: 20, timeMin: 999 }));
+  assert.deepEqual(rides(to.journeyTo(0))[0].stops, [0, 1, 2, 3]);
+});
+
+test('stops: kurs nocny (24:00+) nie gubi ciągu przystanków', () => {
+  const net = makeNet({
+    stops: line(3), routes: [{ n: 'N1', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1, 2], p: [[300, 300]], t: [[25 * 3600 + 600, 0]] }],
+  });
+  const r = computeReachability(net, opts({ timeMin: 60 }));
+  assert.deepEqual(rides(r.journeyTo(2))[0].stops, [0, 1, 2]);
+});
+
+test('stops: etapy walk i access nie dostają pola stops', () => {
+  const net = makeNet({
+    stops: line(3), routes: [{ n: '1', t: 3 }],
+    patterns: [{ r: 0, s: [0, 1, 2], p: [[300, 300]], t: everyN(H8, H8 + 7200, 600) }],
+  });
+  const legs = computeReachability(net, opts({ walk: true, lat: 50, lon: 20.0005, timeMin: 479 })).journeyTo(2);
+  for (const l of legs.filter(x => x.kind !== 'ride')) assert.equal('stops' in l, false);
+});

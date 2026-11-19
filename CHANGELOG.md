@@ -24,6 +24,20 @@ Dosłowny wynik `npm run check` po Z-004 (2026-11-19), podany przez wątek głó
 ℹ duration_ms 793.8935
 ```
   Łącznie 417 testów, lint czysty.
+- Z-010 Prawy klik na mapie rysuje linię trasy z dymka. Wcześniej dymek opisywał przejazd tylko słowami; teraz przejazd widać na mapie. W trybie porównania rysowane są obie trasy naraz. Linia znika razem z dymkiem, a w trybie „tylko pieszo" nie pojawia się wcale. Linia jest schematyczna: łamana po współrzędnych przystanków z danych już obecnych w przeglądarce, bez nowych plików i bez przeliczania miast, jednakowo w 18 miastach. Cena jest jawna: kropki na przystankach (także przy wsiadaniu i wysiadaniu), kreskowane odcinki piesze oraz w dymku zdanie „Linia jest uproszczona: łączy przystanki w linii prostej i nie pokazuje dokładnego przebiegu ulic." Prawdziwa geometria z GTFS to osobna decyzja właściciela (Z-074). Wygląd: ciemna otoczka z jasnym rdzeniem; dwie osoby rozróżnione grubością, kropkami pełnymi lub pustymi, fazą kreskowania i dopiero na końcu kolorem; kolory ustawia CSS przez klasy, bez nowych tokenów. Zmierzony kontrast (liczony na kaflach, nie na pikselach zrzutu): rdzeń wobec otoczki 16,9:1; otoczka wobec podkładu w paśmie 45–60 min 3,7:1 przy medianie jasności kafli, 3,3:1 przy 25. percentylu, 2,7:1 przy 5. percentylu. Ostatni wynik jest poniżej wymaganych 3:1 na najciemniejszych fragmentach mapy (parki, woda; około 5 procent pikseli). Linia pozostaje czytelna dzięki kontrastowi rdzenia wobec otoczki, ale próg 3:1 nie jest spełniony wszędzie (Z-072). Zmiana w silniku: `js/router.js` zapisuje w rodzicach RAPTOR wzorzec i dwie pozycje przystanków oraz pełny ciąg przystanków w etapie przejazdu. Zapisywane są pozycje, nie wyszukiwanie przystanku we wzorcu, bo wzorzec może odwiedzić ten sam przystanek dwa razy. Dla kierunku „do miejsca" sieć jest odwrócona i wycinek jest odwracany (osobny test). Zmiana wyłącznie addytywna: żadne istniejące pole ani warunek nie zostały ruszone; cały dotychczasowy `tests/router.test.mjs` przechodzi bez modyfikacji, łącznie z testami porównującymi wynik z niezależną wyrocznią. (pliki: js/router.js, js/engine.js, js/uilogic.js, js/map.js, js/app.js, css/style.css, README.md, CURRENT_STATE.md; testy: 18 nowych w tests/router.test.mjs, tests/uilogic.test.mjs, tests/engine.test.mjs, tests/a11y-css.test.mjs; sprawdzone w przeglądarce, dziesięć punktów: Warszawa (autobus 130 z Bukowińskiej do EC Siekierki ma 9 wierzchołków, nie jedną cięciwę), kierunek „do miejsca" zaczyna linię w kliknięciu i kończy przy pinezce, tryb ogólny daje pełną linię mimo scalonych etapów, w porównaniu na wspólnym odcinku widać cienki pasek jednej osoby w grubym drugiej, Esc, klik w mapę i klik w wiersz spotkania usuwają linię, nowy klik ją zastępuje bez dublowania, zmiana miasta usuwa, „tylko pieszo" nic nie rysuje, prawy klik na samej linii otwiera nowy dymek, Tczew z Gdańska: linia czytelna nad szarym pasmem „ponad 60 minut", tryb bez workera daje identyczne wektory, przy 360 px grubość bez zmian)
+  Nie sprawdzone: płynność przesuwania mapy na prawdziwym telefonie; prawy klik prawdziwą myszą (testowano zdarzeniem syntetycznym); fizyczne przeciągnięcie pinezki przy otwartym dymku (sprawdzono tę samą ścieżkę przez zmianę godziny); kontrast liczony, nie mierzony na pikselach zrzutu; dostępność z klawiatury (Z-073).
+  Dosłowny wynik `npm run check` po Z-010 (2026-11-19):
+```
+ℹ tests 435
+ℹ suites 0
+ℹ pass 434
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1042.2708
+```
+  Lint czysty.
 
 ## 2026-11-17
 ### Dodane

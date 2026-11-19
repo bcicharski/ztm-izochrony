@@ -902,3 +902,66 @@ export function dataSectionSummary({ feedDate, stale }) {
   const iso = fmtIsoDate(feedDate);
   return { text: iso ? `rozkład z ${iso}` : 'źródła i kontakt', changed: false };
 }
+
+// --- schematyczna linia trasy na mapie (Z-010) -------------------------------
+
+/** Odcinki krótsze niż tyle metrów pomijamy (przesiadka w miejscu). */
+export const SHAPE_MIN_SEG_M = 10;
+
+const M_PER_DEG = 111320;
+/** Odległość w metrach między [lat,lon] — przybliżenie płaskie, wystarcza na skali miasta. */
+function ptDistM(a, b) {
+  const dLat = (a[0] - b[0]) * M_PER_DEG;
+  const dLon = (a[1] - b[1]) * M_PER_DEG * Math.cos(((a[0] + b[0]) / 2) * Math.PI / 180);
+  return Math.hypot(dLat, dLon);
+}
+const pathLenM = pts => {
+  let s = 0;
+  for (let i = 1; i < pts.length; i++) s += ptDistM(pts[i - 1], pts[i]);
+  return s;
+};
+const validPt = p => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+
+/**
+ * Etapy trasy (`Engine.describeLegs`) → odcinki do narysowania na mapie.
+ * Linia jest SCHEMATYCZNA: łamana po współrzędnych przystanków, bez
+ * prawdziwego przebiegu ulic (shapes.txt nie jest prekompilowane).
+ *
+ * @param {Array} legs  etapy w kolejności podróży
+ * @param {{anchors:{start:[number,number], end:[number,number]}, direction:'from'|'to'}} ctx
+ *   anchors = rzeczywisty początek i koniec podróży. Etap „access" leży przy
+ *   punkcie użytkownika: na początku dla „z miejsca", na końcu dla „do miejsca".
+ * @returns {Array<{kind:'ride'|'foot', pts:Array<[number,number]>, vt?:number}>}
+ *   Pierwszy punkt pierwszego odcinka = anchors.start, ostatni punkt ostatniego
+ *   = anchors.end. Brak geometrii → [].
+ */
+export function journeyShape(legs, { anchors, direction } = {}) {
+  if (!Array.isArray(legs) || !validPt(anchors?.start) || !validPt(anchors?.end)) return [];
+  const segs = [];
+  for (const l of legs) {
+    if (l.kind === 'access') {
+      if (!validPt(l.pt)) return [];
+      segs.push({ kind: 'foot', pts: direction === 'to' ? [l.pt, anchors.end] : [anchors.start, l.pt] });
+    } else if (l.kind === 'walk') {
+      if (!Array.isArray(l.path) || !l.path.every(validPt)) return [];
+      segs.push({ kind: 'foot', pts: l.path.slice() });
+    } else if (l.kind === 'ride') {
+      if (!Array.isArray(l.path) || l.path.length < 2 || !l.path.every(validPt)) return [];
+      segs.push({ kind: 'ride', pts: l.path.slice(), vt: l.route?.t });
+    }
+  }
+  const out = segs.filter(s => pathLenM(s.pts) >= SHAPE_MIN_SEG_M);
+  if (out.length === 0) return [];
+  // domknięcie do punktu użytkownika i do klikniętego miejsca: spacer, a gdy
+  // luka mniejsza niż próg — przyciągnięcie końca do kotwicy
+  const first = out[0];
+  if (ptDistM(anchors.start, first.pts[0]) >= SHAPE_MIN_SEG_M) {
+    out.unshift({ kind: 'foot', pts: [anchors.start, first.pts[0]] });
+  } else first.pts[0] = anchors.start;
+  const last2 = out[out.length - 1];
+  const lp = last2.pts[last2.pts.length - 1];
+  if (ptDistM(lp, anchors.end) >= SHAPE_MIN_SEG_M) {
+    out.push({ kind: 'foot', pts: [lp, anchors.end] });
+  } else last2.pts[last2.pts.length - 1] = anchors.end;
+  return out;
+}

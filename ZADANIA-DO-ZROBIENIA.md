@@ -86,13 +86,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js.
 
-### Z-010 [P2] Wizualizacja trasy z dymka na mapie
-- Status: nowe (zatwierdzone do wdrożenia przez właściciela 2026-11-17: „Z-010 — do zrobienia w następnej kolejności". Wchodzi PO Z-004, do wdrożenia zaraz po nim.)
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: nie ma rysowania tras na mapie.
-- Dowód: brak shapes i polilinii w js/app.js i js/map.js.
-- Pliki: js/map.js, js/app.js, tools/build-data.mjs.
-
 ### Z-011 [P2] Realny „teraz"
 - Status: nowe
 - Zgłoszone: 2026-11-16 (analityk)
@@ -206,6 +199,30 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: wdrożenie Z-004 (2026-11-19), dymek przystanku spotkania.
 - Pliki: nieznane.
 - Jak sprawdzić: nieznane. Łączy się naturalnie z rysowaniem trasy na mapie z Z-010.
+
+### Z-072 [P2] Kontrast otoczki trasy poniżej progu na ciemnych fragmentach mapy
+- Status: nowe
+- Zgłoszone: 2026-11-19 (nieznane; pomiar przy wdrożeniu Z-010)
+- Problem: otoczka trasy na paśmie 45–60 minut ma kontrast 2,7:1 wobec najciemniejszych kafli podkładu (około 5 procent pikseli, parki i woda), przy wymaganych 3:1 dla grafiki nietekstowej. Mediana 3,7:1, 25. percentyl 3,3:1. Do rozważenia: jaśniejszy wariant otoczki, cieńszy rdzeń albo delikatny cień.
+- Dowód: pomiar przy wdrożeniu Z-010 (2026-11-19), kontrast liczony na kaflach, nie na pikselach zrzutu.
+- Pliki: css/style.css, js/map.js.
+- Jak sprawdzić: ponowny pomiar na pikselach zrzutu w paśmie 45–60 minut; próg 3:1 dla 5. percentyla.
+
+### Z-073 [P2] Dymka trasy nie da się otworzyć z klawiatury
+- Status: nowe
+- Zgłoszone: 2026-11-19 (projektant przy Z-010; świadomie nienaprawione w Z-010)
+- Problem: jedyne wejście do dymka trasy to prawy klik albo przytrzymanie palcem, więc cała funkcja opisu trasy jest niedostępna dla osoby korzystającej wyłącznie z klawiatury.
+- Dowód: wdrożenie Z-010 (2026-11-19), prawy klik jako jedyne wejście do dymka.
+- Pliki: js/app.js, js/map.js.
+- Jak sprawdzić: nieznane.
+
+### Z-074 [P3] Prawdziwa geometria przejazdu z GTFS — wymaga decyzji właściciela
+- Status: nowe
+- Zgłoszone: 2026-11-19 (nieznane)
+- Problem: linia trasy z Z-010 jest schematyczna (łamana po przystankach). Dołożenie `shapes.txt` do prekompilacji dałoby linię wzdłuż torów i ulic. Koszt: 15–20 MB nowych danych w repozytorium, 0,5–0,8 MB po kompresji na duże miasto przy każdej wizycie, przeliczenie 18 miast, nierówne pokrycie (Opole bez geometrii, bo konwerter TransXChange jej nie produkuje). Proponowany pierwszy etap, gdyby właściciel zatwierdził: geometria tylko dla kolei i metra. Decyzję warto podjąć po tym, jak będzie widać, czy schematyczna linia komukolwiek przeszkadza.
+- Dowód: w katalogu `tools/` nie ma ani jednego wystąpienia słowa „shape" (sprawdzone 2026-11-19); prekompilacja nie czyta geometrii z GTFS, więc nic z niej nie trafia do `data/<miasto>/`.
+- Pliki: tools/ (prekompilacja GTFS), data/<miasto>/ — dopiero po decyzji właściciela.
+- Jak sprawdzić: nieznane.
 
 ## Zrobione
 
@@ -723,6 +740,15 @@ Pułapki do wdrożenia:
 - Budżet panelu niedotrzymany: w trybie spotkania panel przewija się wewnętrznie o 68 px przy oknie 1280x800 (714 px treści przy 646 px widocznych). Karta ma 102 px (budżet 120 px); przekroczenie bierze się głównie z trybu dwóch punktów (618 px przez drugie pole adresu). Karta jest na górze panelu i widoczna bez przewijania. Tryb domyślny nadal 548 px, bez przewijania. Dalsze skrócenie wymagałoby decyzji, co ustąpi.
 - Niezweryfikowane: wygląd pinezek i dymka po ostatnich poprawkach stylów; czytnik ekranu przy zmianie kryterium; tryb „ogólnie" i kierunek „do miejsca" sprawdzone tylko testami, nie w przeglądarce.
 - Etap drugi: przeniesiony do Z-071 (osobne zadanie, do zrobienia po Z-010).
+
+### Z-010 [P2] Wizualizacja trasy z dymka na mapie
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: nie ma rysowania tras na mapie.
+- Dowód: brak shapes i polilinii w js/app.js i js/map.js.
+- Pliki: js/router.js, js/engine.js, js/uilogic.js, js/map.js, js/app.js, css/style.css, README.md, CURRENT_STATE.md.
+- Wdrożone 2026-11-19: prawy klik na mapie rysuje linię trasy z dymka; w trybie porównania obie trasy naraz; linia znika razem z dymkiem; w trybie „tylko pieszo" nic nie rysuje. Źródło geometrii: łamana po współrzędnych przystanków z danych już obecnych w przeglądarce (zero nowych plików, zero przeliczania, jednakowo w 18 miastach). Prawdziwa geometria z GTFS odłożona do Z-074 (wymaga decyzji właściciela). Cena jawna: kropki na przystankach, kreskowane odcinki piesze, w dymku zdanie o uproszczeniu linii. Wygląd: ciemna otoczka z jasnym rdzeniem; dwie osoby rozróżnione grubością, kropkami pełnymi lub pustymi, fazą kreskowania i dopiero na końcu kolorem; zero nowych tokenów. Zmierzony kontrast: rdzeń wobec otoczki 16,9:1; otoczka wobec podkładu w paśmie 45–60 min 2,7:1 przy 5. percentylu, czyli poniżej wymaganych 3:1 na najciemniejszych fragmentach mapy (zgłoszone jako Z-072). Zatwierdzone przez właściciela 2026-11-17 jako następne po Z-004.
+- Niezweryfikowane: płynność przesuwania mapy na prawdziwym telefonie; prawy klik prawdziwą myszą (testowano zdarzeniem syntetycznym); fizyczne przeciągnięcie pinezki przy otwartym dymku; kontrast liczony, nie mierzony na pikselach zrzutu; dostępność z klawiatury (Z-073).
 
 ## Odrzucone
 

@@ -144,3 +144,24 @@ test('summary (Z-062): każdy <summary> w index.html jest pod .sec albo .diag, a
     if (h) assert.equal(h[1].trim(), 'var(--tap)', `${r.selectors.join(', ')}: wysokość summary ≠ --tap`);
   }
 });
+
+test('linia trasy (Z-010): kolory .jl-* wyłącznie z tokenów, a js/map.js nie ma kolorów na sztywno', () => {
+  const expected = {
+    '.jl-halo': /stroke:\s*var\(--ink\)/,
+    '.jl-core': /stroke:\s*var\(--surface\)/,
+    '.jl-core-a': /stroke:\s*var\(--dot-a\)/,
+    '.jl-core-b': /stroke:\s*var\(--dot-b\)/,
+    '.jl-dot': /fill:\s*var\(--surface\)[\s\S]*stroke:\s*var\(--ink\)/,
+    '.jl-dot-a': /fill:\s*var\(--dot-a\)/,
+  };
+  for (const [sel, re] of Object.entries(expected)) {
+    const rule = ALL.find(r => r.selectors.includes(sel));
+    assert.ok(rule, `brak reguły ${sel}`);
+    assert.match(rule.body, re, sel);
+  }
+  const src = readFileSync(new URL('../js/map.js', import.meta.url), 'utf8');
+  const journey = src.slice(src.indexOf('schematyczna linia trasy (Z-010)'));
+  assert.ok(journey.length > 100, 'nie znaleziono sekcji Z-010 w map.js');
+  assert.ok(!/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(journey), 'kolor na sztywno w warstwie linii trasy');
+  assert.ok(!/color:\s*['"]/.test(journey), 'kolor podany w opcjach Leafleta zamiast klasy CSS');
+});

@@ -323,3 +323,86 @@ export const ZoneLayer = L.Layer.extend({
     }
   },
 });
+
+// --- schematyczna linia trasy (Z-010) -----------------------------------------
+
+/**
+ * Własny pane linii trasy: nad strefami (overlayPane, 400), pod pinezkami
+ * (markerPane, 600) i dymkami (popupPane, 700).
+ */
+export function createJourneyPane(map) {
+  const pane = map.createPane('journeyPane');
+  pane.style.zIndex = 450;
+  return pane;
+}
+
+/**
+ * Grubości [px] i promienie to stałe geometrii, nie kolory. Kolory siedzą w
+ * css/style.css (klasy .jl-*) na tokenach --ink / --surface / --dot-a / --dot-b.
+ * Ciemna otoczka (--ink) pod jasnym rdzeniem działa na wszystkich pasmach stref;
+ * jasna otoczka dawałaby ok. 1,4:1 na paśmie „do 10 min". Tryb porównania
+ * odróżnia osoby grubością i kształtem kropek, nie tylko kolorem (--dot-b jest
+ * bliski kolorowi pasma 10–20 min, więc B zawsze ma otoczkę).
+ */
+export const JOURNEY_STYLE = {
+  single: { halo: 8, core: 4, dash: '8 6', dashOffset: '0', dotR: 5, dotW: 2 },
+  a: { halo: 5, core: 3, dash: '8 6', dashOffset: '0', dotR: 5, dotW: 2 },
+  b: { halo: 12, core: 8, dash: '10 6', dashOffset: '8', dotR: 6, dotW: 2.5 },
+};
+
+/**
+ * Warstwa linii trasy. Wszystkie ścieżki `interactive: false` — inaczej
+ * polilinia przechwytywałaby prawy klik (nie dałoby się otworzyć dymka dla
+ * miejsca leżącego na trasie) i wchodziła do kolejności tabulacji.
+ * Linia żyje razem z dymkiem trasy (app.js), który jest jej tekstowym
+ * odpowiednikiem.
+ */
+export function createJourneyLayer(map) {
+  const group = L.layerGroup().addTo(map);
+  const renderer = L.svg({ pane: 'journeyPane' });
+  const base = { pane: 'journeyPane', renderer, interactive: false, lineJoin: 'round', fill: false };
+  const poly = (pts, cls, opt) => L.polyline(pts, { ...base, className: cls, ...opt });
+
+  function drawVariant(shape, variant) {
+    const st = JOURNEY_STYLE[variant] ?? JOURNEY_STYLE.single;
+    const core = variant === 'a' ? 'jl-core-a' : variant === 'b' ? 'jl-core-b' : 'jl-core';
+    // 1. otoczka, ciągła, pod wszystkim (także pod odcinkiem pieszym)
+    for (const seg of shape) {
+      poly(seg.pts, 'jl-halo', { weight: st.halo, lineCap: 'round' }).addTo(group);
+    }
+    // 2. rdzeń: przejazd ciągły, spacer kreskowany
+    for (const seg of shape) {
+      if (seg.kind === 'ride') {
+        poly(seg.pts, core, { weight: st.core, lineCap: 'round' }).addTo(group);
+      } else {
+        poly(seg.pts, core, {
+          weight: st.core, lineCap: 'butt', dashArray: st.dash, dashOffset: st.dashOffset,
+        }).addTo(group);
+      }
+    }
+    // 3. kropki na przystankach (wsiadanie, pośrednie, wysiadanie)
+    const dotCls = variant === 'a' ? 'jl-dot jl-dot-a' : 'jl-dot';
+    for (const seg of shape) {
+      if (seg.kind !== 'ride') continue;
+      for (const pt of seg.pts) {
+        L.circleMarker(pt, {
+          ...base, fill: true, radius: st.dotR, weight: st.dotW, className: dotCls, fillOpacity: 1,
+        }).addTo(group);
+      }
+    }
+  }
+
+  return {
+    /** @param {Array<{shape:Array, variant:'a'|'b'|'single'}>} items; [] czyści */
+    setShapes(items) {
+      group.clearLayers();
+      // B pod spodem, A nad nim — na wspólnym odcinku widać cienki pasek A w grubym B
+      const order = { b: 0, a: 1, single: 2 };
+      [...(items ?? [])]
+        .filter(it => it?.shape?.length)
+        .sort((x, y) => order[x.variant] - order[y.variant])
+        .forEach(it => drawVariant(it.shape, it.variant));
+    },
+    clear() { group.clearLayers(); },
+  };
+}
