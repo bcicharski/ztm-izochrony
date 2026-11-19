@@ -162,7 +162,8 @@ export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
   const limited = Number.isFinite(maxSpreadM);
   // bufor zasięgu trzymany przy siatce (8 MB przy 4 mln komórek — alokacja
   // przy każdym przeliczeniu to zbędna praca dla GC); stare wartości nie są
-  // czytane, bo odczyt dotyczy tylko komórek wpisanych w tym przebiegu
+  // czytane: komórki wpisane w tym przebiegu mają świeży zasięg, a zasiane
+  // z bufora (seeds == null) są zerowane przy zbieraniu do kubełków
   const spread = limited ? (grid.spread ??= new Uint16Array(W * H)) : null;
 
   // kolejka kubełkowa po sekundach
@@ -194,6 +195,9 @@ export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
     for (let i = 0; i < time.length; i++) {
       const t = time[i];
       if (t >= UNREACH) continue;
+      // zasiane piksele leżą na ulicy (zasięg 0); stary `grid.spread` z poprzedniego
+      // przebiegu nie może przeciekać — zerujemy tylko to, co i tak odwiedzamy
+      if (limited) spread[i] = 0;
       (buckets[t] ??= []).push(i);
       pending++;
     }

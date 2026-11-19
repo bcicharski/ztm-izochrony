@@ -121,3 +121,22 @@ test('buildContours: poly[] numeruje wielokąty, pierwszy pierścień wielokąta
   }
   assert.ok([0, 1].some(id => [...b.poly].filter(p => p === id).length === 2), 'jeden wielokąt ma dziurę');
 });
+
+test('computeTimeGrid(null): wynik nie zależy od starego grid.spread (Z-070)', () => {
+  const seed = g => { for (let x = 0; x < 3; x++) g.time[idx(g, x, 10)] = 0; }; // „ulica” zasiana jak paintNetwork
+  const clean = grid();
+  clean.time.fill(UNREACH);
+  seed(clean);
+  const a = [...computeTimeGrid(clean, null, 300)];
+  // ta sama siatka, drugi przebieg po przebiegu, który zasiał duże rozlanie
+  const g = grid();
+  seed(g);
+  computeTimeGrid(g, [[idx(g, 20, 10), 0]], 7000); // zapisuje spread do kilku km
+  assert.ok(g.spread.some(v => v > 300), 'pierwszy przebieg zostawił duże wartości rozlania');
+  g.time.fill(UNREACH);
+  seed(g);
+  const b = [...computeTimeGrid(g, null, 300)];
+  assert.deepEqual(b, a);
+  assert.ok(b[idx(g, 10, 10)] < UNREACH, 'fala sięga ok. 300 m od ulicy');
+  assert.equal(b[idx(g, 30, 10)], UNREACH, 'ale nie dalej niż limit');
+});

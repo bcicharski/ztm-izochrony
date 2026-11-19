@@ -183,15 +183,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Wymagane rozszerzenie, gdyby wpinać BIP: `pickLatestZip` dziś tam nie trafi (tekst linku „GTFS MZK Gorzów Wlkp." bez daty, data w href w formacie `DD-MM-RRRR`). Potrzebna gałąź: gdy żadna data się nie parsuje, a na stronie jest dokładnie jeden link `.zip`, wziąć ten link; opcjonalnie rozpoznawanie `DD-MM-RRRR`. Bez nowego trybu i bez nowego pola w `cities.json`. Credits, gdyby doszło do wpięcia: `{ "label": "MZK Gorzów Wlkp. (BIP)", "url": "https://bip.mzk-gorzow.com.pl/gtfs.html" }`.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
-### Z-070 [P2] Nieczyszczony bufor rozlania `grid.spread` w `walkgrid.js`
-- Status: nowe
-- Zgłoszone: 2026-11-17 (nieznane)
-- Problem: `computeTimeGrid(grid, null, maxSpreadM)` czyta `grid.spread` w komórkach zasianych wcześniej przez `paintNetwork` i nigdy ich nie zeruje, więc zostaje stan z poprzedniego przeliczenia. Dotąd wartości były małe (do 75 m) i skutek niewidoczny. Fallback rastrowy z limitem spaceru zapisuje do ok. 288 m, więc wynik zależy od kolejności wczytywania: w przeglądarce dla `wmax=5` dawało naprzemiennie 26 albo 35 procent obszaru, deterministycznie co drugie przeładowanie.
-- Dowód: js/walkgrid.js:166 i js/walkgrid.js:248 (tworzenie bufora `grid.spread`); obserwacja w przeglądarce przy wdrożeniu Z-012. Obejście z Z-012: `grid.spread?.fill(0)` w js/engine.js:248, z testem regresji.
-- Skutek uboczny obejścia: przy pierwszym przeliczeniu po wejściu na stronę wynik bez limitów jest taki sam jak dotąd; przy kolejnych przeliczeniach jest deterministyczny i może się nieznacznie różnić od dawnego, który zależał od stanu bufora.
-- Pliki: js/walkgrid.js, js/engine.js.
-- Jak sprawdzić: nieznane (naprawa u źródła w `js/walkgrid.js` jeszcze nie zrobiona; istniejący test regresji dotyczy obejścia).
-
 ### Z-071 [P2] Dymek przystanku spotkania z trasami obu osób i kopiowanie zaproszenia
 - Status: nowe
 - Zgłoszone: 2026-11-19 (nieznane; etap drugi Z-004 wskazany przez właściciela)
@@ -749,6 +740,15 @@ Pułapki do wdrożenia:
 - Dowód: wdrożenie Z-010 (2026-11-19), prawy klik jako jedyne wejście do dymka.
 - Pliki: js/uilogic.js, js/app.js, js/map.js, css/style.css, index.html, README.md, CURRENT_STATE.md; testy: tests/keyboard-journey.test.mjs (lista wspólna z Z-072).
 - Jak sprawdzić: testy: tests/keyboard-journey.test.mjs (8 testów). Stan 2026-11-20: Tab na mapę, strzałki ustawiają widok, Enter otwiera opis trasy dla środka mapy; przy fokusie mapy ramka, krzyżyk środka i podpowiedź „Enter — trasa do tego miejsca" (tylko przy `:focus-visible`); skrót w `aria-label` mapy i w oknie pomocy; Enter i prawy klik prowadzą przez jedną funkcję; fokus po otwarciu idzie do dymka, Escape zamyka i oddaje fokus mapie. Sprawdzone w przeglądarce prawdziwymi klawiszami: fokus mapy pokazuje ramkę, krzyżyk i podpowiedź; strzałki przesuwają; Enter otwiera dymek i rysuje linię, fokus ląduje w dymku; Escape zamyka, linia znika, fokus wraca na mapę; prawy klik działa jak wcześniej, także dla trasy z przesiadką; konsola bez błędów. Niezweryfikowane: czytnik ekranu; widok mobilny (czy panel nie zasłania krzyżyka i podpowiedzi); tryb porównania z klawiatury; zachowanie przy ograniczonym ruchu.
+
+### Z-070 [P2] Nieczyszczony bufor rozlania `grid.spread` w `walkgrid.js`
+- Status: zrobione
+- Zgłoszone: 2026-11-17 (nieznane)
+- Problem: `computeTimeGrid(grid, null, maxSpreadM)` czyta `grid.spread` w komórkach zasianych wcześniej przez `paintNetwork` i nigdy ich nie zeruje, więc zostaje stan z poprzedniego przeliczenia. Dotąd wartości były małe (do 75 m) i skutek niewidoczny. Fallback rastrowy z limitem spaceru zapisuje do ok. 288 m, więc wynik zależy od kolejności wczytywania: w przeglądarce dla `wmax=5` dawało naprzemiennie 26 albo 35 procent obszaru, deterministycznie co drugie przeładowanie.
+- Dowód: js/walkgrid.js:166 i js/walkgrid.js:248 (tworzenie bufora `grid.spread`); obserwacja w przeglądarce przy wdrożeniu Z-012. Obejście z Z-012: `grid.spread?.fill(0)` w js/engine.js:248, z testem regresji.
+- Skutek uboczny obejścia: przy pierwszym przeliczeniu po wejściu na stronę wynik bez limitów jest taki sam jak dotąd; przy kolejnych przeliczeniach jest deterministyczny i może się nieznacznie różnić od dawnego, który zależał od stanu bufora.
+- Pliki: js/walkgrid.js, js/engine.js, tests/walkgrid.test.mjs.
+- Jak sprawdzić: stan 2026-11-20 — naprawa u źródła w `computeTimeGrid` (`js/walkgrid.js`): w gałęzi bez zasiewu pętla zbierająca zasiane piksele zeruje `grid.spread` w każdej odwiedzonej komórce. Zasiane piksele leżą na ulicy (zasięg zero), komórki dopisane w przebiegu dostają świeży zasięg przed odczytem, niezasiane nie są czytane przed zapisem. Koszt dodatkowy zero. Obejście `grid.spread?.fill(0)` w `js/engine.js` usunięte, bo druga linia obrony kosztowałaby O(W×H) przy każdym przeliczeniu. Test regresji z obejścia zostaje w `tests/walkgrid.test.mjs`: na tym samym obiekcie siatki pierwszy przebieg zasiewa rozlanie do kilku kilometrów, drugi z limitem 300 m musi dać wynik identyczny jak na czystej siatce. Dowód, że testy łapią błąd: po tymczasowym wycofaniu poprawki oba testy padają, po przywróceniu przechodzą. Zmierzone w przeglądarce (Trójmiasto, limit 5 minut, sześć przeładowań, za każdym razem identyczny wynik): 0,2 / 0,8 / 3,4 / 8,8 / 13 / 20 procent. Bez limitu dwa przeładowania: 0,2 / 0,9 / 4,2 / 15 / 23 / 37 procent. `npm run check`: lint czysty, wynik dosłowny w CHANGELOG.md. Niezweryfikowane: nie porównano liczbowo wyników z sprzed Z-012, więc nie wiadomo, która z dawnych wartości (26 czy 35 procent) była prawidłowa — istotne, że wynik jest teraz stabilny; nie badano innych miast z limitem.
 
 ## Odrzucone
 

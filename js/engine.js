@@ -240,12 +240,6 @@ export class Engine {
     }
     if (!painted) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
     for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
-    // computeTimeGrid(…, null, …) czyta `grid.spread` także w komórkach zasianych
-    // przez paintNetwork, a nigdy ich nie zeruje — zostaje tam stan z poprzedniego
-    // przebiegu. Fallback rastrowy z limitem spaceru zapisuje w tym buforze wartości
-    // do kilkuset metrów, więc bez zerowania wynik zależał od kolejności ładowania
-    // (raster przed grafem albo graf od razu).
-    grid.spread?.fill(0);
     return computeTimeGrid(grid, null, SPREAD_M);
   }
 

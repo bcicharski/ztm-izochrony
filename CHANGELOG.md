@@ -37,6 +37,18 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 ℹ duration_ms 1341.2193
 ```
   Lint czysty.
+- Z-070 Procent obszaru w pasmach przy włączonym limicie długości spaceru nie zależy już od kolejności wczytywania danych. Wcześniej ten sam adres dawał naprzemiennie 26 albo 35 procent (przy `wmax=5`, co drugie przeładowanie). Przyczyna: `computeTimeGrid` w `js/walkgrid.js` czytało `grid.spread` w komórkach zasianych wcześniej przez `paintNetwork` i nigdy ich nie zerowało; dotąd błąd był niewidoczny, bo wartości nie przekraczały 75 m, a limit spaceru (Z-012) podniósł je do ok. 288 m. Naprawa u źródła: w gałęzi bez zasiewu pętla zbierająca zasiane piksele zeruje `grid.spread` w każdej odwiedzonej komórce; koszt dodatkowy zero. Usunięto obejście `grid.spread?.fill(0)` z `js/engine.js` (druga linia obrony kosztowałaby O(W×H) przy każdym przeliczeniu). Test regresji z obejścia zostaje i dowodzi, że naprawa działa bez niego; po tymczasowym wycofaniu poprawki oba testy padają, po przywróceniu przechodzą. Zmierzone w przeglądarce (Trójmiasto, limit 5 minut, sześć przeładowań, identyczny wynik za każdym razem): 0,2 / 0,8 / 3,4 / 8,8 / 13 / 20 procent; bez limitu dwa przeładowania: 0,2 / 0,9 / 4,2 / 15 / 23 / 37 procent. (pliki: js/walkgrid.js, js/engine.js, tests/walkgrid.test.mjs; testy: nowy w tests/walkgrid.test.mjs — na tym samym obiekcie siatki pierwszy przebieg zasiewa rozlanie do kilku kilometrów, drugi z limitem 300 m daje wynik identyczny jak na czystej siatce; npm run check: lint czysty, wynik dosłowny poniżej; nie sprawdzone: nie porównano liczbowo z wynikami sprzed Z-012, więc nieznane, czy dawne 26 czy 35 procent było prawidłowe — istotne, że wynik jest stabilny; nie badano innych miast z limitem)
+```
+ℹ tests 444
+ℹ suites 0
+ℹ pass 443
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1476.0758
+```
+  Lint czysty.
 
 ## 2026-11-19
 ### Dodane
