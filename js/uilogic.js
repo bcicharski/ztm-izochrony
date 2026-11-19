@@ -965,3 +965,22 @@ export function journeyShape(legs, { anchors, direction } = {}) {
   } else last2.pts[last2.pts.length - 1] = anchors.end;
   return out;
 }
+
+// --- trasa z klawiatury (Z-073) ----------------------------------------------
+
+/** Podpowiedź na mapie i opis dla czytników ekranu — jedno źródło tekstu. */
+export const MAP_KEY_HINT = 'Enter — trasa do tego miejsca';
+export const MAP_ARIA_LABEL =
+  'Mapa. Strzałki przesuwają widok, plus i minus zmieniają przybliżenie, '
+  + 'Enter pokazuje trasę do miejsca w środku mapy.';
+
+/**
+ * Czy zdarzenie `keydown` ma otworzyć opis trasy dla środka mapy. Tylko Enter
+ * bez modyfikatorów, bez autopowtarzania i tylko wtedy, gdy fokus jest na
+ * samym kontenerze mapy — Enter na przycisku zoomu, pinezce czy dymku
+ * (zdarzenie bąbelkuje do kontenera) zachowuje się po staremu.
+ */
+export function isJourneyKey(e) {
+  return e.key === 'Enter' && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
+    && e.target === e.currentTarget;
+}

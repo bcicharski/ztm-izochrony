@@ -135,6 +135,9 @@
 </head>
 <body>
   <div id="map"></div>
+  <!-- Klawiatura (Z-073): znacznik środka mapy i podpowiedź, widoczne tylko przy fokusie na mapie -->
+  <div id="mapKeys" aria-hidden="true"><span class="map-cross"></span><span class="map-keyhint" id="mapKeyHint"></span></div>
+  <div id="mapKeyStatus" class="sr-only" role="status"></div>
 
   <div class="consent" id="consentBar" role="region" aria-label="Zgoda na pliki cookie" hidden>
     <p>Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie.</p>
@@ -523,6 +526,10 @@
         palec) dowolne miejsce na mapie, aby zobaczyć proponowaną trasę:
         odcinki pieszo, linie, przystanki przesiadkowe i godziny (w trybie
         „O godzinie"). W trybie porównania dymek pokazuje trasy obu osób.</p>
+      <p><strong>Z klawiatury:</strong> przejdź klawiszem Tab na mapę (widać
+        wtedy ramkę i krzyżyk w jej środku), strzałkami przesuń mapę tak, by
+        krzyżyk wskazywał miejsce, i naciśnij <strong>Enter</strong> — pojawi się
+        ten sam opis trasy. <strong>Esc</strong> zamyka go i wraca na mapę.</p>
 
       <h3>Opóźnienia (tryb ostrożny)</h3>
       <p>Rozkłady zakładają idealną punktualność, a autobusy bywają opóźnione.

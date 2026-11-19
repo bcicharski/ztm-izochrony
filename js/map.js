@@ -343,7 +343,14 @@ export function createJourneyPane(map) {
  * jasna otoczka dawałaby ok. 1,4:1 na paśmie „do 10 min". Tryb porównania
  * odróżnia osoby grubością i kształtem kropek, nie tylko kolorem (--dot-b jest
  * bliski kolorowi pasma 10–20 min, więc B zawsze ma otoczkę).
+ * Z-072: ciemna otoczka sama schodzi poniżej 3:1 (WCAG 1.4.11) na ciemnych
+ * fragmentach podkładu pod pasmem 45–60 min (2,7:1 przy 5. percentylu jasności
+ * kafli), więc ma jeszcze jasny obrys zewnętrzny (--surface, 6,2:1 w tym
+ * najgorszym przypadku). Na każdym podkładzie czytelna jest co najmniej jedna
+ * z dwóch krawędzi: ciemna na jasnym, jasna na ciemnym.
  */
+export const JOURNEY_RIM = 4; // px dodane do grubości otoczki: jasny obrys 2 px z każdej strony (Z-072)
+
 export const JOURNEY_STYLE = {
   single: { halo: 8, core: 4, dash: '8 6', dashOffset: '0', dotR: 5, dotW: 2 },
   a: { halo: 5, core: 3, dash: '8 6', dashOffset: '0', dotR: 5, dotW: 2 },
@@ -366,7 +373,11 @@ export function createJourneyLayer(map) {
   function drawVariant(shape, variant) {
     const st = JOURNEY_STYLE[variant] ?? JOURNEY_STYLE.single;
     const core = variant === 'a' ? 'jl-core-a' : variant === 'b' ? 'jl-core-b' : 'jl-core';
-    // 1. otoczka, ciągła, pod wszystkim (także pod odcinkiem pieszym)
+    // 1. otoczka, ciągła, pod wszystkim (także pod odcinkiem pieszym):
+    //    jasny obrys zewnętrzny, a na nim ciemna otoczka
+    for (const seg of shape) {
+      poly(seg.pts, 'jl-rim', { weight: st.halo + JOURNEY_RIM, lineCap: 'round' }).addTo(group);
+    }
     for (const seg of shape) {
       poly(seg.pts, 'jl-halo', { weight: st.halo, lineCap: 'round' }).addTo(group);
     }

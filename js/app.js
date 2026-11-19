@@ -17,6 +17,7 @@ import {
   meetHeading, meetRowText, meetFasterNote, meetWindowNote, meetEmptyText, meetSummaryText,
   PANEL_SECTIONS_KEY, PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
   timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary,
+  isJourneyKey, MAP_KEY_HINT, MAP_ARIA_LABEL,
 } from './uilogic.js';
 import { Engine } from './engine.js';
 import { dayDataNotice } from './calendar.js';
@@ -959,18 +960,66 @@ attachEngine();
 
 // --- dymek z trasą (prawy klik / przytrzymanie) --------------------------------
 
-let journeyPopup = null; // {popup, latlng} — otwarty dymek, odświeżany po przeliczeniu
+let journeyPopup = null; // {popup, latlng, byKey} — otwarty dymek, odświeżany po przeliczeniu
 
-map.on('contextmenu', async e => {
-  e.originalEvent.preventDefault();
-  if (!cityReady) return;
-  const latlng = { lat: e.latlng.lat, lng: e.latlng.lng };
+const mapEl = map.getContainer();
+const mapKeyHint = $('mapKeyHint');
+const mapKeyStatus = $('mapKeyStatus');
+mapEl.setAttribute('role', 'group');
+mapEl.setAttribute('aria-label', MAP_ARIA_LABEL);
+mapKeyHint.textContent = MAP_KEY_HINT;
+mapEl.addEventListener('blur', () => { mapKeyHint.textContent = MAP_KEY_HINT; });
+
+/** Komunikat z klawiatury: widoczny przy fokusie na mapie i czytany przez czytnik. */
+function mapKeyNote(text) {
+  mapKeyHint.textContent = text;
+  mapKeyStatus.textContent = '';
+  setTimeout(() => { mapKeyStatus.textContent = text; }, 50);
+}
+
+/** Fokus na dymku trasy otwartym z klawiatury (Leaflet sam nie przenosi fokusu do dymka). */
+function focusJourneyPopup(popup) {
+  const box = popup.getElement()?.querySelector('.journey');
+  if (!box) return;
+  box.tabIndex = -1;
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', 'Opis trasy');
+  box.focus({ preventScroll: true });
+}
+
+/**
+ * Wspólna ścieżka prawego kliku, przytrzymania i klawisza Enter: dymek z opisem
+ * trasy + linia na mapie. `byKey` — otwarcie z klawiatury: fokus idzie do dymka,
+ * a Esc albo zamknięcie oddaje go mapie (Leaflet nie obsługuje Esc, gdy fokus
+ * jest poza kontenerem, więc robi to nasz keydown na dymku).
+ */
+async function openJourney(latlng, byKey = false) {
+  if (!cityReady) { if (byKey) mapKeyNote('Trwa wczytywanie danych miasta'); return; }
   let j = null;
   try { j = await engine.journey(latlng); } catch (err) { console.error(err); }
-  if (!j) return;
-  const popup = L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(journeyHtml(j)).openOn(map);
-  journeyPopup = { popup, latlng };
+  if (!j) { if (byKey) mapKeyNote('Brak trasy do tego miejsca'); return; }
+  const popup = L.popup({ maxWidth: 300 }).setLatLng(latlng).setContent(journeyHtml(j)).openOn(map);
+  journeyPopup = { popup, latlng, byKey };
   journeyLayer.setShapes(journeyShapes(j));
+  if (byKey) {
+    popup.getElement()?.addEventListener('keydown', ev => {
+      if (ev.key === 'Escape') { ev.stopPropagation(); map.closePopup(); }
+    });
+    focusJourneyPopup(popup);
+  }
+}
+
+map.on('contextmenu', e => {
+  e.originalEvent.preventDefault();
+  openJourney({ lat: e.latlng.lat, lng: e.latlng.lng });
+});
+
+// Klawiatura (Z-073): Tab na mapę, strzałki ustawiają środek, Enter pyta o trasę.
+mapEl.addEventListener('keydown', e => {
+  if (!isJourneyKey(e)) return;
+  e.preventDefault();
+  const c = map.getCenter();
+  openJourney({ lat: c.lat, lng: c.lng }, true);
 });
 
 // Linia jest graficznym odpowiednikiem dymka, więc ginie razem z nim (zamknięcie
@@ -979,8 +1028,14 @@ map.on('contextmenu', async e => {
 // rysuje dopiero po tym.
 map.on('popupclose', e => {
   if (journeyPopup && e.popup === journeyPopup.popup) {
+    const { byKey } = journeyPopup;
+    const popupEl = e.popup.getElement();
     journeyPopup = null;
     journeyLayer.clear();
+    // dymek z klawiatury oddaje fokus mapie, o ile nikt go już nie przejął
+    // (przy animacji zanikania węzeł dymka jeszcze żyje, więc sprawdzamy i jego)
+    const active = document.activeElement;
+    if (byKey && (!active || active === document.body || popupEl?.contains(active))) mapEl.focus({ preventScroll: true });
   }
 });
 
@@ -1005,8 +1060,10 @@ async function refreshJourneyPopup() {
   try { j = await engine.journey(jp.latlng); } catch { /* bez dymka */ }
   if (journeyPopup !== jp || !jp.popup.isOpen()) return;
   if (!j) { map.closePopup(); journeyPopup = null; journeyLayer.clear(); return; }
+  const hadFocus = jp.byKey && jp.popup.getElement()?.contains(document.activeElement);
   jp.popup.setContent(journeyHtml(j));
   journeyLayer.setShapes(journeyShapes(j));
+  if (hadFocus) focusJourneyPopup(jp.popup); // setContent zrzuca fokus z podmienionego węzła
 }
 
 const JOURNEY_NOTE = 'Linia jest uproszczona: łączy przystanki w linii prostej i nie pokazuje dokładnego przebiegu ulic.';

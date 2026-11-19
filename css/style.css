@@ -1402,6 +1402,7 @@ fieldset.control:disabled label { cursor: default; }
 
 /* Schematyczna linia trasy na mapie (Z-010). Kolory wyłącznie z tokenów;
    grubości i promienie to stałe w js/map.js (JOURNEY_STYLE). */
+.jl-rim { stroke: var(--surface); }  /* jasny obrys otoczki (Z-072) */
 .jl-halo { stroke: var(--ink); }
 .jl-core { stroke: var(--surface); }
 .jl-core-a { stroke: var(--dot-a); }
@@ -1409,3 +1410,44 @@ fieldset.control:disabled label { cursor: default; }
 .jl-dot { fill: var(--surface); stroke: var(--ink); }
 .jl-dot-a { fill: var(--dot-a); }
 .journey .journey-note { margin: 6px 0 0; font-size: 0.85em; }
+
+/* Mapa z klawiatury (Z-073): ramka fokusu i krzyżyk środka widoczne tylko, gdy
+   fokus jest na samej mapie. Podwójny obrys (ciemny + jasny) — czytelny na
+   każdym paśmie stref i na jasnym podkładzie. Same tokeny. */
+#map:focus { outline: none; }
+#mapKeys {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  pointer-events: none;
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+#map:focus-visible + #mapKeys { display: block; }
+.map-cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 3px var(--surface), inset 0 0 0 3px var(--surface);
+}
+.map-keyhint {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 28px);
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.journey:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

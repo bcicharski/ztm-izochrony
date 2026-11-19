@@ -65,7 +65,8 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
   (tramwaj / autobus / trolejbus / kolej SKM/PKM); parametr URL `veh=`.
   Odznaczenie wszystkich włącza tryb **tylko pieszo**: izochrona samego
   spaceru (do 90 min), liczona falowo po lądzie z pominięciem routingu.
-- **Trasa** — prawy klik (na telefonie przytrzymanie) w dowolne miejsce mapy
+- **Trasa** — prawy klik (na telefonie przytrzymanie; z klawiatury: Tab na mapę,
+  strzałki, Enter dla środka mapy, Esc zamyka) w dowolne miejsce mapy
   pokazuje proponowaną trasę: dojścia piesze, linie, przesiadki i godziny
   (rekonstrukcja ścieżki z RAPTOR-a/Dijkstry); w porównaniu — trasy obu osób.
   Trasa jest też rysowana na mapie jako **schematyczna** łamana po przystankach

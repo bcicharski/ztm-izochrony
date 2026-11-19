@@ -200,22 +200,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: nieznane.
 - Jak sprawdzić: nieznane. Łączy się naturalnie z rysowaniem trasy na mapie z Z-010.
 
-### Z-072 [P2] Kontrast otoczki trasy poniżej progu na ciemnych fragmentach mapy
-- Status: nowe
-- Zgłoszone: 2026-11-19 (nieznane; pomiar przy wdrożeniu Z-010)
-- Problem: otoczka trasy na paśmie 45–60 minut ma kontrast 2,7:1 wobec najciemniejszych kafli podkładu (około 5 procent pikseli, parki i woda), przy wymaganych 3:1 dla grafiki nietekstowej. Mediana 3,7:1, 25. percentyl 3,3:1. Do rozważenia: jaśniejszy wariant otoczki, cieńszy rdzeń albo delikatny cień.
-- Dowód: pomiar przy wdrożeniu Z-010 (2026-11-19), kontrast liczony na kaflach, nie na pikselach zrzutu.
-- Pliki: css/style.css, js/map.js.
-- Jak sprawdzić: ponowny pomiar na pikselach zrzutu w paśmie 45–60 minut; próg 3:1 dla 5. percentyla.
-
-### Z-073 [P2] Dymka trasy nie da się otworzyć z klawiatury
-- Status: nowe
-- Zgłoszone: 2026-11-19 (projektant przy Z-010; świadomie nienaprawione w Z-010)
-- Problem: jedyne wejście do dymka trasy to prawy klik albo przytrzymanie palcem, więc cała funkcja opisu trasy jest niedostępna dla osoby korzystającej wyłącznie z klawiatury.
-- Dowód: wdrożenie Z-010 (2026-11-19), prawy klik jako jedyne wejście do dymka.
-- Pliki: js/app.js, js/map.js.
-- Jak sprawdzić: nieznane.
-
 ### Z-074 [P3] Prawdziwa geometria przejazdu z GTFS — wymaga decyzji właściciela
 - Status: nowe
 - Zgłoszone: 2026-11-19 (nieznane)
@@ -749,6 +733,22 @@ Pułapki do wdrożenia:
 - Pliki: js/router.js, js/engine.js, js/uilogic.js, js/map.js, js/app.js, css/style.css, README.md, CURRENT_STATE.md.
 - Wdrożone 2026-11-19: prawy klik na mapie rysuje linię trasy z dymka; w trybie porównania obie trasy naraz; linia znika razem z dymkiem; w trybie „tylko pieszo" nic nie rysuje. Źródło geometrii: łamana po współrzędnych przystanków z danych już obecnych w przeglądarce (zero nowych plików, zero przeliczania, jednakowo w 18 miastach). Prawdziwa geometria z GTFS odłożona do Z-074 (wymaga decyzji właściciela). Cena jawna: kropki na przystankach, kreskowane odcinki piesze, w dymku zdanie o uproszczeniu linii. Wygląd: ciemna otoczka z jasnym rdzeniem; dwie osoby rozróżnione grubością, kropkami pełnymi lub pustymi, fazą kreskowania i dopiero na końcu kolorem; zero nowych tokenów. Zmierzony kontrast: rdzeń wobec otoczki 16,9:1; otoczka wobec podkładu w paśmie 45–60 min 2,7:1 przy 5. percentylu, czyli poniżej wymaganych 3:1 na najciemniejszych fragmentach mapy (zgłoszone jako Z-072). Zatwierdzone przez właściciela 2026-11-17 jako następne po Z-004.
 - Niezweryfikowane: płynność przesuwania mapy na prawdziwym telefonie; prawy klik prawdziwą myszą (testowano zdarzeniem syntetycznym); fizyczne przeciągnięcie pinezki przy otwartym dymku; kontrast liczony, nie mierzony na pikselach zrzutu; dostępność z klawiatury (Z-073).
+
+### Z-072 [P2] Kontrast otoczki trasy poniżej progu na ciemnych fragmentach mapy
+- Status: zrobione
+- Zgłoszone: 2026-11-19 (nieznane; pomiar przy wdrożeniu Z-010)
+- Problem: otoczka trasy na paśmie 45–60 minut ma kontrast 2,7:1 wobec najciemniejszych kafli podkładu (około 5 procent pikseli, parki i woda), przy wymaganych 3:1 dla grafiki nietekstowej. Mediana 3,7:1, 25. percentyl 3,3:1. Do rozważenia: jaśniejszy wariant otoczki, cieńszy rdzeń albo delikatny cień.
+- Dowód: pomiar przy wdrożeniu Z-010 (2026-11-19), kontrast liczony na kaflach, nie na pikselach zrzutu.
+- Pliki: js/uilogic.js, js/app.js, js/map.js, css/style.css, index.html, README.md, CURRENT_STATE.md (lista wspólna z Z-073).
+- Jak sprawdzić: ponowny pomiar na pikselach zrzutu w paśmie 45–60 minut; próg 3:1 dla 5. percentyla. Stan 2026-11-20: wdrożono podwójną otoczkę (jasny obrys 2 px pod ciemną otoczką; kolor rdzenia i sposób rozróżniania dwóch osób bez zmian). Zmierzono 18 kombinacji (sześć pasm × trzy poziomy jasności podkładu). Pojedyncza ciemna otoczka schodzi poniżej 3:1 w jednym przypadku (pasmo 45–60 przy 5. percentylu, 2,71:1), ale jasny obrys w tym samym miejscu daje 6,22:1. Dla każdej z 18 kombinacji LEPSZA z dwóch krawędzi ma co najmniej 3,0:1; najgorszy przypadek to 3,00 dla jasnej krawędzi na paśmie „ponad 60" przy medianie, gdzie dominuje ciemna krawędź z 5,61. Próg jest spełniony przez parę krawędzi, nie przez każdą z osobna. Obrys jest o 2 px szerszy z każdej strony niż dotąd. Przy 1. percentylu nie liczono. Niezweryfikowane: brak zrzutu linii nad ciemnym fragmentem mapy na paśmie 45–60 minut — kontrast policzony, nie obejrzany.
+
+### Z-073 [P2] Dymka trasy nie da się otworzyć z klawiatury
+- Status: zrobione
+- Zgłoszone: 2026-11-19 (projektant przy Z-010; świadomie nienaprawione w Z-010)
+- Problem: jedyne wejście do dymka trasy to prawy klik albo przytrzymanie palcem, więc cała funkcja opisu trasy jest niedostępna dla osoby korzystającej wyłącznie z klawiatury.
+- Dowód: wdrożenie Z-010 (2026-11-19), prawy klik jako jedyne wejście do dymka.
+- Pliki: js/uilogic.js, js/app.js, js/map.js, css/style.css, index.html, README.md, CURRENT_STATE.md; testy: tests/keyboard-journey.test.mjs (lista wspólna z Z-072).
+- Jak sprawdzić: testy: tests/keyboard-journey.test.mjs (8 testów). Stan 2026-11-20: Tab na mapę, strzałki ustawiają widok, Enter otwiera opis trasy dla środka mapy; przy fokusie mapy ramka, krzyżyk środka i podpowiedź „Enter — trasa do tego miejsca" (tylko przy `:focus-visible`); skrót w `aria-label` mapy i w oknie pomocy; Enter i prawy klik prowadzą przez jedną funkcję; fokus po otwarciu idzie do dymka, Escape zamyka i oddaje fokus mapie. Sprawdzone w przeglądarce prawdziwymi klawiszami: fokus mapy pokazuje ramkę, krzyżyk i podpowiedź; strzałki przesuwają; Enter otwiera dymek i rysuje linię, fokus ląduje w dymku; Escape zamyka, linia znika, fokus wraca na mapę; prawy klik działa jak wcześniej, także dla trasy z przesiadką; konsola bez błędów. Niezweryfikowane: czytnik ekranu; widok mobilny (czy panel nie zasłania krzyżyka i podpowiedzi); tryb porównania z klawiatury; zachowanie przy ograniczonym ruchu.
 
 ## Odrzucone
 

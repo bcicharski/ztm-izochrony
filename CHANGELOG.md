@@ -10,6 +10,34 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
 - Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
 
+## 2026-11-20
+### Dodane
+- Z-073 Opis trasy da się otworzyć z klawiatury. Tab ustawia fokus na mapie, strzałki ustawiają widok, Enter otwiera opis trasy dla środka mapy. Przy fokusie mapy pojawia się ramka, krzyżyk środka i podpowiedź „Enter — trasa do tego miejsca"; wszystkie trzy tylko przy `:focus-visible`, więc przy myszy i dotyku nic nie przybywa. Skrót jest w `aria-label` mapy i w oknie pomocy. Enter i prawy klik prowadzą przez jedną funkcję; Enter na przycisku powiększania, pinezce czy dymku zachowuje się jak dotąd (warunek `target === currentTarget`). Fokus po otwarciu idzie do dymka, Escape zamyka dymek i oddaje fokus mapie (własna obsługa Escape na dymku, bo biblioteka obsługuje Escape tylko przy fokusie na kontenerze). Wdrożeniowiec wykrył i poprawił w przeglądarce gubienie fokusu po animacji zanikania dymka. (pliki: js/uilogic.js, js/app.js, js/map.js, css/style.css, index.html, README.md, CURRENT_STATE.md; testy: tests/keyboard-journey.test.mjs — 8 nowych; npm run check: lint czysty, wynik dosłowny poniżej; sprawdzone w przeglądarce prawdziwymi klawiszami: fokus mapy pokazuje ramkę, krzyżyk i podpowiedź; strzałki przesuwają; Enter otwiera dymek i rysuje linię, fokus ląduje w dymku; Escape zamyka, linia znika, fokus wraca na mapę; prawy klik działa jak wcześniej, także dla trasy z przesiadką; konsola bez błędów; nie sprawdzone: czytnik ekranu; widok mobilny (czy panel nie zasłania krzyżyka i podpowiedzi); tryb porównania z klawiatury; zachowanie przy ograniczonym ruchu)
+```
+ℹ tests 443
+ℹ suites 0
+ℹ pass 442
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1341.2193
+```
+  Lint czysty.
+### Naprawione
+- Z-072 Otoczka trasy ma jasny obrys 2 px pod ciemną otoczką, więc linia pozostaje czytelna także na ciemnych fragmentach mapy (parki, woda) w paśmie 45–60 minut. Kolor rdzenia i sposób rozróżniania dwóch osób bez zmian; zero nowych tokenów. Uczciwie: pojedyncza ciemna otoczka schodziła poniżej 3:1 w jednym przypadku (pasmo 45–60 przy 5. percentylu, 2,71:1), ale jasny obrys w tym samym miejscu daje 6,22:1. Zmierzono 18 kombinacji (sześć pasm × trzy poziomy jasności podkładu). Dla każdej z nich LEPSZA z dwóch krawędzi ma co najmniej 3,0:1; próg jest spełniony przez parę krawędzi, nie przez każdą z osobna. Najgorszy przypadek to 3,00 dla jasnej krawędzi na paśmie „ponad 60" przy medianie, gdzie dominuje ciemna krawędź z 5,61. Obrys jest o 2 px szerszy z każdej strony niż dotąd. Przy 1. percentylu nie liczono. (pliki: js/uilogic.js, js/app.js, js/map.js, css/style.css, index.html, README.md, CURRENT_STATE.md — lista wspólna z Z-073; testy: tests/keyboard-journey.test.mjs (wspólny z Z-073); npm run check: lint czysty, wynik dosłowny poniżej; niezweryfikowane: brak zrzutu linii nad ciemnym fragmentem mapy na paśmie 45–60 minut — kontrast policzony, nie obejrzany)
+```
+ℹ tests 443
+ℹ suites 0
+ℹ pass 442
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1341.2193
+```
+  Lint czysty.
+
 ## 2026-11-19
 ### Dodane
 - Z-004 Trzeci tryb „Spotkanie" szuka przystanków, pod które warto się umówić. Po ustawieniu dwóch punktów strona pokazuje kartę „Przystanki na spotkanie": nazwę przystanku, czas dojazdu każdej osoby i różnicę między nimi. Pozycja pierwsza jest wyróżniona, pozostałe cztery rozwija przycisk z licznikiem; na mapie stoją ponumerowane pinezki. Kryterium domyślne to „obie osoby jadą tyle samo", drugie („Najkrócej razem") to najmniejsza suma czasów; przełączenie zmienia listę natychmiast i dopisuje `mcrit=sum` do adresu. Kandydaci to zespoły przystankowe z istniejącego grupowania (bez nowych danych i bez przeliczania miast); reprezentantem zespołu jest słupek o najkrótszym czasie dla wolniejszej osoby. Pozycje są rozsunięte o co najmniej 300 m. Wybór miejsca opiera się na oknie dopuszczalności: najkrótszy czas spotkania plus mniejsza z dwóch wartości (10 min albo połowa tego czasu); dopiero wśród miejsc w oknie szukana jest najmniejsza różnica. Gdy proponowane miejsce nie jest najszybsze, karta podaje notę. Adres: `meet=1`, opcjonalnie `mcrit=sum`; ten sam adres bez `meet=1` nie pokazuje karty ani pinezek, a status i strefy są jak przed wdrożeniem. (pliki: js/stats.js, js/engine.js, js/uilogic.js, js/app.js, index.html, css/style.css, README.md, CURRENT_STATE.md; testy: 21 nowych w tests/stats.test.mjs, tests/engine.test.mjs, tests/uilogic.test.mjs, tests/mobile-layout.test.mjs; `TAP_USES_MIN` 26 na 28; test pułapki (85/85 kontra 12/15 minut) i test regresji (tryb porównania bez nowego parametru daje wynik identyczny co do bajtu); npm run check: lint czysty; wynik poniżej; odstępstwa: alternatywy rozwija przycisk z licznikiem zamiast zagnieżdżonego elementu zwijanego (tylko tak pozycja pierwsza i przełącznik mieszczą się w jednym wierszu); nagłówki skrócono do „Przystanki na spotkanie" i „Przystanki — dojazd do punktów", bo dłuższe zawijały się do pięciu linii; budżet panelu niedotrzymany: w trybie spotkania panel przewija się wewnętrznie o 68 px przy oknie 1280x800 (714 px treści przy 646 px widocznych); sama karta ma 102 px (budżet 120 px), przekroczenie bierze się głównie z trybu dwóch punktów (618 px przez drugie pole adresu, było już wcześniej); karta jest na górze panelu i widoczna bez przewijania; tryb domyślny (jeden punkt) nadal 548 px i się nie przewija; nie sprawdzone: wygląd pinezek i dymka po ostatnich poprawkach stylów, czytnik ekranu przy zmianie kryterium, tryb „ogólnie" i kierunek „do miejsca" (tylko testy, nie przeglądarka); etap drugi (dymek z trasami obu osób i „Kopiuj zaproszenie") to Z-071)
