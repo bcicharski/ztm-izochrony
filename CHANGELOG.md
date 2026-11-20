@@ -7,6 +7,7 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-019 Brakujące profile opóźnień dla GZM i Szczecina — etap: weryfikacja (oczekiwanie na pierwszy przebieg kolektora z nową diagnostyką).
 - Z-002 Mobile i PWA — etap: wdrożenie (etapy 1 i 2 wdrożone; etap 3, service worker, czeka na decyzję właściciela).
 - Z-051 Rozkład Opola kończy się 2026-11-16; Łódź i Olsztyn mają nowe adresy źródeł i przeliczone dane (2026-11-17) — etap: wdrożenie (częściowo; Opole zamknięte w Z-054 (2026-11-17), Gorzów -> Z-055, przegląd przed 2026-12-30).
+- Z-023 Odświeżanie danych OSM — etap: wdrożenie (część: kontrola spójności wdrożona 2026-11-20; cykliczne przeliczenie danych OSM czeka na decyzję właściciela).
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
 - Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
 
@@ -57,6 +58,8 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 ℹ duration_ms 1476.0758
 ```
   Lint czysty.
+### Wewnętrzne
+- Z-023 Kontrola danych OSM (część pierwsza; zadanie zostaje otwarte). Nowe narzędzie developerskie `node tools/check-osm.mjs [miasto ...] [--stats] [--ignore-warnings]` sprawdza `walknet.json`, `water.json` i `bridges.json` w każdym z 18 miast i wykrywa plik uszkodzony, pusty albo niespójny z `gridBbox`. Krok „Kontrola danych OSM" na końcu joba `check` w `.github/workflows/ci.yml`, z `if: always()` i flagą `--ignore-warnings` (kod wyjścia liczy tylko błędy, ostrzeżenia się drukują). Narzędzie tylko czyta; `data/`, `js/` i `index.html` nietknięte. Progi i asercje ustalone pomiarem na 18 miastach 2026-11-20; tabela w Z-023 w `ZADANIA-DO-ZROBIENIA.md`. Woda i mosty nie przechodzą przez dekodery z `js/data.js` (dekodowanie inline w `loadWater` i `loadBridges`), więc kontroler odtwarza ich kształt sam; odnotowane w nagłówku pliku. Sprostowanie daty: dane OSM mają datę modyfikacji z lipca 2026 (17 miast), a 2026-09-18 dotyczy tylko Trójmiasta. Ograniczenie w CI: wiek plików nie jest miarodajny po `actions/checkout`, działa tylko kontrola spójności. (pliki: tools/check-osm.mjs (nowy), tests/check-osm.test.mjs (nowy), .github/workflows/ci.yml; testy: 23 nowe w tests/check-osm.test.mjs, na danych syntetycznych w katalogach tymczasowych; wynik na realnych danych: `node tools/check-osm.mjs --ignore-warnings` kod 0, „Wszystkie 18 miast: dane OSM spójne (walknet, woda, mosty)."; npm run check: tests 479, pass 478, fail 0, skipped 1, lint czysty — jeden pominięty to istniejący `ZTM_SCAN_DATA`; nie sprawdzone: krok w prawdziwym GitHub Actions, walidacja składni YAML parserem (ESLint nie obejmuje `.yml`), Linux (testowano na Windows i Node 24); progi skalibrowane na jednym zrzucie danych z 2026-11-20)
 
 ## 2026-11-19
 ### Dodane

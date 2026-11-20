@@ -21,3 +21,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # Stan danych OSM (walknet, woda, mosty) niezależnie od wyniku testów:
+      # `if: always()`. Flaga: kod 1 tylko dla BŁĘDÓW, ostrzeżenia się drukują.
+      - name: Kontrola danych OSM
+        if: always()
+        run: node tools/check-osm.mjs --ignore-warnings
