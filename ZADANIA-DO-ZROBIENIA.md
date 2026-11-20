@@ -237,13 +237,21 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
 - Jak sprawdzić: nieznane.
 
-### Z-078 [P3] Eksport SVG nie odróżnia zasięgu szacunkowego od policzonego
+### Z-078 [wymaga decyzji właściciela] Eksport GeoJSON pomija koła szacunkowe; wpis o SVG był błędny
 - Status: nowe
+- Decyzja: WYMAGA DECYZJI WŁAŚCICIELA (2026-11-20). Wybór jednego z trzech wariantów poniżej; do tego czasu bez zmian w kodzie.
 - Zgłoszone: 2026-11-20 (nieznane)
-- Problem: eksport stref do pliku SVG nie odróżnia zasięgu szacunkowego od policzonego — koła dalekich przystanków nie są tam kreskowane. Kreskowanie z Z-077 dotyczy tylko płótna na mapie.
-- Dowód: obserwacja przy wdrożeniu Z-077 (2026-11-20).
-- Pliki: js/uilogic.js.
-- Jak sprawdzić: nieznane.
+- Problem: pierwotny opis („eksport SVG nie odróżnia zasięgu szacunkowego od policzonego") jest błędny w całości. Eksportu SVG w projekcie nie ma. Zadanie powstało z błędnego odczytu przy projektowaniu Z-077 i zostało wpisane do kolejki bez sprawdzenia w kodzie. Wykrył to wdrożeniowiec, który zatrzymał się przed napisaniem jednej linii i zgłosił rozbieżność zamiast zgadywać.
+  - Prawdziwy stan: eksport stref to GeoJSON. `zonesToGeoJSON` w `js/uilogic.js` buduje `FeatureCollection` z jednym `MultiPolygon` na pasmo; `js/app.js` zapisuje wynik jako `application/geo+json` pod nazwą `izochrona-*.geojson`. Widniejące tam `'fill-opacity': 0.55` to właściwość stylu dla QGIS i geojson.io, a nie atrybut SVG — stąd nieporozumienie.
+  - Koła szacunkowe (przystanki poza siatką pieszą) nie trafiają do eksportu w ogóle. Eksportowane są wyłącznie kontury pasm policzonych; koła rysuje tylko płótno mapy. Plik GeoJSON dla Trójmiasta nie zawiera więc kół wokół Tczewa ani Pruszcza Gdańskiego.
+  - Plik niczego nieprawdziwego nie twierdzi, tylko pomija przybliżenia. Nie ma w nim czego odróżniać. GeoJSON nie ma legendy, więc nota „Kreskowane: zasięg szacunkowy, w linii prostej" nie ma gdzie trafić.
+- Warianty do rozstrzygnięcia przez właściciela:
+  1. Nic nie robić. Eksport zostaje czystą geometrią stref policzonych. Za: pomijanie zgadywanych kół w pliku z danymi jest zachowaniem poprawnym, a nie brakiem — kto wczytuje izochronę do QGIS, dostaje wyłącznie to, co zostało policzone.
+  2. Dodać koła do GeoJSON jako osobne obiekty z właściwością mówiącą, że to zasięg szacunkowy, plus opis. Wymaga przekazania kół do funkcji eksportu z `js/app.js`. Zmienia zawartość pobieranego pliku, więc dotyka zgodności dla kogoś, kto już przetwarza te pliki skryptem.
+  3. Osobny eksport SVG z kreskowaniem 45 stopni, odpowiadającym temu z mapy. To nowa funkcja; wymaga zmian w `js/app.js` i `index.html`, czyli wychodzi poza `js/uilogic.js`.
+- Dowód: sprawdzone 2026-11-20. W `js/`, `tests/` i `index.html` nie ma składania SVG ani eksportu pliku `.svg`; jedyne trafienia na „svg" to renderer Leafleta i ikony strony. Eksport GeoJSON: `zonesToGeoJSON` w `js/uilogic.js`, zapis w `js/app.js`.
+- Pliki: wariant 1 — bez zmian; wariant 2 — js/uilogic.js, js/app.js; wariant 3 — js/uilogic.js, js/app.js, index.html.
+- Jak sprawdzić: nieznane (zależy od wybranego wariantu).
 
 ## Zrobione
 
