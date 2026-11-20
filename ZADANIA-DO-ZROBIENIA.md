@@ -183,14 +183,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Wymagane rozszerzenie, gdyby wpinać BIP: `pickLatestZip` dziś tam nie trafi (tekst linku „GTFS MZK Gorzów Wlkp." bez daty, data w href w formacie `DD-MM-RRRR`). Potrzebna gałąź: gdy żadna data się nie parsuje, a na stronie jest dokładnie jeden link `.zip`, wziąć ten link; opcjonalnie rozpoznawanie `DD-MM-RRRR`. Bez nowego trybu i bez nowego pola w `cities.json`. Credits, gdyby doszło do wpięcia: `{ "label": "MZK Gorzów Wlkp. (BIP)", "url": "https://bip.mzk-gorzow.com.pl/gtfs.html" }`.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
-### Z-071 [P2] Dymek przystanku spotkania z trasami obu osób i kopiowanie zaproszenia
-- Status: nowe
-- Zgłoszone: 2026-11-19 (nieznane; etap drugi Z-004 wskazany przez właściciela)
-- Problem: dymek wybranego przystanku na spotkanie jest statyczny (nazwa i dwa czasy); brak tras obu osób i przycisku „Kopiuj zaproszenie" z gotowym tekstem do wysłania.
-- Dowód: wdrożenie Z-004 (2026-11-19), dymek przystanku spotkania.
-- Pliki: nieznane.
-- Jak sprawdzić: nieznane. Łączy się naturalnie z rysowaniem trasy na mapie z Z-010.
-
 ### Z-074 [P3] Prawdziwa geometria przejazdu z GTFS — wymaga decyzji właściciela
 - Status: nowe
 - Zgłoszone: 2026-11-19 (nieznane)
@@ -200,6 +192,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Jak sprawdzić: nieznane.
 
 ## Zrobione
+
+### Z-071 [P2] Dymek przystanku spotkania z trasami obu osób i kopiowanie zaproszenia
+- Status: zrobione
+- Zgłoszone: 2026-11-19 (nieznane; etap drugi Z-004 wskazany przez właściciela)
+- Problem: dymek wybranego przystanku na spotkanie jest statyczny (nazwa i dwa czasy); brak tras obu osób i przycisku „Kopiuj zaproszenie" z gotowym tekstem do wysłania.
+- Dowód: wdrożenie Z-004 (2026-11-19), dymek przystanku spotkania.
+- Pliki: js/engine.js, js/worker.js, js/uilogic.js, js/app.js, css/style.css, README.md, CURRENT_STATE.md; testy: tests/engine.test.mjs, tests/uilogic.test.mjs, tests/keyboard-journey.test.mjs.
+- Jak sprawdzić: testy — 9 nowych w tests/engine.test.mjs, tests/uilogic.test.mjs, tests/keyboard-journey.test.mjs, dwa istniejące zaktualizowane; `npm run check`: tests 454, pass 453, fail 0, skipped 1, lint czysty. Sprawdzone w przeglądarce: dwie linie na mapie, znikają po zamknięciu dymka i po Escape; aktywacja pozycji listy bez myszy przenosi fokus do dymka, Escape oddaje go pozycji; przycisk ma 44 px; komunikat „Zaproszenie skopiowane do schowka." trafia do kanału dla czytnika; przy nieudanym kopiowaniu tekst zostaje w awaryjnym polu, zaznaczony; konsola bez błędów. Niezweryfikowane: prawdziwy schowek systemowy (testowano na podstawionej funkcji), czytnik ekranu, kliknięcie pinezki myszą, widok mobilny; awaryjne pole siedzi w panelu bocznym, więc przy zwiniętym panelu na telefonie może być niewidoczne (niesprawdzone); w małym oknie wysoki dymek z dwiema trasami wystaje u góry, tak samo jak dotychczasowy dymek porównania.
 
 ### Z-020 [P1] Dostępność: prefers-reduced-motion i pola dotykowe
 - Status: zrobione

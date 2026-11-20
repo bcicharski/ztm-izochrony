@@ -14,7 +14,7 @@ import {
   esc, optionId, createAsyncCache, STOP_QUERY_MIN, normalizeStopQuery, searchStops, mergeSearchResults, delayCoverageText, safeNoteText,
   RECENT_POINTS_KEY, parseRecentPoints, pushRecentPoint, recentForCity, serializeRecentPoints,
   zonesToGeoJSON, exportFileName, shouldShowIntro,
-  meetHeading, meetRowText, meetFasterNote, meetWindowNote, meetEmptyText, meetSummaryText,
+  meetHeading, meetRowText, meetInviteText, meetFasterNote, meetWindowNote, meetEmptyText, meetSummaryText,
   PANEL_SECTIONS_KEY, PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
   timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary,
   isJourneyKey, MAP_KEY_HINT, MAP_ARIA_LABEL,
@@ -625,23 +625,36 @@ if (geoAvailable) {
   btn.removeAttribute('title');
 }
 
-$('shareBtn').addEventListener('click', async () => {
-  const btn = $('shareBtn');
+/**
+ * Jedna obsługa schowka dla „Kopiuj link" i „Kopiuj zaproszenie" (Z-060, Z-071).
+ * Gdy kopiowanie zawiedzie (HTTP, iframe, odmowa), tekst zostaje w trwałym polu
+ * #shareText, zaznaczony do Ctrl+C — nie znika razem z etykietą przycisku.
+ * @param {string} text
+ * @param {{btn:HTMLElement, label:string, fieldLabel:string, failText:string, okText?:string}} o
+ */
+async function copyText(text, { btn, label, fieldLabel, failText, okText }) {
   const ta = $('shareText');
   try {
-    await navigator.clipboard.writeText(location.href);
+    await navigator.clipboard.writeText(text);
     btn.textContent = 'Skopiowano ✓';
     ta.hidden = true;
+    if (okText) announce(okText);
   } catch {
-    // ostateczność (HTTP, iframe, odmowa): trwałe pole z zaznaczonym adresem — Ctrl+C
-    ta.value = location.href;
+    ta.setAttribute('aria-label', fieldLabel);
+    ta.value = text;
     ta.hidden = false;
     ta.focus();
     ta.select();
-    say('Nie udało się skopiować automatycznie — adres jest zaznaczony w polu, naciśnij Ctrl+C.');
+    say(failText);
   }
-  setTimeout(() => { btn.textContent = 'Kopiuj link'; }, 2000);
-});
+  setTimeout(() => { btn.textContent = label; }, 2000);
+}
+
+$('shareBtn').addEventListener('click', () => copyText(location.href, {
+  btn: $('shareBtn'), label: 'Kopiuj link',
+  fieldLabel: 'Link do tego widoku do skopiowania',
+  failText: 'Nie udało się skopiować automatycznie — adres jest zaznaczony w polu, naciśnij Ctrl+C.',
+}));
 
 // Eksport stref do GeoJSON (Z-008): źródłem są wektorowe obrysy z fazy
 // „contours" — te same, które rysuje mapa. Zero zależności: Blob + <a download>.
@@ -900,6 +913,7 @@ function createDirectClient() {
   client.setCity = (city, cfg) => eng.setCity(city, cfg);
   client.compute = (params, onPhase) => eng.compute(params, onPhase);
   client.journey = async latlng => eng.journey(latlng);
+  client.journeyToStop = async stop => eng.journeyToStop(stop);
   client.stopIndex = dayKey => eng.stopIndex(dayKey);
   return client;
 }
@@ -941,6 +955,7 @@ function createWorkerClient() {
   client.setCity = (city, cfg) => call({ type: 'city', city, cfg });
   client.compute = (params, onPhase) => call({ type: 'compute', params }, onPhase);
   client.journey = latlng => call({ type: 'journey', latlng });
+  client.journeyToStop = stop => call({ type: 'journeyStop', stop });
   client.stopIndex = dayKey => call({ type: 'stops', dayKey });
   return client;
 }
@@ -960,7 +975,7 @@ attachEngine();
 
 // --- dymek z trasą (prawy klik / przytrzymanie) --------------------------------
 
-let journeyPopup = null; // {popup, latlng, byKey} — otwarty dymek, odświeżany po przeliczeniu
+let journeyPopup = null; // {popup, latlng, byKey, stop, j} — otwarty dymek, odświeżany po przeliczeniu; stop ≠ null = dymek spotkania (Z-071)
 
 const mapEl = map.getContainer();
 const mapKeyHint = $('mapKeyHint');
@@ -988,25 +1003,53 @@ function focusJourneyPopup(popup) {
 }
 
 /**
- * Wspólna ścieżka prawego kliku, przytrzymania i klawisza Enter: dymek z opisem
- * trasy + linia na mapie. `byKey` — otwarcie z klawiatury: fokus idzie do dymka,
- * a Esc albo zamknięcie oddaje go mapie (Leaflet nie obsługuje Esc, gdy fokus
- * jest poza kontenerem, więc robi to nasz keydown na dymku).
+ * Trasa dla dymku: do klikniętego miejsca (`engine.journey`) albo — w trybie
+ * spotkania — do ZADANEGO przystanku z listy (`engine.journeyToStop`, Z-071).
+ * Jedno miejsce wyboru, więc otwarcie i odświeżenie dymka nie rozjadą się.
  */
-async function openJourney(latlng, byKey = false) {
+const askJourney = (latlng, stop) => (stop != null ? engine.journeyToStop(stop) : engine.journey(latlng));
+
+/**
+ * Wspólna ścieżka prawego kliku, przytrzymania, klawisza Enter i wyboru
+ * przystanku spotkania: dymek z opisem trasy + linia na mapie. To jeden dymek
+ * dla wszystkich — przystanek spotkania dokłada do niego tylko nagłówek i
+ * przycisk zaproszenia (patrz `journeyHtml`), bo osobny dymek z tymi samymi
+ * trasami dublowałby ścieżkę otwierania, zamykania, odświeżania i fokusu.
+ * `byKey` — otwarcie z klawiatury: fokus idzie do dymka, a Esc albo zamknięcie
+ * oddaje go mapie (dla spotkania: pozycji listy); Leaflet nie obsługuje Esc,
+ * gdy fokus jest poza kontenerem, więc robi to nasz keydown na dymku.
+ */
+async function openJourney(latlng, byKey = false, stop = null) {
   if (!cityReady) { if (byKey) mapKeyNote('Trwa wczytywanie danych miasta'); return; }
   let j = null;
-  try { j = await engine.journey(latlng); } catch (err) { console.error(err); }
+  try { j = await askJourney(latlng, stop); } catch (err) { console.error(err); }
   if (!j) { if (byKey) mapKeyNote('Brak trasy do tego miejsca'); return; }
   const popup = L.popup({ maxWidth: 300 }).setLatLng(latlng).setContent(journeyHtml(j)).openOn(map);
-  journeyPopup = { popup, latlng, byKey };
+  journeyPopup = { popup, latlng, byKey, stop, j };
   journeyLayer.setShapes(journeyShapes(j));
+  popup.getElement()?.addEventListener('click', onJourneyPopupClick);
   if (byKey) {
     popup.getElement()?.addEventListener('keydown', ev => {
       if (ev.key === 'Escape') { ev.stopPropagation(); map.closePopup(); }
     });
     focusJourneyPopup(popup);
   }
+}
+
+/** „Kopiuj zaproszenie" w dymku spotkania: tekst z tych samych czasów, które dymek pokazuje. */
+function onJourneyPopupClick(e) {
+  const btn = e.target.closest?.('.invite-btn');
+  const j = journeyPopup?.j;
+  if (!btn || !j?.persons) return;
+  copyText(meetInviteText({
+    name: j.targetName, aMin: j.persons[0].totalMin, bMin: j.persons[1].totalMin,
+    mode: state.mode, timeMin: state.timeMin, day: state.day, url: location.href,
+  }), {
+    btn, label: INVITE_LABEL,
+    fieldLabel: 'Zaproszenie do skopiowania',
+    failText: 'Nie udało się skopiować automatycznie — zaproszenie jest zaznaczone w polu, naciśnij Ctrl+C.',
+    okText: 'Zaproszenie skopiowane do schowka.',
+  });
 }
 
 map.on('contextmenu', e => {
@@ -1028,14 +1071,18 @@ mapEl.addEventListener('keydown', e => {
 // rysuje dopiero po tym.
 map.on('popupclose', e => {
   if (journeyPopup && e.popup === journeyPopup.popup) {
-    const { byKey } = journeyPopup;
+    const { byKey, stop } = journeyPopup;
     const popupEl = e.popup.getElement();
     journeyPopup = null;
     journeyLayer.clear();
     // dymek z klawiatury oddaje fokus mapie, o ile nikt go już nie przejął
     // (przy animacji zanikania węzeł dymka jeszcze żyje, więc sprawdzamy i jego)
     const active = document.activeElement;
-    if (byKey && (!active || active === document.body || popupEl?.contains(active))) mapEl.focus({ preventScroll: true });
+    if (byKey && (!active || active === document.body || popupEl?.contains(active))) {
+      // dymek spotkania wrócił z listy, więc tam oddaje fokus
+      const row = stop != null ? $('meetBox').querySelector('.meet-row[aria-current="true"]') : null;
+      (row ?? mapEl).focus({ preventScroll: true });
+    }
   }
 });
 
@@ -1057,15 +1104,17 @@ async function refreshJourneyPopup() {
   const jp = journeyPopup;
   if (!jp || !jp.popup.isOpen()) { journeyPopup = null; return; }
   let j = null;
-  try { j = await engine.journey(jp.latlng); } catch { /* bez dymka */ }
+  try { j = await askJourney(jp.latlng, jp.stop); } catch { /* bez dymka */ }
   if (journeyPopup !== jp || !jp.popup.isOpen()) return;
   if (!j) { map.closePopup(); journeyPopup = null; journeyLayer.clear(); return; }
   const hadFocus = jp.byKey && jp.popup.getElement()?.contains(document.activeElement);
+  jp.j = j;
   jp.popup.setContent(journeyHtml(j));
   journeyLayer.setShapes(journeyShapes(j));
   if (hadFocus) focusJourneyPopup(jp.popup); // setContent zrzuca fokus z podmienionego węzła
 }
 
+const INVITE_LABEL = 'Kopiuj zaproszenie';
 const JOURNEY_NOTE = 'Linia jest uproszczona: łączy przystanki w linii prostej i nie pokazuje dokładnego przebiegu ulic.';
 const VEH_ICON = { 900: '🚊', 0: '🚊', 700: '🚌', 3: '🚌', 800: '🚎', 11: '🚎', 1: '🚇', 2: '🚆' };
 
@@ -1150,12 +1199,18 @@ function journeyHtml(j) {
   if (j.kind === 'single') {
     return `<div class="journey">${journeyHeader(j.total)}${j.legs ? legsHtml(j.legs, j.walkMin, j.targetName) : ''}${shapeNote(j.shape)}</div>`;
   }
+  // dymek spotkania (j.stop): nazwa przystanku i ten sam opis czasu co na karcie
+  const meet = j.stop != null;
   const parts = j.persons.map((p, i) => {
     const [cls, name] = i === 0 ? ['dot-a', 'Punkt niebieski'] : ['dot-b', 'Punkt pomarańczowy'];
     return `<div class="person"><span class="dot ${cls}"></span>${name} · ≈ ${Math.round(p.totalMin)} min</div>`
       + (p.legs ? legsHtml(p.legs, j.walkMin, j.targetName) : '<span class="muted">brak trasy</span>');
   });
-  return `<div class="journey"><h4>Wspólny czas: ≈ ${Math.round(j.total)} min</h4>${parts.join('')}${shapeNote(j.persons.some(p => p.shape?.length))}</div>`;
+  const head = meet
+    ? `<h4>${esc(j.targetName)}</h4><p class="muted journey-sub">${esc(meetRowText({ aMin: j.persons[0].totalMin, bMin: j.persons[1].totalMin, meetMin: j.total }, { mode: state.mode }).head)}</p>`
+    : `<h4>Wspólny czas: ≈ ${Math.round(j.total)} min</h4>`;
+  const invite = meet ? `<button type="button" class="share-btn invite-btn">${INVITE_LABEL}</button>` : '';
+  return `<div class="journey">${head}${parts.join('')}${shapeNote(j.persons.some(p => p.shape?.length))}${invite}</div>`;
 }
 
 // --- miejsce spotkania (Z-004) -------------------------------------------------
@@ -1239,13 +1294,17 @@ function renderMeet() {
       icon: meetPinIcon(i + 1, i === meetSel, c.name), title: c.name, alt: c.name,
       keyboard: true, riseOnHover: true, zIndexOffset: i === meetSel ? 1000 : 500,
     });
-    pin.on('click', () => selectMeet(i, true));
+    pin.on('click', ev => selectMeet(i, true, !ev.originalEvent?.detail));
     meetLayer.addLayer(pin);
   });
 }
 
-/** Zaznacza pozycję; `go` przesuwa mapę na przystanek i otwiera dymek (statyczny). */
-function selectMeet(i, go) {
+/**
+ * Zaznacza pozycję; `go` przesuwa mapę na przystanek i otwiera dymek z trasami
+ * obu osób (ten sam co dymek trasy — patrz `openJourney`). `byKey` — wybór
+ * z klawiatury: fokus przejdzie do dymka.
+ */
+function selectMeet(i, go, byKey = false) {
   const list = lastMeet?.[state.meetCrit];
   if (!list?.[i]) return;
   meetSel = i;
@@ -1253,16 +1312,13 @@ function selectMeet(i, go) {
   if (!go) return;
   const c = list[i];
   map.setView([c.lat, c.lon], Math.max(map.getZoom(), 14), { animate: !prefersReducedMotion() });
-  const t = meetRowText(c, { mode: state.mode, crit: state.meetCrit });
-  L.popup({ maxWidth: 300 }).setLatLng([c.lat, c.lon])
-    .setContent(`<div class="journey"><h4>${esc(c.name)}</h4>${esc(t.head)}<br><span class="muted">${esc(t.line)}</span></div>`)
-    .openOn(map);
+  openJourney({ lat: c.lat, lng: c.lon }, byKey, c.stop);
 }
 
 $('meetBox').addEventListener('click', e => {
   const row = e.target.closest('.meet-row');
   if (!row) return;
-  selectMeet(+row.dataset.i, true);
+  selectMeet(+row.dataset.i, true, e.detail === 0); // detail 0 = Enter/Spacja na przycisku
   // przerysowanie podmienia przyciski — focus wraca na wybraną pozycję
   $('meetBox').querySelector('.meet-row[aria-current="true"]')?.focus();
 });

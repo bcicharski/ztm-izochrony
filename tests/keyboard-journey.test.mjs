@@ -30,13 +30,14 @@ test('isJourneyKey: tylko Enter na samym kontenerze mapy, bez modyfikatorów', (
 test('Enter i prawy klik wywołują tę samą funkcję openJourney', () => {
   assert.match(app, /map\.on\('contextmenu'[\s\S]{0,200}openJourney\(/);
   assert.match(app, /isJourneyKey\(e\)[\s\S]{0,200}openJourney\([^)]*true\)/);
-  assert.equal((app.match(/engine\.journey\(/g) ?? []).length, 2, 'engine.journey: openJourney + odświeżanie dymka');
+  assert.equal((app.match(/engine\.journey\(/g) ?? []).length, 1, 'engine.journey: jedno miejsce wyboru (askJourney)');
+  assert.equal((app.match(/askJourney\(/g) ?? []).length, 2, 'askJourney: openJourney + odświeżanie dymka');
   assert.equal((app.match(/journeyLayer\.setShapes\(/g) ?? []).length, 2);
 });
 
 test('Escape na dymku z klawiatury zamyka go, a zamknięcie oddaje fokus mapie', () => {
   assert.match(app, /ev\.key === 'Escape'[\s\S]{0,120}map\.closePopup\(\)/);
-  assert.match(app, /byKey && \(!active \|\| active === document\.body \|\| popupEl\?\.contains\(active\)\)\) mapEl\.focus\(/);
+  assert.match(app, /byKey && \(!active \|\| active === document\.body \|\| popupEl\?\.contains\(active\)\)\) \{[\s\S]{0,260}\(row \?\? mapEl\)\.focus\(/);
 });
 
 test('opis mapy dla czytnika i podpowiedź wymieniają Enter', () => {
@@ -86,4 +87,32 @@ test('jasny obrys otoczki: klasa .jl-rim na tokenie --surface, rysowany pod ciem
   assert.match(css, /\.jl-rim \{ stroke: var\(--surface\); \}/);
   const map = read('../js/map.js');
   assert.ok(map.indexOf("'jl-rim'") < map.indexOf("'jl-halo'"), 'obrys musi być pod otoczką');
+});
+
+// --- dymek spotkania i zaproszenie (Z-071) ---------------------------------------------
+
+test('Spotkanie: pozycja listy i pinezka otwierają TEN SAM dymek trasy (jedna ścieżka, brak drugiego L.popup)', () => {
+  assert.match(app, /function selectMeet\([^)]*\) \{[\s\S]*?openJourney\(\{ lat: c\.lat, lng: c\.lon \}, byKey, c\.stop\)/);
+  assert.equal((app.match(/L\.popup\(/g) ?? []).length, 1, 'w app.js jest jeden dymek');
+  assert.match(app, /engine\.journeyToStop\(stop\)/);
+  // klawiatura: detail 0 = aktywacja Enterem/Spacją → fokus do dymka
+  assert.match(app, /selectMeet\(\+row\.dataset\.i, true, e\.detail === 0\)/);
+});
+
+test('Przycisk „Kopiuj zaproszenie": button type=button, styl .share-btn (pole dotykowe), bez nowych kolorów', () => {
+  assert.match(app, /<button type="button" class="share-btn invite-btn">\$\{INVITE_LABEL\}<\/button>/);
+  assert.match(app, /const INVITE_LABEL = 'Kopiuj zaproszenie'/);
+  const share = css.match(/\.share-btn \{[^}]*\}/)[0];
+  assert.match(share, /height: var\(--tap\)/);
+  const mine = css.match(/\.journey \.invite-btn \{[^}]*\}/)[0];
+  assert.doesNotMatch(mine, /#[0-9a-f]{3,8}|rgb\(/i);
+});
+
+test('Schowek: link i zaproszenie idą przez jedną copyText z awaryjnym polem #shareText', () => {
+  const fn = app.slice(app.indexOf('async function copyText('), app.indexOf("$('shareBtn')"));
+  assert.match(fn, /navigator\.clipboard\.writeText\(text\)/);
+  assert.match(fn, /ta\.hidden = false;[\s\S]*ta\.select\(\)/);
+  assert.equal((app.match(/copyText\(/g) ?? []).length, 3, 'definicja + link + zaproszenie');
+  assert.match(app, /meetInviteText\(\{[\s\S]*?url: location\.href/);
+  assert.match(app, /okText: 'Zaproszenie skopiowane do schowka\.'/);
 });

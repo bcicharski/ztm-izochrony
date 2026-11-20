@@ -1410,6 +1410,9 @@ fieldset.control:disabled label { cursor: default; }
 .jl-dot { fill: var(--surface); stroke: var(--ink); }
 .jl-dot-a { fill: var(--dot-a); }
 .journey .journey-note { margin: 6px 0 0; font-size: 0.85em; }
+/* dymek spotkania (Z-071): opis czasu pod nazwą przystanku i przycisk zaproszenia */
+.journey .journey-sub { margin: 0 0 6px; }
+.journey .invite-btn { margin: 10px 0 0; }
 
 /* Mapa z klawiatury (Z-073): ramka fokusu i krzyżyk środka widoczne tylko, gdy
    fokus jest na samej mapie. Podwójny obrys (ciemny + jasny) — czytelny na

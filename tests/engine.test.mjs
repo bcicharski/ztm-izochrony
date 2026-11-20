@@ -417,3 +417,74 @@ test('journey: compare daje shape obu osobom, z ich własnymi kotwicami', async 
   assert.deepEqual(j.persons[0].anchors.start, [50, 20]);
   assert.deepEqual(j.persons[1].anchors.start, [50.03, 20.0001]);
 });
+
+// --- trasy do zadanego przystanku (Z-071) ---------------------------------------
+
+test('journeyToStop (Z-071): czasy obu osób równe tym z rankingu spotkania — karta i dymek mówią to samo', async () => {
+  const point2 = { lat: 50.063, lng: 20 };
+  for (const extra of [{}, { mode: 'general' }, { maxWalkSec: 3600 }, { maxTransfers: 1 }, { access: 'bike' }, { direction: 'to' }]) {
+    const e = await makeEngine('tstJStop' + JSON.stringify(extra).length);
+    const meet = (await run(e, { compare: true, meet: true, point2, ...extra })).zones.meet;
+    assert.ok(meet && meet.bothCount > 0, JSON.stringify(extra));
+    for (const c of [...meet.fair, ...meet.sum]) {
+      const j = e.journeyToStop(c.stop);
+      assert.equal(j.kind, 'compare');
+      assert.equal(j.persons[0].totalMin, c.aMin, JSON.stringify(extra));
+      assert.equal(j.persons[1].totalMin, c.bMin, JSON.stringify(extra));
+      assert.equal(j.total, c.meetMin);
+      assert.equal(j.targetName, c.name);
+      assert.equal(j.stop, c.stop);
+      assert.equal(j.walkMin, 0);
+    }
+  }
+});
+
+test('journeyToStop (Z-071): oba shape są obecne, a kotwica końca to współrzędne przystanku', async () => {
+  const e = await makeEngine('tstJStopShape');
+  const point2 = { lat: 50.063, lng: 20 };
+  const meet = (await run(e, { compare: true, meet: true, point2 })).zones.meet;
+  const c = meet.fair[0];
+  const j = e.journeyToStop(c.stop);
+  const end = [Math.round(c.lat * 1e5) / 1e5, Math.round(c.lon * 1e5) / 1e5];
+  for (const p of j.persons) {
+    assert.ok(p.shape.length > 0);
+    assert.deepEqual(p.anchors.end, end);
+  }
+  assert.deepEqual(j.persons[0].anchors.start, [50, 20]);
+  assert.deepEqual(j.persons[1].anchors.start, [50.063, 20]);
+});
+
+test('journeyToStop (Z-071): kierunek „do" — kotwica początku to przystanek, końca to punkt osoby', async () => {
+  const e = await makeEngine('tstJStopTo');
+  const point2 = { lat: 50.063, lng: 20 };
+  const meet = (await run(e, { compare: true, meet: true, point2, direction: 'to' })).zones.meet;
+  const c = meet.fair[0];
+  const j = e.journeyToStop(c.stop);
+  const at = [Math.round(c.lat * 1e5) / 1e5, Math.round(c.lon * 1e5) / 1e5];
+  assert.deepEqual(j.persons[0].anchors, { start: at, end: [50, 20] });
+});
+
+test('journeyToStop (Z-071): bez porównania, w trybie pieszym i dla złego indeksu — null; poza zasięgiem — unreach', async () => {
+  const e = await makeEngine('tstJStopNull');
+  const point2 = { lat: 50.063, lng: 20 };
+  await run(e, {});
+  assert.equal(e.journeyToStop(0), null);
+  await run(e, { compare: true, walkOnly: true, point2 });
+  assert.equal(e.journeyToStop(0), null);
+  await run(e, { compare: true, point2, walk: false });
+  assert.equal(e.journeyToStop(-1), null);
+  assert.equal(e.journeyToStop(9999), null);
+  assert.equal(e.journeyToStop(1.5), null);
+  const far = [...Array(e.last.net.nStops).keys()].find(i => !(Math.max(e.last.res.minutes[i], e.last.res2.minutes[i]) <= 90));
+  assert.ok(far !== undefined);
+  assert.equal(e.journeyToStop(far).kind, 'unreach');
+});
+
+test('journeyToStop (Z-071): journey() w porównaniu zwraca ten sam kształt osób (wspólny kod)', async () => {
+  const e = await makeEngine('tstJStopSame');
+  const point2 = { lat: 50.03, lng: 20.0001 };
+  await run(e, { walk: false, compare: true, point2 });
+  const a = e.journey({ lat: 50.03, lng: 20.05 });
+  const b = e.journeyToStop(a.persons.length && e.last.net.stopName.indexOf('S3'));
+  assert.deepEqual(b.persons, a.persons);
+});

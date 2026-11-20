@@ -8,6 +8,7 @@
  *   {type:'compute', id, params}          → {type:'result', id, phase, …}× → {type:'done', id}
  *                                            albo {type:'error', id, message}
  *   {type:'journey', id, latlng}          → {type:'journey', id, result}
+ *   {type:'journeyStop', id, stop}        → {type:'journey', id, result}  (trasy obu osób do przystanku, Z-071)
  *   {type:'stops', id, dayKey}            → {type:'stops', id, index|null}  (indeks nazw przystanków, Z-056)
  * worker → main bez pytania: {type:'walknet', city} gdy graf ulic się wczyta.
  *
@@ -86,5 +87,7 @@ onmessage = async e => {
     }
   } else if (m.type === 'journey') {
     postMessage({ type: 'journey', id: m.id, result: engine.journey(m.latlng) });
+  } else if (m.type === 'journeyStop') {
+    postMessage({ type: 'journey', id: m.id, result: engine.journeyToStop(m.stop) });
   }
 };

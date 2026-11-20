@@ -37,7 +37,11 @@ plus karta z do pięciu przystanków na spotkanie: „Po równo" — obie osoby 
 mniej więcej tyle samo, ale żadna nie dłużej niż o okno ponad najszybsze
 spotkanie; „Najkrócej razem" — najmniejsza suma czasów. Adres: `meet=1`,
 opcjonalnie `mcrit=sum`). Przystanki pochodzą z zespołów `group` z prekompilacji,
-więc słupki jednego dworca to jedna propozycja. Domyślnie aktywne
+więc słupki jednego dworca to jedna propozycja. Klik w pozycję listy albo
+pinezkę otwiera dymek z trasami obu osób do tego przystanku (dwie linie na
+mapie, czasy jak na karcie) i przyciskiem „Kopiuj zaproszenie" — krótki tekst
+z nazwą przystanku, czasami, typem dnia i godziną (w trybie ogólnym bez godziny)
+oraz linkiem do widoku. Domyślnie aktywne
 są „O godzinie" (bieżąca godzina i dzisiejszy typ dnia) oraz „Uwzględnij
 spacer". Legenda kolorów jest zawsze widoczna; tabela statystyk (tylko w trybie
 jednego punktu) pojawia się po włączeniu „Pokaż statystyki".

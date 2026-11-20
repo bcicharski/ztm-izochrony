@@ -159,7 +159,8 @@ test('komunikaty lokalizacji i eksportu idą przez say() -> announce()', () => {
 test('Kopiuj link: awaryjne pole #shareText zamiast etykiety przycisku', () => {
   assert.ok(/id="shareText"[^>]*readonly[^>]*hidden/.test(html));
   assert.ok(!appSrc.includes('btn.textContent = location.href'));
-  assert.ok(appSrc.includes("ta.value = location.href"));
+  assert.ok(appSrc.includes("ta.value = text"));
+  assert.ok(appSrc.includes("copyText(location.href"));
   assert.ok(appSrc.includes("$('shareText').hidden = true"));
 });
 

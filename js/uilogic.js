@@ -8,6 +8,8 @@
  * Używane przez app.js, map.js i worker.js.
  */
 
+import { DAY_LABELS } from './data.js';
+
 // --- czas ------------------------------------------------------------------
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -322,6 +324,21 @@ export function meetSummaryText({ heading, list, bothCount }) {
   if (!list?.length) return '';
   const top = list[0];
   return `${heading}: najlepszy ${top.name}, A ${minText(top.aMin)}, B ${minText(top.bMin)}. Wspólnych przystanków: ${bothCount}.`;
+}
+
+/**
+ * Tekst zaproszenia do wklejenia w wiadomość (Z-071). Tryb „o godzinie" podaje
+ * typ dnia i godzinę wyjścia z panelu; tryb ogólny godziny nie zna, więc jej
+ * nie wymyśla. `url` to bieżący adres widoku — odbiorca zobaczy to samo.
+ */
+export function meetInviteText({ name, aMin, bMin, mode, timeMin, day, url }) {
+  const parts = [`Spotkajmy się przy: ${name}.`, `Dojazd: ${Math.round(aMin)} min i ${Math.round(bMin)} min.`];
+  if (mode === 'time') {
+    const dayName = DAY_LABELS[day] ?? DAY_LABELS.workday;
+    parts.push(`${dayName[0].toUpperCase()}${dayName.slice(1)}, ~${fmtClock(timeMin)}.`);
+  }
+  if (url) parts.push(url);
+  return parts.join(' ');
 }
 
 /** Liczba z przecinkiem dziesiętnym (czytnik ekranu czyta „2,5", nie „2.5"). */

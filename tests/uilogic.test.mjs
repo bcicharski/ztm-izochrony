@@ -801,6 +801,7 @@ test('mergeSearchResults: przystanki przed adresami, limit, puste wejścia, stab
 import {
   PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
   timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary, fmtIsoDate,
+  meetInviteText,
 } from '../js/uilogic.js';
 
 const DEF = { timeMin: 8 * 60 + 15, day: 'workday' };
@@ -1201,4 +1202,24 @@ test('journeyShape: etapy bez geometrii albo bez kotwic zwracają []', () => {
   assert.deepEqual(journeyShape([access(null)], { anchors, direction: 'from' }), []);
   assert.deepEqual(journeyShape([ride([S1, S2])], { direction: 'from' }), []);
   assert.deepEqual(journeyShape([], { anchors, direction: 'from' }), []);
+});
+
+// --- zaproszenie na spotkanie (Z-071) ----------------------------------------------
+
+test('meetInviteText: tryb „o godzinie" — nazwa, oba czasy, typ dnia, godzina i adres', () => {
+  const url = 'https://example.test/?city=trojmiasto&meet=1';
+  const base = { name: 'Gdańsk Wrzeszcz', aMin: 12.6, bMin: 13.2, mode: 'time', timeMin: 510, url };
+  assert.equal(
+    meetInviteText({ ...base, day: 'workday' }),
+    `Spotkajmy się przy: Gdańsk Wrzeszcz. Dojazd: 13 min i 13 min. Dzień roboczy, ~08:30. ${url}`,
+  );
+  assert.match(meetInviteText({ ...base, day: 'saturday' }), /Sobota, ~08:30\./);
+  assert.match(meetInviteText({ ...base, day: 'sunday' }), /Niedziela, ~08:30\./);
+});
+
+test('meetInviteText: tryb „ogólnie" nie podaje godziny ani typu dnia, adres zostaje', () => {
+  const url = 'https://example.test/?x=1';
+  const t = meetInviteText({ name: 'Dworzec', aMin: 13, bMin: 12, mode: 'general', timeMin: 510, day: 'workday', url });
+  assert.equal(t, `Spotkajmy się przy: Dworzec. Dojazd: 13 min i 12 min. ${url}`);
+  assert.doesNotMatch(t, /\d{2}:\d{2}|Dzień|~/);
 });

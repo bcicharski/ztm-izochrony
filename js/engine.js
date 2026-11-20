@@ -519,14 +519,42 @@ export class Engine {
         ...(desc ? this.shapeFor(desc, p.point, latlng) : {}),
       };
     }
-    const persons = [this.last.res, this.last.res2].map((res, i) => {
-      const legs = res.journeyTo(target.stop);
+    const persons = this.comparePersons(target.stop, target.walkMin, latlng);
+    return { kind: 'compare', total: target.total, walkMin: target.walkMin, targetName, persons };
+  }
+
+  /** Trasy obu osób do przystanku `stop`; `latlng` = koniec linii (kliknięcie albo sam przystanek). */
+  comparePersons(stop, walkMin, latlng) {
+    const { params: p } = this.last;
+    return [this.last.res, this.last.res2].map((res, i) => {
+      const legs = res.journeyTo(stop);
       const desc = legs ? this.describeLegs(legs) : null;
       return {
-        totalMin: res.minutes[target.stop] + target.walkMin, legs: desc,
+        totalMin: res.minutes[stop] + walkMin, legs: desc,
         ...(desc ? this.shapeFor(desc, i === 0 ? p.point : p.point2, latlng) : {}),
       };
     });
-    return { kind: 'compare', total: target.total, walkMin: target.walkMin, targetName, persons };
+  }
+
+  /**
+   * Trasy obu osób do ZADANEGO przystanku (Z-071, tryb spotkania) — z pominięciem
+   * `pickTargetStop`: cel jest znany z listy spotkania. Kształt wyniku jak
+   * `journey()` dla porównania, więc UI składa go tym samym kodem. Czasy to
+   * `res.minutes[stop]` tych samych przeliczeń co ranking (`rankMeetingPlaces`),
+   * a limity przesiadek, spaceru i tryb ostrożny siedzą już w `res`, więc dymek
+   * nie może powiedzieć czegoś innego niż karta. Koniec linii = przystanek.
+   * null = brak porównania z pojazdami (nie ma czego pokazać).
+   */
+  journeyToStop(stop) {
+    if (!this.last?.res || !this.last.res2 || !this.last.params.compare) return null;
+    const { net, res, res2 } = this.last;
+    if (!Number.isInteger(stop) || stop < 0 || stop >= net.nStops) return null;
+    const total = Math.max(res.minutes[stop], res2.minutes[stop]);
+    if (!(total <= 90)) return { kind: 'unreach', reason: 'Do tego przystanku nie dojadą oboje w 90 minut.' };
+    const at = { lat: net.lat[stop], lng: net.lon[stop] };
+    return {
+      kind: 'compare', total, walkMin: 0, targetName: net.stopName[stop], stop,
+      persons: this.comparePersons(stop, 0, at),
+    };
   }
 }
