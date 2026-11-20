@@ -90,20 +90,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## Zaprojektowane (gotowe do wdrożenia)
 
-## Nowe (bez projektu rozwiązania)
-
-### Z-003 [P1] Mniejsze dane
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: walknet.json ładowany w całości — 3,3 MB dla Trójmiasta, ok. 2,4 MB po gzipie dla GZM. Pomysły: format binarny, kafle wokół widoku, wersjonowanie nazw plików.
-- Dowód: rozmiary plików w data/<miasto>/.
-- Pliki: tools/build-walknet.mjs, js/walknet.js, js/data.js.
-
 ### Z-007 [P2] Znane luki modelu
-- Status: nowe
-- Decyzja: WYMAGA DECYZJI WŁAŚCICIELA (2026-11-20). Luka 2 ma gotowy projekt; wdrożenie zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie, czyli rdzeń produktu. Zadanie zostaje w kolejce. Luki 1 i 3 bez projektu.
+- Status: zaprojektowane (zatwierdzone 2026-11-20; czeka na wolny limit tygodniowy, nie na decyzję)
+- Decyzja: ZATWIERDZONE do wdrożenia 2026-11-20 z zastrzeżeniem terminu — patrz „Decyzja właściciela (2026-11-20)" niżej. Luka 2 ma gotowy projekt; wdrożenie zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie, czyli rdzeń produktu. Luki 1 i 3 bez projektu.
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: trzy luki — (1) stacje kolejowe 150-400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru (COMPLEX_MAX_M; Kraków SKA, 17 stacji); (2) dalekie przystanki poza gridBbox rysowane kołami 1 km bez bariery wody za krawędzią siatki (poprawione 2026-11-20, patrz niżej); (3) graf pieszy bez tagów krawędzi (schody, deptaki, foot=no dla roweru).
+- Decyzja właściciela (2026-11-20): WDROŻYĆ, ale nie teraz. Projekt „nasiona na brzegu siatki" (luka 2, niżej) zatwierdzony do wdrożenia, z zastrzeżeniem terminu: nie w bieżącym limicie tygodniowym. Wykonać w całości przy pełnym limicie tygodniowym, nigdy w połowie.
+  - Powód tego warunku (sedno): samo obcięcie promienia koła, bez zasiewania krawędzi siatki, ZABIERA pokrycie i nic nie daje w zamian — byłoby gorzej niż stan obecny. Obie części (obcięcie promienia i zasiewanie brzegu) muszą wejść razem.
+  - Właściciel przyjął do wiadomości konsekwencje: widoczna zmiana obrazu izochrony na obrzeżach Warszawy i Krakowa oraz wzrost statystyki „% powierzchni".
 - Luka 2 — sprostowanie opisu (2026-11-20). Trzy dawne twierdzenia są nieaktualne:
   - „Koła bez bariery wody" — nieprawda. Koła SĄ maskowane wodą przy rysowaniu: warstwa w `js/map.js` wycina poligony i linie z `water.json` trybem `destination-out`. Koło nie maluje po zatoce tam, gdzie zatoka jest w `water.json`.
   - Promień koła jest już ograniczony do 1 km stałą `OUTSIDE_MAX_RADIUS_M` w `js/isochrone.js`. Nie ma kół o promieniu 5 km.
@@ -123,11 +117,20 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
   - Uzasadnienie: każda droga z takiego przystanku do wnętrza siatki musi przeciąć brzeg, a poza brzegiem danych nie ma, więc zakładamy ruch w linii prostej — dokładnie to, co zakłada dzisiejsze koło.
   - Kontrakty i zmiany: `js/walkgrid.js` — nowe czyste funkcje `gapToGrid` (odległość punktu od prostokąta siatki) i `borderSeeds` (nasiona brzegowe, pomijające piksele wody, duplikaty rozstrzygane mniejszym czasem). Zgodność w tył: opcja `reset:false` w `computeTimeGrid` (domieszkuje minimum, nie zeruje) oraz opcjonalny trzeci element krotki nasienia — zasięg początkowy w metrach, żeby limit spaceru obejmował też metry przebyte w przerwie. `js/isochrone.js` — `buildZones` przyjmuje cap promienia per przystanek zamiast jednego wspólnego i respektuje cap także w trybie bez spaceru (dziś go tam ignoruje). `js/engine.js` — wpięcie w trzy istniejące ścieżki fali: rastrową, po sieci ulic (osobny drugi przebieg, bo pierwszy ma limit rozlania 75 m, który obcięłby strefę do paska przy krawędzi) i tryb bez spaceru. `js/map.js` bez zmian. Cała dodatkowa praca w workerze; wątek główny bez zmian.
   - Odrzucone opcje: (a) przycinanie koła do poligonów wody — tam, gdzie leży większość przystanków, `water.json` nie ma ani jednego punktu; dla pierścienia wynik gorszy niż fala, bo ucięty promień nie obchodzi brzegu; (b) lokalna siatka rastrowa wokół przystanku — druga siatka pokrywająca się z istniejącą, szwy na granicy, a dla dalekich nie ma z czego powstać; (c) poszerzenie `gridBbox` — przeliczenie wody, mostów i grafu pieszego dla 18 miast (zob. niżej); (d) padding rastra w runtime — rozdzielczość siatki jest wyliczana z pola bboxa, więc padding przesunąłby wszystkie piksele, a pierścień bez danych o wodzie byłby „cały ląd", więc fala skracałaby sobie drogę poza mapą.
-- Luka 2 — dlaczego czeka na decyzję właściciela: (1) obcięcie promienia i zasiewanie brzegu to para, nie dwie osobne zmiany. Samo obcięcie zabiera pokrycie i nic nie daje w zamian, więc byłoby regresem użyteczności; para musi wejść razem. (2) Para zmienia widocznie obraz izochrony w Warszawie i Krakowie i podnosi statystykę „% powierzchni" (przystanki z pierścienia zaczną wchodzić do statystyki; dziś ich koło nie jest w niej liczone wcale). Wzrost będzie realny i poprawny, ale to zmiana rdzenia produktu.
+- Luka 2 — dlaczego obie części muszą wejść razem: (1) obcięcie promienia i zasiewanie brzegu to para, nie dwie osobne zmiany. Samo obcięcie zabiera pokrycie i nic nie daje w zamian, więc byłoby regresem użyteczności; para musi wejść razem. (2) Para zmienia widocznie obraz izochrony w Warszawie i Krakowie i podnosi statystykę „% powierzchni" (przystanki z pierścienia zaczną wchodzić do statystyki; dziś ich koło nie jest w niej liczone wcale). Wzrost będzie realny i poprawny, ale to zmiana rdzenia produktu.
 - Luka 2 — czego projekt NIE naprawia: 804 pozycje dalej niż 1 km od krawędzi (349 w pasie 1–5 km, 455 powyżej 5 km) zostają kołami 1 km. Jedyne wyjście to szerszy `gridBbox` i przeliczenie `water.json`, `bridges.json` oraz `walknet.json` dla 18 miast — wymaga zgody właściciela i jest poza tym zadaniem. Sama przerwa między przystankiem a siatką (do 1 km) nadal nie ma bariery wody, bo nie ma tam danych.
 - Luka 2 — jak sprawdzić przy wdrożeniu: test monotoniczności (nasiona mogą tylko skracać czas, nigdy go nie wydłużać, dla każdego piksela); regresja na Łodzi (bez przystanków poza siatką) — obraz i statystyki bez żadnej zmiany; regresja barierowa — siatka z pasem wody bez mostu, przystanek za krawędzią po stronie A: piksele po stronie B muszą zostać nieosiągalne; ten sam układ z mostem daje stronę B osiągalną i dłuższy czas; przystanek 10 km za krawędzią daje wynik identyczny jak dziś; narożnik siatki (nasiona na dwóch bokach, bez duplikatów); zgodność w tył obu rozszerzeń krotki i opcji `reset`.
 - Dowód: luka 2 — pomiar 2026-11-20 (wyżej) oraz `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Luki 1 i 3: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js (luki 1 i 3). Luka 2: js/walkgrid.js, js/isochrone.js, js/engine.js, testy w tests/ (walkgrid, isochrone, engine).
+
+## Nowe (bez projektu rozwiązania)
+
+### Z-003 [P1] Mniejsze dane
+- Status: nowe
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: walknet.json ładowany w całości — 3,3 MB dla Trójmiasta, ok. 2,4 MB po gzipie dla GZM. Pomysły: format binarny, kafle wokół widoku, wersjonowanie nazw plików.
+- Dowód: rozmiary plików w data/<miasto>/.
+- Pliki: tools/build-walknet.mjs, js/walknet.js, js/data.js.
 
 ### Z-011 [P2] Realny „teraz"
 - Status: nowe
@@ -237,21 +240,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
 - Jak sprawdzić: nieznane.
 
-### Z-078 [wymaga decyzji właściciela] Eksport GeoJSON pomija koła szacunkowe; wpis o SVG był błędny
-- Status: nowe
-- Decyzja: WYMAGA DECYZJI WŁAŚCICIELA (2026-11-20). Wybór jednego z trzech wariantów poniżej; do tego czasu bez zmian w kodzie.
-- Zgłoszone: 2026-11-20 (nieznane)
-- Problem: pierwotny opis („eksport SVG nie odróżnia zasięgu szacunkowego od policzonego") jest błędny w całości. Eksportu SVG w projekcie nie ma. Zadanie powstało z błędnego odczytu przy projektowaniu Z-077 i zostało wpisane do kolejki bez sprawdzenia w kodzie. Wykrył to wdrożeniowiec, który zatrzymał się przed napisaniem jednej linii i zgłosił rozbieżność zamiast zgadywać.
-  - Prawdziwy stan: eksport stref to GeoJSON. `zonesToGeoJSON` w `js/uilogic.js` buduje `FeatureCollection` z jednym `MultiPolygon` na pasmo; `js/app.js` zapisuje wynik jako `application/geo+json` pod nazwą `izochrona-*.geojson`. Widniejące tam `'fill-opacity': 0.55` to właściwość stylu dla QGIS i geojson.io, a nie atrybut SVG — stąd nieporozumienie.
-  - Koła szacunkowe (przystanki poza siatką pieszą) nie trafiają do eksportu w ogóle. Eksportowane są wyłącznie kontury pasm policzonych; koła rysuje tylko płótno mapy. Plik GeoJSON dla Trójmiasta nie zawiera więc kół wokół Tczewa ani Pruszcza Gdańskiego.
-  - Plik niczego nieprawdziwego nie twierdzi, tylko pomija przybliżenia. Nie ma w nim czego odróżniać. GeoJSON nie ma legendy, więc nota „Kreskowane: zasięg szacunkowy, w linii prostej" nie ma gdzie trafić.
-- Warianty do rozstrzygnięcia przez właściciela:
-  1. Nic nie robić. Eksport zostaje czystą geometrią stref policzonych. Za: pomijanie zgadywanych kół w pliku z danymi jest zachowaniem poprawnym, a nie brakiem — kto wczytuje izochronę do QGIS, dostaje wyłącznie to, co zostało policzone.
-  2. Dodać koła do GeoJSON jako osobne obiekty z właściwością mówiącą, że to zasięg szacunkowy, plus opis. Wymaga przekazania kół do funkcji eksportu z `js/app.js`. Zmienia zawartość pobieranego pliku, więc dotyka zgodności dla kogoś, kto już przetwarza te pliki skryptem.
-  3. Osobny eksport SVG z kreskowaniem 45 stopni, odpowiadającym temu z mapy. To nowa funkcja; wymaga zmian w `js/app.js` i `index.html`, czyli wychodzi poza `js/uilogic.js`.
-- Dowód: sprawdzone 2026-11-20. W `js/`, `tests/` i `index.html` nie ma składania SVG ani eksportu pliku `.svg`; jedyne trafienia na „svg" to renderer Leafleta i ikony strony. Eksport GeoJSON: `zonesToGeoJSON` w `js/uilogic.js`, zapis w `js/app.js`.
-- Pliki: wariant 1 — bez zmian; wariant 2 — js/uilogic.js, js/app.js; wariant 3 — js/uilogic.js, js/app.js, index.html.
-- Jak sprawdzić: nieznane (zależy od wybranego wariantu).
 
 ## Zrobione
 
@@ -879,3 +867,20 @@ Pułapki do wdrożenia:
 - Uwaga: po Z-008 zrzut ekranu zwiniętego panelu daje mapę z legendą bez osobnego trybu, więc wartość eksportu PNG jest mniejsza niż przed tą zmianą. Warto to rozważyć przed wdrożeniem.
 - Pliki: nieznane — wymaga projektu.
 - Powód odrzucenia (2026-11-17, decyzja właściciela: „eksport widoku do PNG nie ma sensu, skasuj to zadanie"): po Z-008 zwinięty panel pokazuje legendę, więc zwykły zrzut ekranu daje mapę z objaśnieniem kolorów bez osobnej funkcji.
+
+### Z-078 Eksport GeoJSON pomija koła szacunkowe; wpis o SVG był błędny
+- Status: odrzucone
+- Decyzja: ODRZUCONE 2026-11-20 — wybrano wariant 1 (patrz „Decyzja właściciela (2026-11-20)" niżej). Warianty poniżej zostają jako historia.
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: pierwotny opis („eksport SVG nie odróżnia zasięgu szacunkowego od policzonego") jest błędny w całości. Eksportu SVG w projekcie nie ma. Zadanie powstało z błędnego odczytu przy projektowaniu Z-077 i zostało wpisane do kolejki bez sprawdzenia w kodzie. Wykrył to wdrożeniowiec, który zatrzymał się przed napisaniem jednej linii i zgłosił rozbieżność zamiast zgadywać.
+  - Prawdziwy stan: eksport stref to GeoJSON. `zonesToGeoJSON` w `js/uilogic.js` buduje `FeatureCollection` z jednym `MultiPolygon` na pasmo; `js/app.js` zapisuje wynik jako `application/geo+json` pod nazwą `izochrona-*.geojson`. Widniejące tam `'fill-opacity': 0.55` to właściwość stylu dla QGIS i geojson.io, a nie atrybut SVG — stąd nieporozumienie.
+  - Koła szacunkowe (przystanki poza siatką pieszą) nie trafiają do eksportu w ogóle. Eksportowane są wyłącznie kontury pasm policzonych; koła rysuje tylko płótno mapy. Plik GeoJSON dla Trójmiasta nie zawiera więc kół wokół Tczewa ani Pruszcza Gdańskiego.
+  - Plik niczego nieprawdziwego nie twierdzi, tylko pomija przybliżenia. Nie ma w nim czego odróżniać. GeoJSON nie ma legendy, więc nota „Kreskowane: zasięg szacunkowy, w linii prostej" nie ma gdzie trafić.
+- Warianty rozstrzygane przez właściciela:
+  1. Nic nie robić. Eksport zostaje czystą geometrią stref policzonych. Za: pomijanie zgadywanych kół w pliku z danymi jest zachowaniem poprawnym, a nie brakiem — kto wczytuje izochronę do QGIS, dostaje wyłącznie to, co zostało policzone.
+  2. Dodać koła do GeoJSON jako osobne obiekty z właściwością mówiącą, że to zasięg szacunkowy, plus opis. Wymaga przekazania kół do funkcji eksportu z `js/app.js`. Zmienia zawartość pobieranego pliku, więc dotyka zgodności dla kogoś, kto już przetwarza te pliki skryptem.
+  3. Osobny eksport SVG z kreskowaniem 45 stopni, odpowiadającym temu z mapy. To nowa funkcja; wymaga zmian w `js/app.js` i `index.html`, czyli wychodzi poza `js/uilogic.js`.
+- Dowód: sprawdzone 2026-11-20. W `js/`, `tests/` i `index.html` nie ma składania SVG ani eksportu pliku `.svg`; jedyne trafienia na „svg" to renderer Leafleta i ikony strony. Eksport GeoJSON: `zonesToGeoJSON` w `js/uilogic.js`, zapis w `js/app.js`.
+- Pliki: wariant 1 — bez zmian; wariant 2 — js/uilogic.js, js/app.js; wariant 3 — js/uilogic.js, js/app.js, index.html.
+- Jak sprawdzić: nieznane (zależy od wybranego wariantu).
+- Decyzja właściciela (2026-11-20): wariant 1 — eksport zostaje czystą geometrią stref policzonych; kół szacunkowych się do niego nie dodaje. Uzasadnienie: plik GeoJSON jest eksportem danych pomiarowych, a mieszanie do niego zgadywanych kół zaciemniłoby to rozróżnienie; kto wczytuje izochronę do QGIS, chce wyłącznie tego, co zostało policzone. Warianty 2 (koła jako osobne obiekty GeoJSON) i 3 (osobny eksport SVG z kreskowaniem) pozostają możliwe do wykonania w każdej chwili, gdyby pojawiła się realna potrzeba; wariant 2 jest tani.
