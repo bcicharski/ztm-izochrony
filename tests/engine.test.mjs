@@ -488,3 +488,83 @@ test('journeyToStop (Z-071): journey() w porównaniu zwraca ten sam kształt os�
   const b = e.journeyToStop(a.persons.length && e.last.net.stopName.indexOf('S3'));
   assert.deepEqual(b.persons, a.persons);
 });
+
+// --- Z-076: cap promienia kół poza siatką liczony tempem wyjścia z przystanku -------
+
+/** Atrapa canvasu: sama „lądowa" siatka, bez rysowania (alfa 0 = ląd). */
+const fakeCanvas = (W, H) => ({
+  getContext: () => new Proxy({ getImageData: () => ({ data: new Uint8ClampedArray(W * H * 4) }) }, {
+    get: (t, k) => (k in t ? t[k] : () => {}),
+    set: () => true,
+  }),
+});
+
+/** Silnik z siatką lądu obejmującą tylko okolice węzła 0 — wszystkie przystanki S0..S5 leżą poza nią. */
+async function makeGridEngine(city) {
+  globalThis.ImageData ??= class { constructor(w, h) { this.data = new Uint8ClampedArray(w * h * 4); } };
+  let resolveWalk;
+  const walkLoaded = new Promise(r => { resolveWalk = r; });
+  const engine = new Engine({ createCanvas: fakeCanvas, onWalkNet: resolveWalk });
+  assert.equal(await engine.setCity(city, { gridBbox: [49.99, 19.99, 50.01, 20.01] }), true);
+  await walkLoaded;
+  return engine;
+}
+
+/** Największy promień koła w strefach [m] — przy dalekim przystanku z długim pasmem to właśnie cap. */
+const maxRadius = zones => Math.max(...zones.zones.flatMap(z => z.circles.map(c => c[2])));
+// punkt ok. 300 m od S0 (50,03): dojście mieści się w limicie 250 s także pieszo
+const NEAR_S0 = { lat: 50.0273, lng: 20 };
+const LIM = 250; // [s]; 250 s × tempo < 1000 m w każdym trybie, więc cap nie ginie w OUTSIDE_MAX_RADIUS_M
+
+test('cap kół poza siatką (Z-076): tempo wyjścia z przystanku — pieszo i rower do przystanku liczą pieszo, rower w pojeździe rowerowo', async () => {
+  const e = await makeGridEngine('tstOutCap');
+  const cap = async (access, direction, maxWalkSec = LIM) => {
+    const { zones } = await run(e, { access, direction, maxWalkSec, point: NEAR_S0 });
+    assert.ok(zones, `${access}/${direction}: są koła poza siatką`);
+    return maxRadius(zones);
+  };
+  // wartości liczone z definicji: min(OUTSIDE_MAX_RADIUS_M, limit × tempo wyjścia)
+  assert.equal(await cap('foot', 'from'), LIM * WALK_MPS, 'pieszo: bez zmian');
+  assert.equal(await cap('bike', 'from'), LIM * WALK_MPS, 'rower do przystanku: wyjście pieszo, bez zmian');
+  const onboard = await cap('bike-onboard', 'from');
+  assert.equal(onboard, LIM * BIKE_MPS, 'rower w pojeździe: wyjście rowerem');
+  assert.ok(onboard > LIM * WALK_MPS);
+  assert.ok(onboard <= 1000, 'nie przekracza OUTSIDE_MAX_RADIUS_M');
+});
+
+test('cap kół poza siatką (Z-076): kierunek „do miejsca" zamienia role — wyjście rowerem przy „bike" i „bike-onboard"', async () => {
+  const e = await makeGridEngine('tstOutCapTo');
+  const cap = async access => {
+    const { zones } = await run(e, { access, direction: 'to', maxWalkSec: LIM, point: NEAR_S0 });
+    assert.ok(zones, `${access}/to: są koła poza siatką`);
+    return maxRadius(zones);
+  };
+  assert.equal(await cap('foot'), LIM * WALK_MPS);
+  assert.equal(await cap('bike'), LIM * BIKE_MPS, 'po zamianie ról rower dotyczy wyjścia');
+  assert.equal(await cap('bike-onboard'), LIM * BIKE_MPS);
+});
+
+test('cap kół poza siatką (Z-076): bez limitu spaceru cap to OUTSIDE_MAX_RADIUS_M w każdym trybie', async () => {
+  const e = await makeGridEngine('tstOutCapFree');
+  for (const [access, direction] of [['foot', 'from'], ['bike', 'from'], ['bike-onboard', 'from'], ['bike', 'to']]) {
+    const { zones } = await run(e, { access, direction, point: NEAR_S0 });
+    assert.ok(zones, `${access}/${direction}`);
+    assert.equal(maxRadius(zones), 1000, `${access}/${direction}`);
+  }
+});
+
+test('promień pasma (Z-076): tempo wyjścia z przystanku także bez limitu spaceru (koła crow-fly)', async () => {
+  const e = await makeEngine('tstBandSpeed');
+  /** Promień koła wokół S0 w paśmie „do 90 min" i czas dojazdu do S0 [min]. */
+  const band = async (access, direction) => {
+    const { zones } = await run(e, { access, direction });
+    const c = zones.zones.find(z => z.limit === 90).circles.find(k => k[0] === 50.03 && k[1] === 20);
+    assert.ok(c, `${access}/${direction}: koło S0`);
+    return { r: c[2], t: mins(e)[0] };
+  };
+  for (const [access, direction, mps] of [['foot', 'from', WALK_MPS], ['bike', 'from', WALK_MPS], ['bike-onboard', 'from', BIKE_MPS], ['bike', 'to', BIKE_MPS], ['foot', 'to', WALK_MPS]]) {
+    const { r, t } = await band(access, direction);
+    assert.ok(Number.isFinite(t) && t < 90, `${access}/${direction}: S0 osiągalny`);
+    near(r, (90 - t) * 60 * mps, 1e-6, `${access}/${direction}`);
+  }
+});

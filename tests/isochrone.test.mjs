@@ -24,3 +24,20 @@ test('buildZones bez spaceru: stałe koła w paśmie przyjazdu', () => {
   assert.equal(zones.find(z => z.limit === 30).circles[0][2], NO_WALK_RADIUS_M);
   assert.equal(zones.find(z => z.limit === 20).circles.length, 0);
 });
+
+test('buildZones (Z-076): bez opcji egressMps wynik jak dla WALK_MPS; z opcją promienie skalują się tempem, cap zostaje górną granicą', () => {
+  const minutes = Float64Array.from([5, 25, 95]);
+  const origin = { lat: 50, lon: 20 };
+  const radii = zs => zs.map(z => ({ limit: z.limit, r: z.circles.map(c => c[2]) }));
+  const def = buildZones(net, minutes, { walk: true, origin });
+  assert.deepEqual(radii(buildZones(net, minutes, { walk: true, origin, egressMps: WALK_MPS })), radii(def), 'jawne tempo piesze = domyślne');
+  const v = 3;
+  const fast = buildZones(net, minutes, { walk: true, origin, egressMps: v });
+  const z90 = fast.find(z => z.limit === 90);
+  assert.equal(z90.circles[0][2], 90 * 60 * v, 'origin: domyślnie to samo tempo co wyjście');
+  assert.equal(z90.circles[1][2], (90 - 5) * 60 * v);
+  const split = buildZones(net, minutes, { walk: true, origin, egressMps: v, originMps: 2 });
+  assert.equal(split.find(z => z.limit === 90).circles[0][2], 90 * 60 * 2, 'originMps niezależne od egressMps');
+  const capped = buildZones(net, minutes, { walk: true, origin, egressMps: v, maxRadiusM: 1000 });
+  assert.ok(capped.every(z => z.circles.every(c => c[2] <= 1000)), 'cap nadal obowiązuje');
+});

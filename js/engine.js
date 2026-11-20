@@ -294,6 +294,8 @@ export class Engine {
     this.last = { net, res, res2, minutes, params: p, speeds, limits: { maxTransfers, maxWalkSec }, grid: null, gridTime: null };
 
     let gridTime = null, grid = null, zones = null, image = null, bbox = null;
+    // tempo wyjścia z przystanku w linii prostej — promień kół (jak w opisie trasy: last.speeds.crowEgress)
+    const egressCrow = speeds.crowEgress ?? WALK_MPS;
     if (this.assets) {
       // strefy na siatce lądu: woda blokuje, mosty przepuszczają.
       // walk=true — fala pieszo (czas dojazdu + dojście); walk=false — koła 200 m
@@ -357,7 +359,7 @@ export class Engine {
         }
       }
       zones = anyOutside
-        ? buildZones(net, outside, { walk: p.walk, origin: null, maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS) })
+        ? buildZones(net, outside, { walk: p.walk, origin: null, egressMps: egressCrow, maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * egressCrow) })
         : null;
     } else {
       // brak geometrii miasta: koła crow-fly. W trybie „tylko pieszo" zostają
@@ -365,6 +367,7 @@ export class Engine {
       zones = buildZones(net, minutes, {
         walk: p.walk || p.walkOnly,
         origin: p.compare && !p.walkOnly ? null : { lat: p.point.lat, lon: p.point.lng },
+        egressMps: egressCrow, originMps: speeds.crowAccess ?? WALK_MPS,
       });
     }
     // dymek trasy korzysta z tej samej siatki co strefy (spójny dobór przystanku)

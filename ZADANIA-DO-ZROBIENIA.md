@@ -237,15 +237,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
 - Jak sprawdzić: nieznane.
 
-### Z-076 [P2] Cap przerwy liczony zawsze w tempie pieszym, także w trybie rowerowym
-- Status: nowe
-- Zgłoszone: 2026-11-20 (nieznane)
-- Problem: w `js/engine.js` ograniczenie promienia dla przystanków poza siatką mnoży limit spaceru przez prędkość pieszą, również gdy dojście do przystanku jest rowerem. Niespójność znaleziona przy projekcie Z-007.
-- Dowód: `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Otoczenia tej linii w tym wpisie nie czytano.
-- Rozwiązanie: nieznane (nie zaprojektowane).
-- Pliki: js/engine.js.
-- Jak sprawdzić: nieznane.
-
 ### Z-077 [P3] Dalekie koła wyglądają jak wynik pomiaru, a są zgadywaniem
 - Status: nowe
 - Zgłoszone: 2026-11-20 (nieznane)
@@ -256,6 +247,15 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Jak sprawdzić: nieznane.
 
 ## Zrobione
+
+### Z-076 [P2] Cap przerwy liczony zawsze w tempie pieszym, także w trybie rowerowym
+- Status: zrobione
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: w `js/engine.js` ograniczenie promienia dla przystanków poza siatką mnoży limit spaceru przez prędkość pieszą, również gdy dojście do przystanku jest rowerem. Niespójność znaleziona przy projekcie Z-007.
+- Dowód: `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Otoczenia tej linii w tym wpisie nie czytano.
+- Rozwiązanie (wdrożone 2026-11-20): tempo wyjścia liczone raz w `js/engine.js` i przekazywane do capu oraz do obu wywołań `buildZones`; `buildZones` w `js/isochrone.js` przyjmuje dwie opcje — tempo wyjścia (domyślnie piesze) i tempo wokół punktu użytkownika (domyślnie równe tempu wyjścia), więc wywołania bez nowych opcji dają wynik identyczny. Zakres rozszerzony o `js/isochrone.js`: `buildZones` liczy promień pasma też stałą `WALK_MPS`, a cap jest tylko górnym ograniczeniem, więc sama poprawka capu nie zmieniała nic bez limitu spaceru — to druga połowa tego samego problemu, nie osobne zadanie. Świadome odstępstwo: koło wokół punktu użytkownika w gałęzi awaryjnej dostaje tempo dojścia, bo statystyki liczą ten punkt tempem dojścia; różnica widoczna tylko w trybie „rowerem do przystanku” z kierunkiem „do miejsca”. Gałąź bez capu jest uruchamiana tylko, gdy wczytanie geometrii miasta się nie powiedzie; wszystkie 18 miast ma komplet plików, Białystok i Rzeszów (bez `gridBbox`) budują siatkę ze swojego `bbox`, a w gałęzi z siatką obowiązuje cap 1000 m.
+- Pliki: js/engine.js, js/isochrone.js; testy: tests/engine.test.mjs, tests/isochrone.test.mjs.
+- Jak sprawdzić: 5 nowych testów w `tests/engine.test.mjs` i `tests/isochrone.test.mjs`. Po cofnięciu poprawki przez `git stash` cztery padają (pass 31, fail 4): promień pasma w trybie rowerowym 4422 m zamiast 14740 m, test `buildZones` 5192,3 zamiast 16200, dwa testy capu 240,38 zamiast 801,28; piąty (regresja dotychczasowego zachowania) przechodzi przed i po. `npm run check`: tests 484, pass 483, fail 0, skipped 1, lint czysty. Zmierzone: przy limicie spaceru 250 s promień dalekiego koła 240,4 m → 801,3 m; bez limitu pasmo „do 90 min” wokół przystanku osiąganego w 13,35 min 4422,1 m → 14740,4 m (oba razy 3,33, zgodnie ze stosunkiem prędkości). Sprawdzone w przeglądarce: Trójmiasto, tryb „rowerem w pojeździe”, limit spaceru 5 min — strona renderuje się, woda blokuje zasięg, konsola bez błędów; Białystok w trybie rowerowym bez błędów. Niezweryfikowane: wygląd po zmianie na pozostałych 16 miastach; realny zasięg po poprawce na danych produkcyjnych nieporównany z rozkładem; widok mobilny.
 
 ### Z-071 [P2] Dymek przystanku spotkania z trasami obu osób i kopiowanie zaproszenia
 - Status: zrobione

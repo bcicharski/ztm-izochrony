@@ -33,20 +33,25 @@ const MIN_RADIUS_M = 60;
  * @param {object} net     sieć (dla współrzędnych przystanków)
  * @param {Float64Array} minutes  czas dojazdu per przystanek
  * @param {{walk: boolean, origin: {lat:number, lon:number}, maxRadiusM?: number}} opts
- *        `maxRadiusM` — górny cap promienia (fallback dla przystanków poza siatką)
+ *        `maxRadiusM` — górny cap promienia (fallback dla przystanków poza siatką);
+ *        `egressMps` — tempo wyjścia z przystanku [m/s], domyślnie WALK_MPS;
+ *        `originMps` — tempo wokół punktu użytkownika, domyślnie `egressMps`
  * @returns {Array<{color: string, circles: Array<[lat, lon, radiusM]>}>}
  *          kolejność: od najchłodniejszej (rysować pierwszą) do najcieplejszej
  */
 export function buildZones(net, minutes, opts) {
   const zones = BANDS.map(b => ({ limit: b.limit, color: b.color, circles: [] }));
   const cap = opts.maxRadiusM ?? Infinity;
+  // tempo wyjścia z przystanku (rower w pojeździe: rowerowe); origin domyślnie tym samym
+  const egressMps = opts.egressMps ?? WALK_MPS;
+  const originMps = opts.originMps ?? egressMps;
 
   if (opts.walk) {
     // punkt startowy zachowuje się jak przystanek o czasie 0
     // (w trybie porównania origin jest pomijany — obszar wyznaczają przystanki)
     if (opts.origin) {
       for (let b = 0; b < BANDS.length; b++) {
-        zones[b].circles.push([opts.origin.lat, opts.origin.lon, Math.min(BANDS[b].limit * 60 * WALK_MPS, cap)]);
+        zones[b].circles.push([opts.origin.lat, opts.origin.lon, Math.min(BANDS[b].limit * 60 * originMps, cap)]);
       }
     }
     for (let i = 0; i < net.nStops; i++) {
@@ -54,7 +59,7 @@ export function buildZones(net, minutes, opts) {
       if (t > 90) continue;
       for (let b = 0; b < BANDS.length; b++) {
         if (t <= BANDS[b].limit) {
-          const r = Math.max(Math.min((BANDS[b].limit - t) * 60 * WALK_MPS, cap), MIN_RADIUS_M);
+          const r = Math.max(Math.min((BANDS[b].limit - t) * 60 * egressMps, cap), MIN_RADIUS_M);
           zones[b].circles.push([net.lat[i], net.lon[i], r]);
         }
       }
