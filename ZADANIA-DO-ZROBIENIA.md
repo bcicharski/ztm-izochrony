@@ -101,10 +101,33 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ### Z-007 [P2] Znane luki modelu
 - Status: nowe
+- Decyzja: WYMAGA DECYZJI WŁAŚCICIELA (2026-11-20). Luka 2 ma gotowy projekt; wdrożenie zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie, czyli rdzeń produktu. Zadanie zostaje w kolejce. Luki 1 i 3 bez projektu.
 - Zgłoszone: 2026-11-16 (analityk)
-- Problem: trzy luki — stacje kolejowe 150-400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru (COMPLEX_MAX_M; Kraków SKA, 17 stacji); dalekie stacje poza gridBbox rysowane kołami bez bariery wody; graf pieszy bez tagów krawędzi (schody, deptaki, foot=no dla roweru).
-- Dowód: nieznane.
-- Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js.
+- Problem: trzy luki — (1) stacje kolejowe 150-400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru (COMPLEX_MAX_M; Kraków SKA, 17 stacji); (2) dalekie przystanki poza gridBbox rysowane kołami 1 km bez bariery wody za krawędzią siatki (poprawione 2026-11-20, patrz niżej); (3) graf pieszy bez tagów krawędzi (schody, deptaki, foot=no dla roweru).
+- Luka 2 — sprostowanie opisu (2026-11-20). Trzy dawne twierdzenia są nieaktualne:
+  - „Koła bez bariery wody" — nieprawda. Koła SĄ maskowane wodą przy rysowaniu: warstwa w `js/map.js` wycina poligony i linie z `water.json` trybem `destination-out`. Koło nie maluje po zatoce tam, gdzie zatoka jest w `water.json`.
+  - Promień koła jest już ograniczony do 1 km stałą `OUTSIDE_MAX_RADIUS_M` w `js/isochrone.js`. Nie ma kół o promieniu 5 km.
+  - Szczecin nie jest dotknięty w praktyce: 3 pozycje poza siatką, wszystkie 0,42–0,68 km na zachód, w okolicy bez większej wody.
+- Luka 2 — prawdziwa wada (2026-11-20), trzy części:
+  - Koła rysują się NA WIERZCHU obrysów (`js/map.js`: najpierw kontury, potem koła, ten sam bufor, `source-over`). Dla przystanku 80–900 m za krawędzią siatki płaski dysk jednego koloru zamazuje poprawny wynik fali lądowej WEWNĄTRZ `gridBbox`, czyli tam, gdzie dziś jest dobrze.
+  - Woda nie jest barierą dla propagacji poza siatką, więc pasmo może pojawić się po drugim brzegu.
+  - Dla przystanków dalszych niż kilka km od krawędzi nie ma w `data/<miasto>/water.json` ani jednego poligonu. `tools/build-water.mjs` buduje wodę na `gridBbox`, a poza prostokąt wycieka tylko tyle, ile sięga pojedynczy way z Overpass. Nie ma czym stawiać bariery.
+- Luka 2 — pomiar (2026-11-20, dane w `data/`, unikalne pozycje współrzędnych, nie wpisy tablicy; odległość od krawędzi `gridBbox`):
+  - Poza siatką, suma po miastach: 0–200 m: 41; 200–500 m: 62; 500 m–1 km: 73; 1–5 km: 349; powyżej 5 km: 455.
+  - Pierścień 0–1 km: 176 pozycji, z tego 53 ma geometrię wody w promieniu 1 km.
+  - Po miastach (pierścień / z wodą w promieniu 1 km / najbliższa pozycja): warszawa 50/11/26 m; krakow 38/12/27 m; poznan 18/8/26 m; torun 14/0/86 m; kielce 13/7/34 m; bydgoszcz 10/2/140 m; wroclaw 8/4/348 m; olsztyn 6/3/3 m; lublin 6/0/182 m; opole 4/0/52 m; trojmiasto 4/3/718 m; szczecin 3/1/420 m; gzm 2/2/395 m.
+  - Zero pozycji poza siatką: lodz, bialystok, rzeszow, zielonagora, gorzow.
+  - Dalej niż 1 km (nienaprawialne): warszawa 391, krakow 146, trojmiasto 95, poznan 88, torun 31, bydgoszcz 23, kielce 22. Przyczyna: budowa danych zatrzymuje cały kurs, jeśli dotyka bboxa, więc feedy kolejowe (SKM, PolRegio, KM, WKD) ciągną ogon przystanków nawet 120 km od miasta (Trójmiasto aż po Bydgoszcz i okolice Olsztyna).
+- Luka 2 — projekt (rozwiazywacz, 2026-11-20): „nasiona na brzegu siatki".
+  - Przystanek leżący poza siatką nie dalej niż 1 km przestaje być kołem wewnątrz siatki. Zasiewa piksele BRZEGU siatki wartością „przyjazd + odległość w linii prostej / tempo", a dalej pracuje istniejąca fala po lądzie — z wodą, mostami i obejściem brzegu. Jego własne koło dostaje promień obcięty do odległości od siatki, więc nie wchodzi na obrysy. Przystanki dalsze: bez żadnej zmiany.
+  - Uzasadnienie: każda droga z takiego przystanku do wnętrza siatki musi przeciąć brzeg, a poza brzegiem danych nie ma, więc zakładamy ruch w linii prostej — dokładnie to, co zakłada dzisiejsze koło.
+  - Kontrakty i zmiany: `js/walkgrid.js` — nowe czyste funkcje `gapToGrid` (odległość punktu od prostokąta siatki) i `borderSeeds` (nasiona brzegowe, pomijające piksele wody, duplikaty rozstrzygane mniejszym czasem). Zgodność w tył: opcja `reset:false` w `computeTimeGrid` (domieszkuje minimum, nie zeruje) oraz opcjonalny trzeci element krotki nasienia — zasięg początkowy w metrach, żeby limit spaceru obejmował też metry przebyte w przerwie. `js/isochrone.js` — `buildZones` przyjmuje cap promienia per przystanek zamiast jednego wspólnego i respektuje cap także w trybie bez spaceru (dziś go tam ignoruje). `js/engine.js` — wpięcie w trzy istniejące ścieżki fali: rastrową, po sieci ulic (osobny drugi przebieg, bo pierwszy ma limit rozlania 75 m, który obcięłby strefę do paska przy krawędzi) i tryb bez spaceru. `js/map.js` bez zmian. Cała dodatkowa praca w workerze; wątek główny bez zmian.
+  - Odrzucone opcje: (a) przycinanie koła do poligonów wody — tam, gdzie leży większość przystanków, `water.json` nie ma ani jednego punktu; dla pierścienia wynik gorszy niż fala, bo ucięty promień nie obchodzi brzegu; (b) lokalna siatka rastrowa wokół przystanku — druga siatka pokrywająca się z istniejącą, szwy na granicy, a dla dalekich nie ma z czego powstać; (c) poszerzenie `gridBbox` — przeliczenie wody, mostów i grafu pieszego dla 18 miast (zob. niżej); (d) padding rastra w runtime — rozdzielczość siatki jest wyliczana z pola bboxa, więc padding przesunąłby wszystkie piksele, a pierścień bez danych o wodzie byłby „cały ląd", więc fala skracałaby sobie drogę poza mapą.
+- Luka 2 — dlaczego czeka na decyzję właściciela: (1) obcięcie promienia i zasiewanie brzegu to para, nie dwie osobne zmiany. Samo obcięcie zabiera pokrycie i nic nie daje w zamian, więc byłoby regresem użyteczności; para musi wejść razem. (2) Para zmienia widocznie obraz izochrony w Warszawie i Krakowie i podnosi statystykę „% powierzchni" (przystanki z pierścienia zaczną wchodzić do statystyki; dziś ich koło nie jest w niej liczone wcale). Wzrost będzie realny i poprawny, ale to zmiana rdzenia produktu.
+- Luka 2 — czego projekt NIE naprawia: 804 pozycje dalej niż 1 km od krawędzi (349 w pasie 1–5 km, 455 powyżej 5 km) zostają kołami 1 km. Jedyne wyjście to szerszy `gridBbox` i przeliczenie `water.json`, `bridges.json` oraz `walknet.json` dla 18 miast — wymaga zgody właściciela i jest poza tym zadaniem. Sama przerwa między przystankiem a siatką (do 1 km) nadal nie ma bariery wody, bo nie ma tam danych.
+- Luka 2 — jak sprawdzić przy wdrożeniu: test monotoniczności (nasiona mogą tylko skracać czas, nigdy go nie wydłużać, dla każdego piksela); regresja na Łodzi (bez przystanków poza siatką) — obraz i statystyki bez żadnej zmiany; regresja barierowa — siatka z pasem wody bez mostu, przystanek za krawędzią po stronie A: piksele po stronie B muszą zostać nieosiągalne; ten sam układ z mostem daje stronę B osiągalną i dłuższy czas; przystanek 10 km za krawędzią daje wynik identyczny jak dziś; narożnik siatki (nasiona na dwóch bokach, bez duplikatów); zgodność w tył obu rozszerzeń krotki i opcji `reset`.
+- Dowód: luka 2 — pomiar 2026-11-20 (wyżej) oraz `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Luki 1 i 3: nieznane.
+- Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js (luki 1 i 3). Luka 2: js/walkgrid.js, js/isochrone.js, js/engine.js, testy w tests/ (walkgrid, isochrone, engine).
 
 ### Z-011 [P2] Realny „teraz"
 - Status: nowe
@@ -203,6 +226,33 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: linia trasy z Z-010 jest schematyczna (łamana po przystankach). Dołożenie `shapes.txt` do prekompilacji dałoby linię wzdłuż torów i ulic. Koszt: 15–20 MB nowych danych w repozytorium, 0,5–0,8 MB po kompresji na duże miasto przy każdej wizycie, przeliczenie 18 miast, nierówne pokrycie (Opole bez geometrii, bo konwerter TransXChange jej nie produkuje). Proponowany pierwszy etap, gdyby właściciel zatwierdził: geometria tylko dla kolei i metra. Decyzję warto podjąć po tym, jak będzie widać, czy schematyczna linia komukolwiek przeszkadza.
 - Dowód: w katalogu `tools/` nie ma ani jednego wystąpienia słowa „shape" (sprawdzone 2026-11-19); prekompilacja nie czyta geometrii z GTFS, więc nic z niej nie trafia do `data/<miasto>/`.
 - Pliki: tools/ (prekompilacja GTFS), data/<miasto>/ — dopiero po decyzji właściciela.
+- Jak sprawdzić: nieznane.
+
+### Z-075 [P2] Wyciek `water.json` poza `gridBbox` jest przypadkowy
+- Status: nowe
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: `tools/build-water.mjs` buduje wodę na `gridBbox`, ale Overpass zwraca pełną geometrię way'a, który ma choć jeden węzeł w bboxie. W Trójmieście geometria wychodzi 4,3 km na południe za krawędź, a tylko 0,6 km na zachód. Skutek: maska wody w `js/map.js` poza siatką działa losowo — w jednym kierunku jest, w drugim nie.
+- Dowód: pomiar 2026-11-20 (Trójmiasto, geometria wody za krawędzią `gridBbox`).
+- Opcje (do rozstrzygnięcia, nie zaprojektowane): świadomy margines w `build-water.mjs` albo przycięcie danych do bboxa, żeby zachowanie było przewidywalne. Zmiana wymaga przeliczenia `water.json`, czyli zgody właściciela.
+- Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
+- Jak sprawdzić: nieznane.
+
+### Z-076 [P2] Cap przerwy liczony zawsze w tempie pieszym, także w trybie rowerowym
+- Status: nowe
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: w `js/engine.js` ograniczenie promienia dla przystanków poza siatką mnoży limit spaceru przez prędkość pieszą, również gdy dojście do przystanku jest rowerem. Niespójność znaleziona przy projekcie Z-007.
+- Dowód: `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Otoczenia tej linii w tym wpisie nie czytano.
+- Rozwiązanie: nieznane (nie zaprojektowane).
+- Pliki: js/engine.js.
+- Jak sprawdzić: nieznane.
+
+### Z-077 [P3] Dalekie koła wyglądają jak wynik pomiaru, a są zgadywaniem
+- Status: nowe
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: płaski dysk 1 km dla przystanku dalej niż 1 km od siatki (349 pozycji w pasie 1–5 km, 455 powyżej 5 km, najdalej ok. 120 km) jest nie do odróżnienia wizualnie od policzonej strefy. Dotyczy 804 pozycji w 8 miastach (najwięcej: Warszawa 391, Kraków 146, Trójmiasto 95).
+- Dowód: pomiar 2026-11-20 (patrz Z-007, luka 2).
+- Wygląd i UX (do zaprojektowania przez `esteta`): deseń, przezroczystość albo podpis odróżniający zasięg przybliżony od policzonego.
+- Pliki: js/map.js, css/style.css.
 - Jak sprawdzić: nieznane.
 
 ## Zrobione

@@ -4,6 +4,7 @@ Historia wdrożonych zmian i prac w toku. Najnowsze na górze.
 Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 
 ## W toku
+- Z-007 Znane luki modelu — etap: projekt (luka 2, dalekie przystanki poza siatką: projekt gotowy, czeka na decyzję właściciela, bo zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie).
 - Z-019 Brakujące profile opóźnień dla GZM i Szczecina — etap: weryfikacja (oczekiwanie na pierwszy przebieg kolektora z nową diagnostyką).
 - Z-002 Mobile i PWA — etap: wdrożenie (etapy 1 i 2 wdrożone; etap 3, service worker, czeka na decyzję właściciela).
 - Z-051 Rozkład Opola kończy się 2026-11-16; Łódź i Olsztyn mają nowe adresy źródeł i przeliczone dane (2026-11-17) — etap: wdrożenie (częściowo; Opole zamknięte w Z-054 (2026-11-17), Gorzów -> Z-055, przegląd przed 2026-12-30).
