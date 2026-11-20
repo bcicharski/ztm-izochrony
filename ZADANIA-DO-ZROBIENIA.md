@@ -14,7 +14,12 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: oba miasta mają skonfigurowane źródło rt, ale nie mają danych opóźnień. Diagnoza: config, mapy `routeNames` i próg `MIN_OBS` są poprawne; ścieżka urywa się w `tools/collect-delays.mjs` — kolektor dostaje zero obserwacji przy każdym przebiegu, a błędy HTTP i wyjątki kończyły się cichym ostrzeżeniem przy sukcesie przebiegu, więc awaria była niewidoczna od lipca 2026. Pliki `data/delays/gzm.json` i `szczecin.json` nigdy nie istniały w żadnym commicie.
 - Dowód: data/cities.json:300,344; data/delays/ zawiera tylko krakow.json, poznan.json, trojmiasto.json, a rt jest ustawione dla 5 miast.
 - Wdrożono część „awaria widoczna" (2026-11-16): klasyfikacja wyniku per URL (`ok`, `http`, `exception`, `undecodable`, `no-entities`, `no-tripupdate`, `no-routeid`, `no-delay`), diagnostyka w logu, tabela werdyktów w podsumowaniu przebiegu, kod wyjścia 1 przy mieście z `rt` i zerem obserwacji; miasta działające dalej zapisują dane. Czerwony status tylko przy uruchomieniu ręcznym i w pierwszej godzinie dnia (cron daje 76 przebiegów dziennie).
-- Pozostaje: odczytać werdykt z pierwszego przebiegu i naprawić przyczynę po stronie feedów. Przyczyny nie ustalono lokalnie (brak dostępu do logów GitHuba, zakaz odpytywania feedów).
+- Złagodzenie (świadome, z wcześniejszej fali; doprecyzowane 2026-11-20): przebieg kolektora jest czerwony tylko przy ręcznym uruchomieniu i o 03 UTC (4 z 76 przebiegów dziennie); w pozostałych 72 daje żółtą adnotację, żeby nie zalewać skrzynki. Awaria jest widoczna codziennie. Wcześniejsze zdanie „tylko przy uruchomieniu ręcznym i w pierwszej godzinie dnia" jest nieaktualne.
+- Wdrożono 2026-11-20 (część, testowalność; zadanie otwarte): ścieżka pobierania w `tools/collect-delays.mjs` da się testować bez sieci. Wydzielono funkcję zbierającą dane jednego miasta z podstawialnym pobieraniem i dekoderem; nie rzuca wyjątków — błąd pobrania, błąd dekodera i nieznany typ źródła stają się wpisem w wyniku. 7 testów na atrapie, bez sieci (`tests/collect-delays.test.mjs`). Zachowanie przy awarii: miasto bez źródła pomijane (nie błąd); miasto ze źródłem i obserwacjami przechodzi; miasto ze źródłem i zerem obserwacji jest awarią, tak samo jak błąd HTTP, wyjątek, treść niedekodowalna i feed bez użytecznych pól. Kod wyjścia 1, gdy którekolwiek miasto ze źródłem zawiodło; agregaty miast działających zapisują się przed zakończeniem procesu.
+- SPROSTOWANIE (2026-11-20): zlecenie zakładało, że awaria kolektora jest cicha i trzeba ją dopiero uczynić głośną. To była nieprawda. Werdykty per miasto, kod wyjścia 1, tabela w podsumowaniu przebiegu, klasyfikacja błędów i zapis działających miast przed ustaleniem kodu wyjścia były już w repozytorium z wcześniejszej fali. Wdrożono tylko brakującą testowalność. Przyczyna pomyłki: zlecenie powstało z opisu zadania w kolejce, bez sprawdzenia bieżącego stanu kodu.
+- Przyczyna zerowych obserwacji (pomiar 2026-11-20; ustalona, nie zakładana): oba źródła działają poprawnie. GZM: HTTP 200, `application/x-protobuf`, 107 648 B, dekoduje się jako GTFS-RT, 1175 encji, wszystkie z aktualizacją kursu. Szczecin: HTTP 200, `application/octet-stream`, 92 343 B, dekoduje się poprawnie, 900 encji, wszystkie z aktualizacją kursu. W żadnej encji nie występuje identyfikator linii (0 z 1175 i 0 z 900); jest wyłącznie identyfikator kursu (GZM np. `1_7298305`, Szczecin np. `436853_POWS`). Opóźnienia w feedach są (aktualizacje przystankowe). Kolektor odrzuca encje bez identyfikatora linii, stąd zero obserwacji. To nie awaria źródła ani zły adres: założenie kolektora nie pasuje do tego, co wystawiają przewoźnicy.
+- Pozostaje (wymaga decyzji właściciela): wyznaczanie linii z identyfikatora kursu przez `trips.txt`. Wymaga mapy „kurs na linię" w danych miejskich, czyli zmiany formatu danych i prawdopodobnie przeliczenia miast; nie wykonano. Niesprawdzone: czy identyfikatory kursów z feedów pasują do `trips.txt` w `data/gzm` i `data/szczecin`; trzeba to zmierzyć, zanim powstanie projekt. Werdykt pierwszego przebiegu kolektora w GitHub Actions: nieznane (workflow nie był uruchamiany; prawdziwy przebieg nie był odpalany, bo zapisałby do `data/delays/`).
+- Nowe zadanie powstałe przy Z-019: Z-079 (uszkodzony agregat jednego miasta przerywa przebieg kolektora).
 - Pliki: data/delays/, tools/collect-delays.mjs, data/cities.json, .github/workflows/collect-delays.yml, README.md, tests/collect-delays.test.mjs.
 
 ### Z-002 [P1] Mobile i PWA
@@ -240,6 +245,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
 - Jak sprawdzić: nieznane.
 
+
+### Z-079 [P2] Uszkodzony agregat jednego miasta przerywa cały przebieg kolektora
+- Status: nowe
+- Zgłoszone: 2026-11-20 (nieznane; znalezione przy Z-019)
+- Problem: uszkodzony plik agregatu jednego miasta wywróciłby cały proces `tools/collect-delays.mjs` już po zebraniu danych: podsumowanie przebiegu nie zostałoby wydrukowane, a miasta przetwarzane po nim straciłyby zapis.
+- Dowód: nieznane (numer linii nie podano); zachowanie opisane w zgłoszeniu z 2026-11-20, nienaprawione.
+- Pliki: tools/collect-delays.mjs.
+- Jak sprawdzić: nieznane.
 
 ## Zrobione
 

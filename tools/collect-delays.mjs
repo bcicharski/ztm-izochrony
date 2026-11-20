@@ -190,12 +190,12 @@ async function fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl = fetch) {
 }
 
 /** Obserwacje z feedów GTFS-RT TripUpdates: { obs, urlResults }. */
-async function fromGtfsRt(urls, names) {
-  const { transit_realtime } = (await import('gtfs-realtime-bindings')).default;
+async function fromGtfsRt(urls, names, fetchImpl = fetch, decoder = null) {
+  const transit_realtime = decoder ?? (await import('gtfs-realtime-bindings')).default.transit_realtime;
   const obs = new Map();
   const urlResults = [];
   for (const url of urls) {
-    const r = await fetchGtfsRtUrl(url, names, transit_realtime);
+    const r = await fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl);
     for (const [k, v] of r.obs) obs.set(k, v);
     urlResults.push(classifyUrlResult(r));
   }
@@ -203,12 +203,12 @@ async function fromGtfsRt(urls, names) {
 }
 
 /** Obserwacje z API estymacji ZTM Gdańsk: jedna na kurs (pole trip). */
-async function fromGdanskDepartures(url) {
+async function fromGdanskDepartures(url, fetchImpl = fetch) {
   const obs = new Map();
   const r = { url, obsCount: 0, stats: { entities: 0, withTripUpdate: 0, withRouteId: 0, withDelay: 0, sampleRouteIds: [] } };
   try {
-    const res = await fetch(url, { headers: UA });
-    r.http = { ok: res.ok, status: res.status, contentType: res.headers.get('content-type') ?? '' };
+    const res = await fetchImpl(url, { headers: UA });
+    r.http = { ok: res.ok, status: res.status, contentType: res.headers?.get?.('content-type') ?? '' };
     if (res.ok) {
       const data = await res.json();
       for (const stop of Object.values(data)) {
@@ -232,6 +232,22 @@ async function fromGdanskDepartures(url) {
   return { obs, urlResults: [classifyUrlResult(r)] };
 }
 
+/**
+ * Odpytuje źródło rt jednego miasta. Nigdy nie rzuca: wyjątek i nieznany typ
+ * źródła stają się wpisem urlResults (kind 'exception'), więc awaria jednego
+ * miasta trafia do podsumowania, a pozostałe miasta są dalej zbierane.
+ * deps: { names, fetchImpl, decoder } — wstrzykiwane w testach (bez sieci).
+ */
+export async function collectCity(cfg, { names = {}, fetchImpl = fetch, decoder = null } = {}) {
+  try {
+    if (cfg.rt.type === 'gtfsrt') return await fromGtfsRt(cfg.rt.urls, names, fetchImpl, decoder);
+    if (cfg.rt.type === 'gdansk-departures') return await fromGdanskDepartures(cfg.rt.url, fetchImpl);
+    return { obs: new Map(), urlResults: [{ url: '-', kind: 'exception', detail: `nieznany typ rt: ${cfg.rt.type}` }] };
+  } catch (err) {
+    return { obs: new Map(), urlResults: [{ url: '-', kind: 'exception', detail: err.message }] };
+  }
+}
+
 async function main() {
   const root = path.join(import.meta.dirname, '..');
   const cities = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cities.json'), 'utf8'));
@@ -244,19 +260,7 @@ async function main() {
 
   for (const [cityKey, cfg] of Object.entries(cities)) {
     if (!cfg.rt) { reports.push({ cityKey, verdict: cityVerdict(false, 0), urlResults: [] }); continue; }
-    let obs = new Map();
-    let urlResults = [];
-    try {
-      const res = cfg.rt.type === 'gtfsrt'
-        ? await fromGtfsRt(cfg.rt.urls, routeNameMap(root, cityKey))
-        : cfg.rt.type === 'gdansk-departures'
-          ? await fromGdanskDepartures(cfg.rt.url)
-          : { obs: new Map(), urlResults: [{ url: '-', kind: 'exception', detail: `nieznany typ rt: ${cfg.rt.type}` }] };
-      obs = res.obs; urlResults = res.urlResults;
-    } catch (err) {
-      // jedno zepsute miasto nie może przerwać zbierania dla pozostałych
-      urlResults = [{ url: '-', kind: 'exception', detail: err.message }];
-    }
+    const { obs, urlResults } = await collectCity(cfg, { names: routeNameMap(root, cityKey) });
     for (const u of urlResults) if (u.kind !== 'ok') console.warn(`${cityKey}: ${u.kind} — ${u.url} — ${u.detail}`);
     const verdict = cityVerdict(true, obs.size, urlResults);
     reports.push({ cityKey, verdict, urlResults });
