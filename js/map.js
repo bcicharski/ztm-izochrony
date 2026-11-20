@@ -11,6 +11,52 @@ import { reducedMotionFrom, geoErrorMessage } from './uilogic.js';
 
 export const ZONE_ALPHA = 0.55;
 
+// Koła szacunkowe (przystanki spoza siatki pieszej) rysowane kreskowaniem,
+// żeby nie wyglądały jak zasięg policzony po lądzie (Z-077).
+export const APPROX_TILE = 8; // okres wzoru [px CSS]
+export const APPROX_LINE = 2; // grubość kreski [px CSS]
+export const APPROX_UNDERLAY = 0.35; // kryjność podkładu pod kreskami
+export const APPROX_MIN_R = 6; // poniżej tego promienia 1 km [px] wzór zamienia się w szum
+export const APPROX_SMALL_ALPHA = 0.7; // jednolite wypełnienie w małej skali
+
+/** Czy koło 1 km ma w tej skali za mało pikseli na wzór. */
+export const isApproxSmallScale = pxPerM => 1000 * pxPerM < APPROX_MIN_R;
+
+/** Czy w wyniku (całym, nie tylko w widoku) jest choć jedno koło szacunkowe. */
+export const hasApproxCircles = zones => (zones ?? []).some(z => z.circles?.length);
+
+const hatchCache = new Map();
+
+/**
+ * Wzór kreskowania 45° w danym kolorze. Kafel w pikselach urządzenia
+ * (`APPROX_TILE * dpr`); `setTransform(1/dpr)` neutralizuje skalę bufora
+ * (`bctx.scale(dpr, dpr)`), więc okres na ekranie to zawsze APPROX_TILE px CSS.
+ * Trzy odcinki (przekątna i dwa narożniki) dają ciągłość kreski na szwach.
+ * Cache po `kolor|dpr` — kilka małych płócien na całe życie strony.
+ */
+export function hatchPattern(color, dpr, ctx) {
+  const key = `${color}|${dpr}`;
+  let pattern = hatchCache.get(key);
+  if (pattern) return pattern;
+  const S = Math.round(APPROX_TILE * dpr);
+  const tile = document.createElement('canvas');
+  tile.width = S;
+  tile.height = S;
+  const t = tile.getContext('2d');
+  t.strokeStyle = color;
+  t.lineWidth = APPROX_LINE * dpr;
+  t.lineCap = 'butt';
+  t.beginPath();
+  t.moveTo(0, S); t.lineTo(S, 0);
+  t.moveTo(0, S / 2); t.lineTo(S / 2, 0);
+  t.moveTo(S / 2, S); t.lineTo(S, S / 2);
+  t.stroke();
+  pattern = ctx.createPattern(tile, 'repeat');
+  pattern.setTransform(new DOMMatrix().scale(1 / dpr));
+  hatchCache.set(key, pattern);
+  return pattern;
+}
+
 /**
  * Czy system prosi o ograniczenie ruchu. Pytanie zadawane w chwili wywołania,
  * nie raz na starcie — zmiana ustawienia systemu działa bez przeładowania.
@@ -134,7 +180,16 @@ export const ZoneLayer = L.Layer.extend({
 
   setZones(zones) {
     this._zones = zones;
+    this._markApprox();
     this._redraw();
+  },
+
+  /**
+   * Znacznik dla legendy: `data-approx` na <html>, gdy wynik ma koła
+   * szacunkowe. Ustawiany przy zmianie wyniku, nie przy przesuwaniu mapy.
+   */
+  _markApprox() {
+    document.documentElement.toggleAttribute('data-approx', hasApproxCircles(this._zones));
   },
 
   /**
@@ -161,7 +216,7 @@ export const ZoneLayer = L.Layer.extend({
    */
   update({ grid, zones, contours } = {}) {
     if (grid !== undefined) this._grid = grid;
-    if (zones !== undefined) this._zones = zones;
+    if (zones !== undefined) { this._zones = zones; this._markApprox(); }
     if (contours !== undefined) this._contours = contours;
     this._redraw();
   },
@@ -224,6 +279,7 @@ export const ZoneLayer = L.Layer.extend({
       bctx.drawImage(g.canvas, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
     }
 
+    const smallScale = isApproxSmallScale(pxPerM);
     for (const zone of this._zones ?? []) {
       bctx.fillStyle = zone.color;
       bctx.beginPath();
@@ -234,7 +290,19 @@ export const ZoneLayer = L.Layer.extend({
         bctx.moveTo(p.x + r, p.y);
         bctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       }
-      bctx.fill();
+      if (!zone.circles.length) continue; // pusta ścieżka: nic do rysowania
+      if (smallScale) {
+        bctx.globalAlpha = APPROX_SMALL_ALPHA;
+        bctx.fill();
+      } else {
+        // podkład + kreskowanie na tej samej ścieżce (kołach nie buduje się drugi raz)
+        bctx.globalAlpha = APPROX_UNDERLAY;
+        bctx.fill();
+        bctx.globalAlpha = 1;
+        bctx.fillStyle = hatchPattern(zone.color, dpr, bctx);
+        bctx.fill();
+      }
+      bctx.globalAlpha = 1;
     }
 
     // wytnij wodę (reguła nonzero: wyspy w pierścieniach wody zostają)

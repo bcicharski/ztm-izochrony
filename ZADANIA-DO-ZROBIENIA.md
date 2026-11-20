@@ -237,13 +237,12 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
 - Jak sprawdzić: nieznane.
 
-### Z-077 [P3] Dalekie koła wyglądają jak wynik pomiaru, a są zgadywaniem
+### Z-078 [P3] Eksport SVG nie odróżnia zasięgu szacunkowego od policzonego
 - Status: nowe
 - Zgłoszone: 2026-11-20 (nieznane)
-- Problem: płaski dysk 1 km dla przystanku dalej niż 1 km od siatki (349 pozycji w pasie 1–5 km, 455 powyżej 5 km, najdalej ok. 120 km) jest nie do odróżnienia wizualnie od policzonej strefy. Dotyczy 804 pozycji w 8 miastach (najwięcej: Warszawa 391, Kraków 146, Trójmiasto 95).
-- Dowód: pomiar 2026-11-20 (patrz Z-007, luka 2).
-- Wygląd i UX (do zaprojektowania przez `esteta`): deseń, przezroczystość albo podpis odróżniający zasięg przybliżony od policzonego.
-- Pliki: js/map.js, css/style.css.
+- Problem: eksport stref do pliku SVG nie odróżnia zasięgu szacunkowego od policzonego — koła dalekich przystanków nie są tam kreskowane. Kreskowanie z Z-077 dotyczy tylko płótna na mapie.
+- Dowód: obserwacja przy wdrożeniu Z-077 (2026-11-20).
+- Pliki: js/uilogic.js.
 - Jak sprawdzić: nieznane.
 
 ## Zrobione
@@ -256,6 +255,15 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Rozwiązanie (wdrożone 2026-11-20): tempo wyjścia liczone raz w `js/engine.js` i przekazywane do capu oraz do obu wywołań `buildZones`; `buildZones` w `js/isochrone.js` przyjmuje dwie opcje — tempo wyjścia (domyślnie piesze) i tempo wokół punktu użytkownika (domyślnie równe tempu wyjścia), więc wywołania bez nowych opcji dają wynik identyczny. Zakres rozszerzony o `js/isochrone.js`: `buildZones` liczy promień pasma też stałą `WALK_MPS`, a cap jest tylko górnym ograniczeniem, więc sama poprawka capu nie zmieniała nic bez limitu spaceru — to druga połowa tego samego problemu, nie osobne zadanie. Świadome odstępstwo: koło wokół punktu użytkownika w gałęzi awaryjnej dostaje tempo dojścia, bo statystyki liczą ten punkt tempem dojścia; różnica widoczna tylko w trybie „rowerem do przystanku” z kierunkiem „do miejsca”. Gałąź bez capu jest uruchamiana tylko, gdy wczytanie geometrii miasta się nie powiedzie; wszystkie 18 miast ma komplet plików, Białystok i Rzeszów (bez `gridBbox`) budują siatkę ze swojego `bbox`, a w gałęzi z siatką obowiązuje cap 1000 m.
 - Pliki: js/engine.js, js/isochrone.js; testy: tests/engine.test.mjs, tests/isochrone.test.mjs.
 - Jak sprawdzić: 5 nowych testów w `tests/engine.test.mjs` i `tests/isochrone.test.mjs`. Po cofnięciu poprawki przez `git stash` cztery padają (pass 31, fail 4): promień pasma w trybie rowerowym 4422 m zamiast 14740 m, test `buildZones` 5192,3 zamiast 16200, dwa testy capu 240,38 zamiast 801,28; piąty (regresja dotychczasowego zachowania) przechodzi przed i po. `npm run check`: tests 484, pass 483, fail 0, skipped 1, lint czysty. Zmierzone: przy limicie spaceru 250 s promień dalekiego koła 240,4 m → 801,3 m; bez limitu pasmo „do 90 min” wokół przystanku osiąganego w 13,35 min 4422,1 m → 14740,4 m (oba razy 3,33, zgodnie ze stosunkiem prędkości). Sprawdzone w przeglądarce: Trójmiasto, tryb „rowerem w pojeździe”, limit spaceru 5 min — strona renderuje się, woda blokuje zasięg, konsola bez błędów; Białystok w trybie rowerowym bez błędów. Niezweryfikowane: wygląd po zmianie na pozostałych 16 miastach; realny zasięg po poprawce na danych produkcyjnych nieporównany z rozkładem; widok mobilny.
+
+### Z-077 [P3] Dalekie koła wyglądają jak wynik pomiaru, a są zgadywaniem
+- Status: zrobione
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: płaski dysk 1 km dla przystanku dalej niż 1 km od siatki (349 pozycji w pasie 1–5 km, 455 powyżej 5 km, najdalej ok. 120 km) był nie do odróżnienia wizualnie od policzonej strefy. Dotyczyło 804 pozycji w 8 miastach (najwięcej: Warszawa 391, Kraków 146, Trójmiasto 95).
+- Dowód: pomiar 2026-11-20 (patrz Z-007, luka 2).
+- Wygląd i UX (wdrożone 2026-11-20): koła zasięgu szacunkowego w linii prostej są kreskowane pod 45 stopni na lekkim podkładzie w kolorze pasma; strefa policzona zostaje pełnym wypełnieniem. W legendzie nota „Kreskowane: zasięg szacunkowy, w linii prostej" z próbką wzoru, widoczna tylko wtedy, gdy wynik zawiera koła. Przy oddaleniu do zoomu ok. 9 i mniej kreskowanie znika, zostaje jednolite, jaśniejsze wypełnienie (świadome ustępstwo). Bez nowych tokenów, bez animacji i przejść.
+- Pliki: js/map.js, index.html, css/style.css, tests/approx-circles.test.mjs.
+- Jak sprawdzić: 4 nowe testy w `tests/approx-circles.test.mjs` (próg małej skali, znacznik legendy dla pustych i niepustych kształtów, pamięć podręczna wzorów, kontrakt noty i reguł jej pokazywania); `npm run check`: tests 488, pass 487, fail 0, skipped 1, lint czysty. Sprawdzone w przeglądarce: Trójmiasto (okolice Tczewa i Pruszcza Gdańskiego), Warszawa (Legionowo, Pruszków), Łódź bez kół i bez noty, przełączenie miast zdejmuje notę, widok 375 px, konsola bez błędów. Niezweryfikowane: Kraków, Poznań, Toruń, Bydgoszcz, Kielce; zwinięty panel z notą; wzór w powiększeniu pikselowym potwierdzony odczytem pikseli, nie obrazem.
 
 ### Z-071 [P2] Dymek przystanku spotkania z trasami obu osób i kopiowanie zaproszenia
 - Status: zrobione

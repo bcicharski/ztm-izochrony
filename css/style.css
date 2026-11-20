@@ -810,6 +810,16 @@ fieldset.control:disabled label { cursor: default; }
   color: var(--muted);
 }
 
+/* Nota o kołach szacunkowych (Z-077): widoczna tylko, gdy wynik je zawiera
+   (atrybut ustawia ZoneLayer). Próbka neutralna — opisuje wzór, nie pasmo. */
+.legend .note-approx { display: none; align-items: center; gap: 6px; }
+html[data-approx] .legend .note-approx { display: flex; }
+.swatch-approx {
+  flex: none; width: 22px; height: 12px; border-radius: 3px;
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(45deg, var(--muted) 0 2px, transparent 2px 5px);
+}
+
 /* ---------- status / stopka ---------- */
 
 /* Tylko dla czytników ekranu (komunikat o wyniku, Z-045). */
