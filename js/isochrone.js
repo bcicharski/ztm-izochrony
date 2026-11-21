@@ -35,7 +35,11 @@ const MIN_RADIUS_M = 60;
  * @param {{walk: boolean, origin: {lat:number, lon:number}, maxRadiusM?: number}} opts
  *        `maxRadiusM` — górny cap promienia (fallback dla przystanków poza siatką);
  *        `egressMps` — tempo wyjścia z przystanku [m/s], domyślnie WALK_MPS;
- *        `originMps` — tempo wokół punktu użytkownika, domyślnie `egressMps`
+ *        `originMps` — tempo wokół punktu użytkownika, domyślnie `egressMps`;
+ *        `capPerStop` — własny górny cap promienia per przystanek [m] (indeks jak w
+ *        `minutes`; brak wartości = bez capa). Działa także bez spaceru. Używane
+ *        przy przystankach tuż za krawędzią siatki (Z-007): koło nie wchodzi w siatkę,
+ *        tam pracuje fala z nasion brzegowych (`borderSeeds`)
  * @returns {Array<{color: string, circles: Array<[lat, lon, radiusM]>}>}
  *          kolejność: od najchłodniejszej (rysować pierwszą) do najcieplejszej
  */
@@ -45,6 +49,7 @@ export function buildZones(net, minutes, opts) {
   // tempo wyjścia z przystanku (rower w pojeździe: rowerowe); origin domyślnie tym samym
   const egressMps = opts.egressMps ?? WALK_MPS;
   const originMps = opts.originMps ?? egressMps;
+  const capPerStop = opts.capPerStop;
 
   if (opts.walk) {
     // punkt startowy zachowuje się jak przystanek o czasie 0
@@ -59,7 +64,12 @@ export function buildZones(net, minutes, opts) {
       if (t > 90) continue;
       for (let b = 0; b < BANDS.length; b++) {
         if (t <= BANDS[b].limit) {
-          const r = Math.max(Math.min((BANDS[b].limit - t) * 60 * egressMps, cap), MIN_RADIUS_M);
+          let r = Math.max(Math.min((BANDS[b].limit - t) * 60 * egressMps, cap), MIN_RADIUS_M);
+          // cap per przystanek stosowany na końcu, więc obcina także MIN_RADIUS_M
+          if (capPerStop && capPerStop[i] < r) {
+            r = capPerStop[i];
+            if (r <= 0) continue;
+          }
           zones[b].circles.push([net.lat[i], net.lon[i], r]);
         }
       }
@@ -69,7 +79,10 @@ export function buildZones(net, minutes, opts) {
       const t = minutes[i];
       if (t > 90) continue;
       const b = BANDS.findIndex(band => t <= band.limit);
-      if (b >= 0) zones[b].circles.push([net.lat[i], net.lon[i], NO_WALK_RADIUS_M]);
+      if (b >= 0) {
+        const r = capPerStop && capPerStop[i] < NO_WALK_RADIUS_M ? capPerStop[i] : NO_WALK_RADIUS_M;
+        if (r > 0) zones[b].circles.push([net.lat[i], net.lon[i], r]);
+      }
     }
   }
 

@@ -271,7 +271,13 @@ linia brzegowa, czyli praktycznie nigdy).
   (woda blokuje, mosty/kładki/mola z OSM przepuszczają), która nie zna ulic.
   Zakres jak siatka — `gridBbox` z `cities.json` (bbox miasta poszerzony
   o przystanki do ~5 km za jego granicą, np. Pruszcz Gdański, Wieliczka);
-  dalekie stacje kolejowe (Lębork, Tczew, Działdowo) leżą poza nim i mają
+  stacje tuż za krawędzią siatki (do 1 km) nie są już płaskim kołem: sieją
+  piksele jej brzegu czasem „przyjazd + odległość w linii prostej / tempo
+  wyjścia", a dalej niesie je ta sama fala po lądzie (woda blokuje, mosty
+  przepuszczają); ich własne koło jest przycięte do odstępu od siatki, więc
+  nie zamazuje wyniku wewnątrz niej. Sam odcinek między stacją a brzegiem
+  (do 1 km) nadal nie ma bariery wody, bo poza siatką nie ma danych o wodzie.
+  Stacje dalsze niż 1 km od siatki (Lębork, Tczew, Działdowo) mają, jak dotąd,
   uproszczony zasięg kołowy ograniczony do 1 km, bez bariery wody.
 - Czasy dojścia **wewnątrz silnika rozkładowego** liczy ten sam graf:
   przesiadki piesze wyznacza prekompilacja (`build-data.mjs` — para odpada,

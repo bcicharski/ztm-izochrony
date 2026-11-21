@@ -153,11 +153,20 @@ function domCanvas(w, h) {
  * osiągalny dłuższą, ale krótszą przestrzennie drogą może zostać ucięty.
  * Odchylenie jest zachowawcze (nigdy nie zawyża zasięgu) i podpikselowe przy
  * typowych proporcjach `maxSpreadM` do `res`.
+ *
+ * Rozszerzenia zgodne w tył (Z-007, nasiona na brzegu siatki):
+ *  - trzeci element nasienia `[idx, sek, startM]` = metry już przebyte (np. w linii
+ *    prostej od przystanku za krawędzią do piksela brzegu); wlicza się do
+ *    `maxSpreadM`. Brak = 0, czyli dwuelementowa krotka działa jak dotąd;
+ *  - `opts.reset: false` — nie zeruje `grid.time`, tylko domieszkuje nasiona do
+ *    istniejącego wyniku. Fala idzie wyłącznie tam, gdzie SKRACA czas, więc
+ *    żaden piksel nigdy nie dostaje czasu dłuższego niż miał (monotoniczność);
+ *  - `opts.mps` — tempo marszu fali [m/s], domyślnie `WALK_MPS`.
  */
-export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
+export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity, { reset = true, mps = WALK_MPS } = {}) {
   const { W, H, res, land, time } = grid;
-  if (seeds) time.fill(UNREACH);
-  const orth = Math.max(1, Math.round(res / WALK_MPS));
+  if (seeds && reset) time.fill(UNREACH);
+  const orth = Math.max(1, Math.round(res / mps));
   const diag = Math.round(orth * Math.SQRT2);
   const limited = Number.isFinite(maxSpreadM);
   // bufor zasięgu trzymany przy siatce (8 MB przy 4 mln komórek — alokacja
@@ -180,13 +189,13 @@ export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
     pending++;
   };
   if (seeds) {
-    for (const [idx, sec] of seeds) {
-      if (idx >= 0 && idx < W * H && land[idx]) push(idx, Math.min(sec, CAP_SEC));
+    for (const [idx, sec, startM = 0] of seeds) {
+      if (idx >= 0 && idx < W * H && land[idx]) push(idx, Math.min(sec, CAP_SEC), startM);
       else if (idx >= 0 && idx < W * H) {
         // przystanek na pikselu wody (pomost, błąd rastra) — spróbuj sąsiadów
         for (const d of [-1, 1, -W, W]) {
           const j = idx + d;
-          if (j >= 0 && j < W * H && land[j]) { push(j, Math.min(sec, CAP_SEC)); break; }
+          if (j >= 0 && j < W * H && land[j]) { push(j, Math.min(sec, CAP_SEC), startM); break; }
         }
       }
     }
@@ -241,16 +250,23 @@ export function computeTimeGrid(grid, seeds, maxSpreadM = Infinity) {
  * styku może wystąpić minimalne (podpikselowe przy res 25–40 m) niedopokrycie
  * po stronie zachowawczej — bez wpływu wizualnego.
  *
+ * Rozszerzenia zgodne w tył (Z-007): trzeci element nasienia `[idx, sek, startM]`
+ * = metry już przebyte w linii prostej (wliczają się do promienia), oraz
+ * `opts.reset: false` — domieszanie nasion do istniejącego wyniku bez zerowania
+ * (zmieniają się tylko piksele, które dostają wcześniejszy przyjazd albo ten sam
+ * przy mniejszym zasięgu; żaden piksel nie dostaje późniejszego).
+ *
  * @param {object} grid   siatka z `buildWalkGrid`
- * @param {Array<[number, number]>} seeds  [pxIndex, sekundy przyjazdu] (bez origin)
+ * @param {Array<[number, number, number?]>} seeds  [pxIndex, sekundy przyjazdu, startM] (bez origin)
  * @param {number} radiusM  promień strefy wokół przystanku [m]
  * @returns {Uint16Array} grid.time (sekundy przyjazdu, UNREACH = poza strefami)
  */
-export function computeNoWalkGrid(grid, seeds, radiusM) {
+export function computeNoWalkGrid(grid, seeds, radiusM, { reset = true } = {}) {
   const { W, H, res, land, time } = grid;
-  time.fill(UNREACH);
+  const fresh = !grid.spread;
   const spread = (grid.spread ??= new Uint16Array(W * H)); // metry po lądzie od przystanku-źródła
-  spread.fill(0xffff);
+  if (reset) time.fill(UNREACH);
+  if (reset || fresh) spread.fill(0xffff);
   const orth = res;
   const diag = Math.round(res * Math.SQRT2);
   const buckets = new Array(CAP_SEC + 1);
@@ -263,7 +279,7 @@ export function computeNoWalkGrid(grid, seeds, radiusM) {
       (buckets[arr] ??= []).push(idx);
     }
   };
-  for (const [idx0, sec] of seeds) {
+  for (const [idx0, sec, startM = 0] of seeds) {
     if (idx0 < 0 || idx0 >= W * H) continue;
     let idx = idx0;
     if (!land[idx]) {
@@ -274,7 +290,7 @@ export function computeNoWalkGrid(grid, seeds, radiusM) {
       }
       if (!land[idx]) continue;
     }
-    push(idx, Math.min(sec, CAP_SEC), 0);
+    push(idx, Math.min(sec, CAP_SEC), startM);
   }
 
   // przetwarzanie kubełkami po czasie przyjazdu (rosnąco) = wcześniejszy koloruje pierwszy;
@@ -307,6 +323,81 @@ export function pixelIndex(grid, lat, lon) {
   const x = Math.round(grid.toX(lon)), y = Math.round(grid.toY(lat));
   if (x < 0 || y < 0 || x >= grid.W || y >= grid.H) return -1;
   return y * grid.W + x;
+}
+
+/**
+ * Odległość punktu od prostokąta siatki [m]; 0 = punkt leży w siatce (czyli
+ * `pixelIndex` go znajduje). Prostokąt to komórki w sensie `pixelIndex`
+ * (zaokrąglanie do najbliższego piksela), więc `gapToGrid > 0` ⇔ `pixelIndex < 0`.
+ */
+export function gapToGrid(grid, lat, lon) {
+  const { W, H, res } = grid;
+  const x = grid.toX(lon), y = grid.toY(lat);
+  const dx = Math.max(-0.5 - x, 0, x - (W - 0.5));
+  const dy = Math.max(-0.5 - y, 0, y - (H - 0.5));
+  return Math.hypot(dx, dy) * res;
+}
+
+/**
+ * Nasiona na brzegu siatki dla przystanku LEŻĄCEGO POZA SIATKĄ (Z-007).
+ * Poza siatką nie ma danych o wodzie ani ulicach, więc przyjmujemy ruch w linii
+ * prostej od przystanku do piksela brzegu; dalej pracuje zwykła fala po lądzie
+ * (woda, mosty, obejście brzegu). Zwraca krotki `[idx, sek, startM]` gotowe dla
+ * `computeTimeGrid` / `computeNoWalkGrid`:
+ *   sek    = przyjazd + odległość / `mps` (albo sam przyjazd przy `addWalk: false`
+ *            — tryb bez spaceru nie dolicza czasu dojścia),
+ *   startM = odległość w linii prostej (wlicza się do limitu rozlania).
+ * Pomijane są piksele wody oraz piksele dalsze niż `reachM`. Boki, które nie
+ * „widzą" przystanku (odcinek do nich przechodziłby przez wnętrze siatki,
+ * w poprzek wody), nie dostają nasion. Piksel narożny leży na dwóch bokach, ale
+ * występuje raz. Przystanek wewnątrz siatki: pusta lista.
+ *
+ * @param {{mps?:number, reachM:number, addWalk?:boolean}} opts
+ * @returns {Array<[number, number, number]>}
+ */
+export function borderSeeds(grid, lat, lon, arrivalSec, { mps = WALK_MPS, reachM, addWalk = true }) {
+  if (!(reachM > 0)) return [];
+  const gap = gapToGrid(grid, lat, lon);
+  if (gap <= 0 || gap > reachM) return [];
+  const { W, H, res, land } = grid;
+  const px = grid.toX(lon), py = grid.toY(lat);
+  const rp = reachM / res;
+  const best = new Map(); // idx -> [idx, sek, startM]; remis rozstrzyga mniejszy czas, potem bliższy
+  const consider = (x, y) => {
+    const idx = y * W + x;
+    if (!land[idx]) return;
+    const d = Math.hypot(x - px, y - py) * res;
+    if (d > reachM) return;
+    const sec = Math.round(arrivalSec + (addWalk ? d / mps : 0));
+    if (sec > CAP_SEC) return;
+    const startM = Math.round(d);
+    const cur = best.get(idx);
+    if (!cur || sec < cur[1] || (sec === cur[1] && startM < cur[2])) best.set(idx, [idx, sec, startM]);
+  };
+  const yLo = Math.max(0, Math.ceil(py - rp)), yHi = Math.min(H - 1, Math.floor(py + rp));
+  const xLo = Math.max(0, Math.ceil(px - rp)), xHi = Math.min(W - 1, Math.floor(px + rp));
+  if (px < 0) for (let y = yLo; y <= yHi; y++) consider(0, y);
+  if (px > W - 1) for (let y = yLo; y <= yHi; y++) consider(W - 1, y);
+  if (py < 0) for (let x = xLo; x <= xHi; x++) consider(x, 0);
+  if (py > H - 1) for (let x = xLo; x <= xHi; x++) consider(x, H - 1);
+  return [...best.values()];
+}
+
+/**
+ * Nasiona brzegowe wszystkich przystanków poza siatką, którym dojazd zajmuje
+ * ≤ 90 min (`mins` w minutach, jak w silniku). Przystanki dalsze niż `reachM`
+ * od siatki nie dają nic — zostają kołami (patrz `buildZones`, `capPerStop`).
+ * @param {{nStops:number, lat:ArrayLike<number>, lon:ArrayLike<number>}} net
+ */
+export function outsideSeeds(grid, net, mins, opts) {
+  const seeds = [];
+  if (!mins) return seeds;
+  for (let i = 0; i < net.nStops; i++) {
+    const t = mins[i];
+    if (!(t <= 90)) continue;
+    for (const s of borderSeeds(grid, net.lat[i], net.lon[i], Math.round(t * 60), opts)) seeds.push(s);
+  }
+  return seeds;
 }
 
 /** Łączy dwie siatki czasów (tryb porównania): wolniejsza osoba decyduje. */

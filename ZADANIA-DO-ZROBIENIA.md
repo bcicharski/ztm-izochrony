@@ -95,14 +95,19 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## Zaprojektowane (gotowe do wdrożenia)
 
+## Nowe (bez projektu rozwiązania)
+
 ### Z-007 [P2] Znane luki modelu
-- Status: zaprojektowane (zatwierdzone 2026-11-20; czeka na wolny limit tygodniowy, nie na decyzję)
+- Status: nowe (częściowo zrobione: luka 2 wdrożona 2026-11-21; luki 1 i 3 otwarte, bez projektu; zadanie NIE jest zamknięte)
 - Decyzja: ZATWIERDZONE do wdrożenia 2026-11-20 z zastrzeżeniem terminu — patrz „Decyzja właściciela (2026-11-20)" niżej. Luka 2 ma gotowy projekt; wdrożenie zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie, czyli rdzeń produktu. Luki 1 i 3 bez projektu.
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: trzy luki — (1) stacje kolejowe 150-400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru (COMPLEX_MAX_M; Kraków SKA, 17 stacji); (2) dalekie przystanki poza gridBbox rysowane kołami 1 km bez bariery wody za krawędzią siatki (poprawione 2026-11-20, patrz niżej); (3) graf pieszy bez tagów krawędzi (schody, deptaki, foot=no dla roweru).
 - Decyzja właściciela (2026-11-20): WDROŻYĆ, ale nie teraz. Projekt „nasiona na brzegu siatki" (luka 2, niżej) zatwierdzony do wdrożenia, z zastrzeżeniem terminu: nie w bieżącym limicie tygodniowym. Wykonać w całości przy pełnym limicie tygodniowym, nigdy w połowie.
   - Powód tego warunku (sedno): samo obcięcie promienia koła, bez zasiewania krawędzi siatki, ZABIERA pokrycie i nic nie daje w zamian — byłoby gorzej niż stan obecny. Obie części (obcięcie promienia i zasiewanie brzegu) muszą wejść razem.
   - Właściciel przyjął do wiadomości konsekwencje: widoczna zmiana obrazu izochrony na obrzeżach Warszawy i Krakowa oraz wzrost statystyki „% powierzchni".
+- Wdrożono 2026-11-21 (tylko luka 2, „nasiona na brzegu siatki"; wpis w CHANGELOG.md, sekcja 2026-11-21): przystanki do 1 km za krawędzią `gridBbox` zasiewają brzeg siatki zamiast płaskiego koła na wierzchu wyniku; dalej liczy fala po lądzie (woda, mosty, sieć ulic); koło przystanku obcięte do odległości od siatki; dalsze przystanki bez zmian. Testy: 19 nowych, `npm run check`: tests 511, pass 510, fail 0, skipped 1, lint czysty.
+- ZMIERZONY EFEKT (2026-11-21), ODBIEGA OD OCZEKIWANIA: statystyka „% powierzchni" NIE wzrosła. Zmiana wynosi 0,000 punktu procentowego w każdym z sześciu pasm, we wszystkich siedmiu sprawdzonych trybach. Przyczyna ustalona: żaden przystanek z pierścienia (Warszawa 52, Kraków 38, Olsztyn 7, Opole 4) nie ma w promieniu 1 km ani jednego piksela maski granic miasta; poprawione piksele leżą poza maską, której statystyka używa. Zmiana jest widoczna na mapie, nie w liczbie. Wzrost statystyki założony w projekcie i w decyzji właściciela (2026-11-20) nie wystąpił.
+- Pozostaje otwarte (bez projektu): luka 1 (stacje kolejowe 150–400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru) — NIE ruszana; luka 3 (graf pieszy bez tagów krawędzi) — NIE ruszana. Dalekie przystanki powyżej 1 km — bez zmian, wymagają szerszego `gridBbox` (zgoda właściciela).
 - Luka 2 — sprostowanie opisu (2026-11-20). Trzy dawne twierdzenia są nieaktualne:
   - „Koła bez bariery wody" — nieprawda. Koła SĄ maskowane wodą przy rysowaniu: warstwa w `js/map.js` wycina poligony i linie z `water.json` trybem `destination-out`. Koło nie maluje po zatoce tam, gdzie zatoka jest w `water.json`.
   - Promień koła jest już ograniczony do 1 km stałą `OUTSIDE_MAX_RADIUS_M` w `js/isochrone.js`. Nie ma kół o promieniu 5 km.
@@ -127,8 +132,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Luka 2 — jak sprawdzić przy wdrożeniu: test monotoniczności (nasiona mogą tylko skracać czas, nigdy go nie wydłużać, dla każdego piksela); regresja na Łodzi (bez przystanków poza siatką) — obraz i statystyki bez żadnej zmiany; regresja barierowa — siatka z pasem wody bez mostu, przystanek za krawędzią po stronie A: piksele po stronie B muszą zostać nieosiągalne; ten sam układ z mostem daje stronę B osiągalną i dłuższy czas; przystanek 10 km za krawędzią daje wynik identyczny jak dziś; narożnik siatki (nasiona na dwóch bokach, bez duplikatów); zgodność w tył obu rozszerzeń krotki i opcji `reset`.
 - Dowód: luka 2 — pomiar 2026-11-20 (wyżej) oraz `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Luki 1 i 3: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js (luki 1 i 3). Luka 2: js/walkgrid.js, js/isochrone.js, js/engine.js, testy w tests/ (walkgrid, isochrone, engine).
-
-## Nowe (bez projektu rozwiązania)
 
 ### Z-003 [P1] Mniejsze dane
 - Status: nowe

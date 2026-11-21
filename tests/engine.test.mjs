@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Engine } from '../js/engine.js';
-import { buildWalkGrid, pixelIndex } from '../js/walkgrid.js';
+import { buildWalkGrid, pixelIndex, outsideSeeds } from '../js/walkgrid.js';
 import { NET_WALK_MPS, NET_BIKE_MPS } from '../js/walknet.js';
 import { WALK_MPS, BIKE_MPS, M_PER_DEG_LAT } from '../js/data.js';
 import { makeRaw, makeWalkRaw, everyN } from './helpers.mjs';
@@ -567,4 +567,71 @@ test('promień pasma (Z-076): tempo wyjścia z przystanku także bez limitu spac
     assert.ok(Number.isFinite(t) && t < 90, `${access}/${direction}: S0 osiągalny`);
     near(r, (90 - t) * 60 * mps, 1e-6, `${access}/${direction}`);
   }
+});
+
+// --- Z-007: przystanki tuż za krawędzią siatki zasiewają jej brzeg ------------------
+
+/** Siatka kończy się ~107 m na zachód od S3/S4/S5 (lon 20,05); S0..S2 leżą w siatce. */
+async function makeRingEngine(city) {
+  globalThis.ImageData ??= class { constructor(w, h) { this.data = new Uint8ClampedArray(w * h * 4); } };
+  let resolveWalk;
+  const walkLoaded = new Promise(r => { resolveWalk = r; });
+  const engine = new Engine({ createCanvas: fakeCanvas, onWalkNet: resolveWalk });
+  assert.equal(await engine.setCity(city, { gridBbox: [49.99, 19.99, 50.0985, 20.0485] }), true);
+  await walkLoaded;
+  return engine;
+}
+
+/** Piksel brzegu siatki (kolumna wschodnia) w wierszu szerokości `lat`, jego odległość od `lon` w m i czas z siatki. */
+function eastEdge(e, lat, lon) {
+  const g = e.last.grid;
+  const x = g.W - 1, y = Math.round(g.toY(lat));
+  return { idx: y * g.W + x, distM: Math.hypot(x - g.toX(lon), y - g.toY(lat)) * g.res, gap: Math.max(0, g.toX(lon) - (g.W - 0.5)) * g.res };
+}
+
+test('nasiona brzegowe (Z-007): przystanek tuż za krawędzią zasiewa brzeg czasem przyjazdu + odległość/tempo, a koło nie wchodzi w siatkę', async () => {
+  const e = await makeRingEngine('tstRingWalk');
+  const { zones } = await run(e, {});
+  const t3 = mins(e)[3];
+  assert.ok(Number.isFinite(t3) && t3 < 90, 'S3 osiągalny');
+  const edge = eastEdge(e, 50.03, 20.05);
+  assert.ok(edge.gap > 50 && edge.gap < 200, `S3 tuż za krawędzią (${edge.gap.toFixed(0)} m)`);
+  const sec = e.last.gridTime[edge.idx];
+  near(sec, t3 * 60 + edge.distM / WALK_MPS, 1.5, 'czas piksela brzegu');
+  // koła wokół S3..S5: promień nie większy niż odstęp od siatki
+  const rings = zones.zones.flatMap(z => z.circles.filter(c => c[1] === 20.05));
+  assert.ok(rings.length > 0);
+  assert.ok(rings.every(c => c[2] <= edge.gap + 1e-6), `promienie ≤ ${edge.gap.toFixed(1)} m`);
+  assert.ok(e.last.gridTime.some((v, i) => v < 65535 && i !== edge.idx), 'fala niesie nasiona w głąb siatki');
+});
+
+test('nasiona brzegowe (Z-007): bez spaceru piksel brzegu dostaje sam czas przyjazdu, koło ≤ odstęp od siatki i ≤ 200 m', async () => {
+  const e = await makeRingEngine('tstRingNoWalk');
+  const { zones } = await run(e, { walk: false });
+  const t3 = mins(e)[3];
+  const edge = eastEdge(e, 50.03, 20.05);
+  assert.equal(e.last.gridTime[edge.idx], Math.round(t3 * 60));
+  const rings = zones.zones.flatMap(z => z.circles.filter(c => c[1] === 20.05));
+  assert.ok(rings.length > 0 && rings.every(c => c[2] <= edge.gap + 1e-6 && c[2] <= 200));
+});
+
+test('nasiona brzegowe (Z-007): limit spaceru krótszy niż odstęp od siatki wyłącza nasiona (zasięg = limit × tempo)', async () => {
+  const e = await makeRingEngine('tstRingLimit');
+  await run(e, { maxWalkSec: 60 }); // 75 m < ~107 m do siatki
+  const t3 = mins(e)[3];
+  const edge = eastEdge(e, 50.03, 20.05);
+  if (Number.isFinite(t3) && t3 < 90) {
+    const sec = e.last.gridTime[edge.idx];
+    assert.ok(sec > t3 * 60 + edge.distM / WALK_MPS + 10, 'piksel brzegu nie dostał nasienia przystanku');
+  }
+});
+
+test('nasiona brzegowe (Z-007): przystanki dalej niż 1 km od siatki nie dają nasion, a ich koła mają dotychczasowy promień', async () => {
+  const e = await makeGridEngine('tstRingFar'); // siatka 2,2 km od S0, S3..S5 jeszcze dalej
+  const { zones } = await run(e, { point: NEAR_S0 });
+  const { net, minutes, grid } = e.last;
+  assert.ok(minutes.some(m => m <= 90), 'są osiągalne przystanki');
+  assert.deepEqual(outsideSeeds(grid, net, minutes, { reachM: 1000 }), []);
+  assert.ok(zones.zones.some(z => z.circles.length > 0));
+  assert.equal(maxRadius(zones), 1000, 'cap kół bez zmian (OUTSIDE_MAX_RADIUS_M)');
 });

@@ -18,7 +18,7 @@ import { computeReachability } from './router.js';
 import { buildZones, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
 import { computeStats, rankMeetingPlaces } from './stats.js';
 import { buildStopIndex, journeyShape } from './uilogic.js';
-import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, pixelIndex, maxTimeGrid, renderTimeGrid, buildContours, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
+import { buildWalkGrid, dropGrid, computeTimeGrid, computeNoWalkGrid, outsideSeeds, gapToGrid, pixelIndex, maxTimeGrid, renderTimeGrid, buildContours, areaPercents, maxBandDistances, UNREACH } from './walkgrid.js';
 
 /** Cap fali pieszej [s] — jak CAP_SEC w walkgrid.js (pasmo „ponad 60" do 90 min). */
 const WALK_CAP_SEC = 90 * 60;
@@ -320,9 +320,26 @@ export class Engine {
       // Fallback rastrowy tnie limitem przez `maxSpreadM`; nasiona są w jednej
       // liście, więc ucina też spacer z samego punktu (graf ulic go oszczędza) —
       // przyjęty kompromis, bez trzeciego bufora siatki.
-      const waveFor = (mins, origin) =>
-        this.walkWaveOnNet(grid, net, mins, origin, speeds, maxWalkSec)
-        ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * WALK_MPS);
+      //
+      // Drugi przebieg (Z-007): przystanki tuż za krawędzią siatki (≤ ringReach)
+      // zasiewają piksele brzegu (`outsideSeeds`) i fala po lądzie niesie je dalej
+      // — z wodą i mostami zamiast płaskiego koła. Osobny przebieg `reset:false`
+      // tylko skraca czasy (nigdy nie wydłuża) i omija limit rozlania 75 m
+      // przebiegu po ulicach; sam jest ograniczony do `ringReach` metrów od
+      // przystanku, czyli do zasięgu dawnego koła. Tempo to tempo wyjścia (Z-076).
+      const ringReach = Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * egressCrow);
+      const waveFor = (mins, origin) => {
+        const time = this.walkWaveOnNet(grid, net, mins, origin, speeds, maxWalkSec)
+          ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * WALK_MPS);
+        const ring = outsideSeeds(grid, net, mins, { mps: egressCrow, reachM: ringReach });
+        return ring.length ? computeTimeGrid(grid, ring, ringReach, { reset: false, mps: egressCrow }) : time;
+      };
+      // tryb bez spaceru: te same nasiona, ale bez doliczania czasu dojścia i w promieniu dawnego koła
+      const noWalkFor = mins => {
+        const time = computeNoWalkGrid(grid, seedsFor(mins, null), NO_WALK_RADIUS_M);
+        const ring = outsideSeeds(grid, net, mins, { reachM: NO_WALK_RADIUS_M, addWalk: false });
+        return ring.length ? computeNoWalkGrid(grid, ring, NO_WALK_RADIUS_M, { reset: false }) : time;
+      };
 
       // tryb porównania liczy dwie fale w tym samym buforze grid.time — pierwszą
       // trzeba odłożyć; drugi bufor trzymany przy siatce zamiast kopii .slice()
@@ -339,27 +356,33 @@ export class Engine {
         }
       } else if (p.compare) {
         // bez spaceru: origin nie jest źródłem (dojście tylko od przystanku)
-        const t1 = keep(computeNoWalkGrid(grid, seedsFor(res.minutes, null), NO_WALK_RADIUS_M));
-        const t2 = computeNoWalkGrid(grid, seedsFor(res2.minutes, null), NO_WALK_RADIUS_M);
+        const t1 = keep(noWalkFor(res.minutes));
+        const t2 = noWalkFor(res2.minutes);
         gridTime = maxTimeGrid(grid, t1, t2);
       } else {
-        gridTime = computeNoWalkGrid(grid, seedsFor(minutes, null), NO_WALK_RADIUS_M);
+        gridTime = noWalkFor(minutes);
       }
       image = renderTimeGrid(grid, gridTime);
       bbox = { latN: grid.latN, lonW: grid.lonW, latS: grid.latS, lonE: grid.lonE };
       // koła tylko dla przystanków poza bboxem siatki (np. Lębork, Tczew w feedzie
       // SKM). Promień ograniczony capem — pełny promień pasma (do 5,2 km) rysowany
       // bez bariery wody zlewał się w plamę większą niż zasięg siatki
+      // Z-007: koło przystanku tuż za krawędzią jest przycięte do jego odległości od
+      // siatki (`capPerStop`), więc nie zamazuje wyniku fali wewnątrz niej; jego
+      // pokrycie przejmują nasiona brzegowe. Przystanki dalsze niż zasięg nasion
+      // dostają cap większy niż ich dotychczasowy promień — bez zmian.
       const outside = new Float64Array(minutes.length).fill(Infinity);
+      const capPerStop = new Float64Array(minutes.length).fill(Infinity);
       let anyOutside = false;
       for (let i = 0; i < net.nStops; i++) {
         if (minutes[i] <= 90 && pixelIndex(grid, net.lat[i], net.lon[i]) < 0) {
           outside[i] = minutes[i];
+          capPerStop[i] = gapToGrid(grid, net.lat[i], net.lon[i]);
           anyOutside = true;
         }
       }
       zones = anyOutside
-        ? buildZones(net, outside, { walk: p.walk, origin: null, egressMps: egressCrow, maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * egressCrow) })
+        ? buildZones(net, outside, { walk: p.walk, origin: null, egressMps: egressCrow, maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * egressCrow), capPerStop })
         : null;
     } else {
       // brak geometrii miasta: koła crow-fly. W trybie „tylko pieszo" zostają

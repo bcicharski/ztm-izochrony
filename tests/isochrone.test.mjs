@@ -41,3 +41,32 @@ test('buildZones (Z-076): bez opcji egressMps wynik jak dla WALK_MPS; z opcją p
   const capped = buildZones(net, minutes, { walk: true, origin, egressMps: v, maxRadiusM: 1000 });
   assert.ok(capped.every(z => z.circles.every(c => c[2] <= 1000)), 'cap nadal obowiązuje');
 });
+
+test('buildZones (Z-007): capPerStop obcina promień tylko wskazanych przystanków, także poniżej MIN_RADIUS_M; bez opcji wynik bez zmian', () => {
+  const minutes = Float64Array.from([5, 25, 40]);
+  const radii = zs => zs.map(z => ({ limit: z.limit, c: z.circles.map(c => c.join(',')) }));
+  const base = buildZones(net, minutes, { walk: true, origin: null, egressMps: 1.2 });
+  assert.deepEqual(radii(buildZones(net, minutes, { walk: true, origin: null, egressMps: 1.2, capPerStop: undefined })), radii(base));
+  assert.deepEqual(radii(buildZones(net, minutes, { walk: true, origin: null, egressMps: 1.2, capPerStop: [Infinity, Infinity, Infinity] })), radii(base), 'cap nieskończony = bez capa');
+  const capped = buildZones(net, minutes, { walk: true, origin: null, egressMps: 1.2, capPerStop: [Infinity, 30, Infinity] });
+  const of = (zs, lat) => zs.flatMap(z => z.circles.filter(c => c[0] === lat).map(c => c[2]));
+  assert.ok(of(capped, 50.01).length > 0 && of(capped, 50.01).every(r => r === 30), 'przystanek 1: 30 m (poniżej MIN_RADIUS_M = 60)');
+  assert.deepEqual(of(capped, 50), of(base, 50), 'pozostałe przystanki bez zmian');
+  assert.deepEqual(of(capped, 50.02), of(base, 50.02));
+  // cap większy od promienia nie powiększa koła
+  const loose = buildZones(net, minutes, { walk: true, origin: null, egressMps: 1.2, capPerStop: [1e6, 1e6, 1e6] });
+  assert.deepEqual(radii(loose), radii(base));
+  // cap 0 = brak koła
+  const none = buildZones(net, minutes, { walk: true, origin: null, capPerStop: [Infinity, 0, Infinity] });
+  assert.equal(of(none, 50.01).length, 0);
+});
+
+test('buildZones (Z-007): bez spaceru capPerStop też obcina koło 200 m; dalekie przystanki zostają przy NO_WALK_RADIUS_M', () => {
+  const minutes = Float64Array.from([5, 5, 5]);
+  const z = buildZones(net, minutes, { walk: false, capPerStop: [90, Infinity, NO_WALK_RADIUS_M + 500] });
+  const r = lat => z.flatMap(b => b.circles.filter(c => c[0] === lat).map(c => c[2]));
+  assert.deepEqual(r(50), [90]);
+  assert.deepEqual(r(50.01), [NO_WALK_RADIUS_M]);
+  assert.deepEqual(r(50.02), [NO_WALK_RADIUS_M], 'cap większy od 200 m nie zmienia koła');
+  assert.deepEqual(buildZones(net, minutes, { walk: false, capPerStop: [0, 0, 0] }).flatMap(b => b.circles), [], 'cap 0 = brak koła');
+});

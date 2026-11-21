@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeTimeGrid, computeNoWalkGrid, maxTimeGrid, areaPercents, maxBandDistances, pixelIndex, UNREACH } from '../js/walkgrid.js';
+import { computeTimeGrid, computeNoWalkGrid, maxTimeGrid, areaPercents, maxBandDistances, pixelIndex, gapToGrid, borderSeeds, outsideSeeds, UNREACH } from '../js/walkgrid.js';
+import { rng } from './helpers.mjs';
 import { WALK_MPS } from '../js/data.js';
 
 /** Siatka W×H, res m/px; woda w kolumnach [x0,x1] z opcjonalnym mostem w wierszu y. */
@@ -139,4 +140,165 @@ test('computeTimeGrid(null): wynik nie zależy od starego grid.spread (Z-070)', 
   assert.deepEqual(b, a);
   assert.ok(b[idx(g, 10, 10)] < UNREACH, 'fala sięga ok. 300 m od ulicy');
   assert.equal(b[idx(g, 30, 10)], UNREACH, 'ale nie dalej niż limit');
+});
+
+// --- Z-007: nasiona na brzegu siatki (przystanki tuż za krawędzią) --------------
+
+test('gapToGrid: 0 w siatce (zgodnie z pixelIndex), odległość do prostokąta poza nią', () => {
+  const g = grid(); // 40×20, res 25, toX/toY = tożsamość: „lon" = x, „lat" = y
+  assert.equal(gapToGrid(g, 10, 20), 0);
+  assert.equal(gapToGrid(g, 0, 0), 0);
+  assert.equal(gapToGrid(g, 10, -5.5), 5 * 25, 'na zachód od siatki: 5 px');
+  assert.equal(gapToGrid(g, 10, 39.5 + 4), 4 * 25, 'na wschód');
+  assert.equal(gapToGrid(g, -3.5, 10), 3 * 25, 'na północ');
+  assert.equal(gapToGrid(g, 19.5 + 6, 10), 6 * 25, 'na południe');
+  assert.equal(gapToGrid(g, -3.5, -4.5), Math.hypot(3, 4) * 25, 'narożnik: odległość euklidesowa');
+  for (const [y, x] of [[10, -0.6], [10, 39.6], [-0.6, 5], [19.6, 5], [3, 3], [19, 39]]) {
+    assert.equal(gapToGrid(g, y, x) > 0, pixelIndex(g, y, x) < 0, `spójne z pixelIndex dla (${x}, ${y})`);
+  }
+});
+
+test('borderSeeds: tylko piksele brzegu widoczne z przystanku, czas = przyjazd + odległość/tempo, startM = odległość', () => {
+  const g = grid();
+  const seeds = borderSeeds(g, 10, -4, 600, { mps: 1, reachM: 110 }); // y=10, x=-4 → 4 px = 100 m od brzegu
+  assert.ok(seeds.length > 0);
+  assert.ok(seeds.every(([i]) => i % g.W === 0), 'wyłącznie zachodnia kolumna (x = 0)');
+  const at = Object.fromEntries(seeds.map(([i, sec, m]) => [Math.floor(i / g.W), [sec, m]]));
+  assert.deepEqual(at[10], [600 + 100, 100], 'na wprost: 100 m');
+  assert.equal(at[7], undefined, 'piksel 125 m poza zasięgiem');
+  assert.deepEqual(borderSeeds(g, 10, -4, 600, { mps: 1, reachM: 99 }), [], 'zasięg krótszy niż odstęp od siatki: nic');
+  const wide = borderSeeds(g, 10, -4, 600, { mps: 1, reachM: 200 });
+  const w = Object.fromEntries(wide.map(([i, sec, m]) => [Math.floor(i / g.W), [sec, m]]));
+  const d3 = Math.round(Math.hypot(4, 3) * 25);
+  assert.deepEqual(w[7], [600 + d3, d3]);
+  // tryb bez spaceru: czas to sam przyjazd, metry dalej liczą się do promienia
+  const nw = borderSeeds(g, 10, -4, 600, { reachM: 200, addWalk: false });
+  assert.ok(nw.length > 0 && nw.every(([, sec]) => sec === 600));
+  assert.deepEqual(borderSeeds(g, 10, 5, 600, { mps: 1, reachM: 500 }), [], 'przystanek w siatce: bez nasion');
+  assert.deepEqual(borderSeeds(g, 10, -4, 5399, { mps: 1, reachM: 500 }).filter(([, sec]) => sec > 5400), [], 'czas > 90 min odpada');
+});
+
+test('borderSeeds: woda na brzegu nie dostaje nasion; narożnik ma nasiona na dwóch bokach, ale bez duplikatów', () => {
+  const g = grid({ water: [0, 0] }); // cała zachodnia kolumna to woda
+  assert.deepEqual(borderSeeds(g, 10, -3, 0, { mps: 1, reachM: 500 }), [], 'brzeg z wody: brak nasion');
+  const c = grid();
+  const seeds = borderSeeds(c, -3, -3, 0, { mps: 1, reachM: 200 }); // narożnik NW, 3 px po przekątnej
+  const ids = seeds.map(([i]) => i);
+  assert.equal(new Set(ids).size, ids.length, 'bez duplikatów');
+  assert.equal(ids.filter(i => i === idx(c, 0, 0)).length, 1, 'piksel narożny dokładnie raz');
+  assert.ok(ids.some(i => i % c.W === 0 && i > 0), 'jest bok zachodni (x = 0, y > 0)');
+  assert.ok(ids.some(i => i < c.W && i > 0), 'jest bok północny (y = 0, x > 0)');
+  // przystanek na wprost zachodniego boku nie sieje północnego (odcinek przecinałby siatkę)
+  assert.ok(borderSeeds(c, 3, -3, 0, { mps: 1, reachM: 500 }).every(([i]) => i % c.W === 0));
+});
+
+test('outsideSeeds: zbiera nasiona przystanków poza siatką osiągalnych w 90 min, pomija dalekie, wewnętrzne i nieosiągalne', () => {
+  const g = grid();
+  const net = { nStops: 5, lat: [10, 10, 10, 10, 10], lon: [-3, 20, -3, -40, -3] };
+  const mins = [5, 5, 120, 5, NaN];
+  const seeds = outsideSeeds(g, net, mins, { mps: 1, reachM: 100 });
+  assert.ok(seeds.length > 0);
+  assert.ok(seeds.every(([, sec]) => sec >= 300 && sec <= 400), 'tylko przystanek 0');
+  assert.deepEqual(outsideSeeds(g, net, null, { reachM: 100 }), []);
+});
+
+test('computeTimeGrid: krotka dwuelementowa i trzyelementowa z 0 dają ten sam wynik, startM zjada limit rozlania', () => {
+  const a = grid(), b = grid();
+  const base = [[idx(a, 10, 10), 100], [idx(a, 30, 5), 200]];
+  computeTimeGrid(a, base, 300);
+  computeTimeGrid(b, base.map(s => [...s, 0]), 300);
+  assert.deepEqual([...b.time], [...a.time]);
+  const s = grid();
+  computeTimeGrid(s, [[idx(s, 10, 10), 100, 50]], 60); // 50 m już przebyte, zostaje 10 m < 1 piksel
+  assert.equal(s.time[idx(s, 10, 10)], 100);
+  assert.equal(s.time[idx(s, 11, 10)], UNREACH);
+  const u = grid();
+  computeTimeGrid(u, [[idx(u, 10, 10), 100, 50]]); // bez limitu startM nic nie zmienia
+  assert.equal(u.time[idx(u, 13, 10)], 100 + 3 * ORTH);
+});
+
+test('computeTimeGrid: bez nowych opcji wynik bajt w bajt jak przed Z-007 (reset domyślnie, tempo WALK_MPS)', () => {
+  const a = grid({ water: [20, 21], bridgeY: 10 }), b = grid({ water: [20, 21], bridgeY: 10 });
+  const seeds = [[idx(a, 5, 10), 0], [idx(a, 12, 3), 90]];
+  computeTimeGrid(a, seeds, 400);
+  computeTimeGrid(b, seeds, 400, { reset: true, mps: WALK_MPS });
+  assert.deepEqual([...b.time], [...a.time]);
+});
+
+test('computeTimeGrid: opts.mps skaluje tempo fali', () => {
+  const g = grid();
+  computeTimeGrid(g, [[idx(g, 2, 10), 0]], Infinity, { mps: 2 * WALK_MPS });
+  assert.equal(g.time[idx(g, 12, 10)], 10 * Math.round(25 / (2 * WALK_MPS)));
+});
+
+test('monotoniczność (Z-007): nasiona brzegowe domieszane reset:false nigdy nie wydłużają czasu żadnego piksela', () => {
+  for (let seed = 1; seed <= 25; seed++) {
+    const r = rng(seed);
+    const g = grid({ W: 60, H: 40 });
+    for (let k = 0; k < 6; k++) { // losowa woda (prostokąty)
+      const x0 = Math.floor(r() * 50), y0 = Math.floor(r() * 30), w = 1 + Math.floor(r() * 8), h = 1 + Math.floor(r() * 8);
+      for (let y = y0; y < Math.min(40, y0 + h); y++) for (let x = x0; x < Math.min(60, x0 + w); x++) g.land[y * 60 + x] = 0;
+    }
+    const inner = Array.from({ length: 5 }, () => [Math.floor(r() * 2400), Math.floor(r() * 4000)]);
+    const limit = r() < 0.5 ? Infinity : 75 + Math.floor(r() * 400);
+    computeTimeGrid(g, inner, limit);
+    const before = Uint16Array.from(g.time);
+    const net = { nStops: 4, lat: [], lon: [] };
+    for (let k = 0; k < 4; k++) { // przystanki tuż za losowym bokiem
+      const side = Math.floor(r() * 4);
+      const along = r() * 40;
+      const off = -(0.6 + r() * 8);
+      if (side === 0) { net.lat.push(along); net.lon.push(off); }
+      else if (side === 1) { net.lat.push(along); net.lon.push(59 - off); }
+      else if (side === 2) { net.lat.push(off); net.lon.push(along + 10); }
+      else { net.lat.push(39 - off); net.lon.push(along + 10); }
+    }
+    const ring = outsideSeeds(g, net, [10, 20, 30, 5], { mps: WALK_MPS, reachM: 1000 });
+    assert.ok(ring.length > 0, `seed ${seed}: są nasiona`);
+    computeTimeGrid(g, ring, 1000, { reset: false });
+    for (let i = 0; i < before.length; i++) {
+      assert.ok(g.time[i] <= before[i], `seed ${seed}, piksel ${i}: ${g.time[i]} > ${before[i]}`);
+    }
+  }
+});
+
+test('bariera wody (Z-007): bez mostu druga strona pasa wody nieosiągalna, z mostem osiągalna i później', () => {
+  const run = bridgeY => {
+    const g = grid({ W: 60, H: 20, water: [30, 31], bridgeY });
+    computeTimeGrid(g, [], Infinity); // pierwszy przebieg: pusto (brak źródeł wewnątrz)
+    const ring = borderSeeds(g, 10, -4, 0, { mps: WALK_MPS, reachM: 1500 }); // przystanek 100 m za zachodnim brzegiem
+    assert.ok(ring.length > 0);
+    computeTimeGrid(g, ring, 1500, { reset: false });
+    return g;
+  };
+  const blocked = run(-1);
+  const bridged = run(10);
+  const open = grid({ W: 60, H: 20 });
+  computeTimeGrid(open, borderSeeds(open, 10, -4, 0, { mps: WALK_MPS, reachM: 1500 }), 1500);
+  assert.ok(blocked.time[idx(blocked, 20, 10)] < UNREACH, 'strona A osiągalna');
+  for (let y = 0; y < 20; y++) assert.equal(blocked.time[idx(blocked, 40, y)], UNREACH, `strona B bez mostu (y=${y})`);
+  assert.ok(bridged.time[idx(bridged, 40, 10)] < UNREACH, 'strona B przez most');
+  assert.ok(bridged.time[idx(bridged, 40, 3)] < UNREACH, 'także dalej od mostu');
+  assert.ok(bridged.time[idx(bridged, 40, 3)] > open.time[idx(open, 40, 3)], 'objazd przez most trwa dłużej niż bez wody');
+});
+
+test('computeNoWalkGrid (Z-007): zgodność w tył, startM zjada promień, reset:false tylko skraca', () => {
+  const a = grid({ water: [20, 21] }), b = grid({ water: [20, 21] });
+  const seeds = [[idx(a, 8, 10), 600], [idx(a, 14, 10), 300]];
+  computeNoWalkGrid(a, seeds, 100);
+  computeNoWalkGrid(b, seeds, 100, { reset: true });
+  assert.deepEqual([...b.time], [...a.time]);
+  const c = grid();
+  computeNoWalkGrid(c, [[idx(c, 10, 10), 500, 75]], 100); // zostaje 25 m = 1 piksel
+  assert.equal(c.time[idx(c, 11, 10)], 500);
+  assert.equal(c.time[idx(c, 12, 10)], UNREACH);
+  // dwuprzebiegowo: wcześniejszy przyjazd z nasion przejmuje piksele, pozostałe bez zmian
+  const d = grid();
+  computeNoWalkGrid(d, [[idx(d, 5, 10), 900]], 100);
+  const before = Uint16Array.from(d.time);
+  computeNoWalkGrid(d, [[idx(d, 0, 10), 300, 25]], 100, { reset: false });
+  for (let i = 0; i < before.length; i++) assert.ok(d.time[i] <= before[i], `piksel ${i}`);
+  assert.equal(d.time[idx(d, 1, 10)], 300);
+  assert.equal(d.time[idx(d, 3, 10)], 300, 'wcześniejszy przyjazd wygrywa');
+  assert.equal(d.time[idx(d, 9, 10)], 900, 'poza zasięgiem nasienia: wynik pierwszego przebiegu');
 });
