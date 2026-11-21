@@ -52,6 +52,11 @@ export const GATE = {
   // zapalałby się więc co odświeżenie dla 39% miast. Właściwy sygnał to WZROST
   // względem poprzedniego buildu; pułap bezwzględny zostaje tylko jako zabezpieczenie
   // dla miasta bez baseline (np. pomyłka w gridBbox nowego miasta).
+  // Potwierdzone 2026-11-20 na realnych polach `grid` z meta.json (Łódź 0%, Olsztyn 1%,
+  // Opole 0,77% — tylko te 3 miasta mają już `counts`/`grid`): wartości z meta.json są
+  // identyczne z liczonymi z plików rozkładowych gridCoverage (różnica 0 dla outsideStops,
+  // outsideShare, maxOutsideKm); pełny przelicz 18 miast z plików potwierdza liczby powyżej.
+  // Progów nie zmieniono. Pozostałe 15 miast dostanie pola przy najbliższym przeliczeniu.
   outsideShareWarn: 0.25,       // pułap awaryjny: najwyższy dziś 8,94% (Warszawa), zapas ~2,8x
   outsideShareRiseWarn: 0.005,  // wzrost o ≥0,5 pp wobec poprzedniego buildu...
   outsideRiseMinStops: 5,       // ...ale tylko gdy przybyło ≥5 przystanków (0,5 pp to 2 przystanki w Gorzowie, 433 szt.)

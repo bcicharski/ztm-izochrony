@@ -218,6 +218,9 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: progi z Z-031 dobrano z wartości policzonych z plików rozkładowych, a nie z pól `counts` i `grid` w `meta.json`, bo tych jeszcze nie ma. Po pierwszym odświeżeniu danych trzeba sprawdzić, czy wyliczone udziały zgadzają się z zapisanymi.
 - Dowód: obserwacja 2026-11-16: żaden `meta.json` nie ma pól `counts` ani `grid`.
 - Pliki: tools/check-data.mjs
+- Wynik (2026-11-20; zadanie zostaje otwarte, potwierdzenie objęło tylko 3 z 18 miast): progi są w porządku, logika bez zmian; zgadzają się z polami `counts` i `grid`. Pola mają tylko Łódź, Olsztyn i Opole; pozostałe 15 miast ma `meta.json` bez nich, w tym Warszawa, Kraków, Trójmiasto i Toruń (najwyższy udział przystanków poza siatką), więc nie dało się ich porównać. Dla trzech miast z polami wszystkie wielkości z `counts` i `grid` policzono tą samą funkcją co build i porównano z `meta.json`: zero różnic, w tym `outsideStops`, `outsideShare` i `maxOutsideKm`. Jedyna rozbieżność (liczba linii w plikach dnia Łodzi 129 / 133 / 134 wobec `counts.routes` 134) ma przyczynę w kodzie: lista linii w `tools/build-data.mjs` jest uzupełniana leniwie, więc każdy plik dnia dostaje stan z chwili zapisu. Nie wpływa na bramkę (porównuje `counts` z `counts`); zgłoszone jako Z-080.
+- Udział poza siatką dla miast z polami (zmierzony): Łódź 0%, Olsztyn 1%, Opole 0,77%. Dla pozostałych 15 miast policzono z plików (nie porównano z `meta.json`): Warszawa 8,94%, Kraków 5,88%, Trójmiasto 5,52%, Toruń 5,02%, Poznań 3,16%, Bydgoszcz 2,79%, Kielce 2,59%, Lublin 0,76%, Wrocław 0,36%, Szczecin 0,19%, GZM 0,07%, Białystok, Rzeszów, Zielona Góra i Gorzów 0%. Próg ostrzegawczy `outsideShareWarn` to 0,25 (25%), najwyższa wartość (Warszawa) ma zapas ok. 2,8 raza.
+- Pozostaje: potwierdzenie progów na miastach o wysokim udziale (przede wszystkim Warszawa) możliwe dopiero po ich przeliczeniu, bo dopiero wtedy zapiszą `counts` i `grid`. Dotąd zapas potwierdzony tylko wartością liczoną z plików, nie zapisaną. Niezweryfikowane: zgodność `counts` z plikami dla 15 miast bez tych pól.
 
 ### Z-055 [P1] Gorzów: żywe źródło rozkładu po 2026-12-30
 - Status: nowe
@@ -253,6 +256,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: nieznane (numer linii nie podano); zachowanie opisane w zgłoszeniu z 2026-11-20, nienaprawione.
 - Pliki: tools/collect-delays.mjs.
 - Jak sprawdzić: nieznane.
+
+### Z-080 [P3] Lista linii zapisywana w plikach dnia zależy od kolejności budowania dni
+- Status: nowe
+- Zgłoszone: 2026-11-20 (nieznane; znalezione przy Z-053)
+- Problem: lista linii w `tools/build-data.mjs` jest uzupełniana leniwie w trakcie budowania kolejnych dni i zapisywana do każdego pliku w chwili jego zapisu. Łódź ma w plikach dnia 129 (dzień roboczy), 133 (sobota) i 134 (niedziela) linii, a `counts.routes` to 134. Dziś nieszkodliwe, bo bramka porównuje `counts` z `counts`, ale plik dnia niesie wtedy niepełną listę linii.
+- Dowód: pomiar 2026-11-20 (Łódź: liczba linii w `data/lodz/workday.json`, `saturday.json`, `sunday.json` wobec `counts.routes` w `data/lodz/meta.json`); przyczyna ustalona z kodu `tools/build-data.mjs`.
+- Pliki: tools/build-data.mjs.
+- Jak sprawdzić: nieznane (oczekiwane: liczba linii w każdym pliku dnia równa `counts.routes`; test nieznany).
 
 ## Zrobione
 
