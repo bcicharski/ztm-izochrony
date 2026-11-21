@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "css/style.css"
+        ],
+        "createdAt": "2026-11-21T09:18:47.692Z",
+        "reason": "Wlasciciel potwierdzil 2026-11-21: .warn i .intro to komunikaty (role=alert), akcentowy pasek to konwencja komunikatu, nie stylizacja karty"
+      }
+    ]
+  }
+}

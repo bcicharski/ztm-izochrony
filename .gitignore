@@ -11,6 +11,12 @@ data/delays/*.tmp
 # zależności (eslint do lintu; gtfs-realtime-bindings instaluje workflow kolektora)
 node_modules/
 
+# hook kontroli designu: .impeccable/config.json jest wspólny i śledzony
+# (trzyma zapisane wyjątki wraz z powodem), reszta jest lokalna dla maszyny —
+# cache nosi identyfikator sesji i bezwzględne ścieżki użytkownika
+.impeccable/hook.cache.json
+.impeccable/config.local.json
+
 # system
 Thumbs.db
 .DS_Store
