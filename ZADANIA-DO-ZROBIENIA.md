@@ -161,11 +161,12 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: nieznane.
 - Pliki: nieznane.
 
-### Z-016 [P2] Tryb ciemny, i18n i ARIA stref
+### Z-016 [P2] Wielojęzyczność, ARIA stref, płynne przejścia i wysoki kontrast stref
 - Status: nowe
 - Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak trybu ciemnego, wielojęzyczności, opisów ARIA dla stref, płynnych przejść i wariantu wysokiego kontrastu stref.
-- Dowód: brak prefers-color-scheme w css/style.css.
+- Problem: brak wielojęzyczności, opisów ARIA dla stref, płynnych przejść i wariantu wysokiego kontrastu stref.
+- Dowód: stan sprawdzony 2026-11-21 — wielojęzyczność: `index.html:2` ma `lang="pl"`, nie ma mechanizmu wyboru języka; ARIA stref: etykiety są tylko w legendzie (`js/app.js:838`), warstwa stref na mapie nie ma opisu; wysoki kontrast: brak `prefers-contrast` w css/style.css; płynne przejścia: istnieje obsługa `prefers-reduced-motion` (`css/style.css:1415`), zakres „płynnych przejść" w opisie nie jest zdefiniowany.
+- Tryb ciemny (2026-11-21): zrobiony w Z-044, patrz wpis Z-044 w sekcji „Zrobione". Mapa i kolory pasm świadomie zostały jasne. „Wariant wysokiego kontrastu stref" z tego zadania to nadal otwarta, osobna sprawa; nie jest tym samym co tryb ciemny.
 - Pliki: css/style.css, index.html, js/app.js.
 
 ### Z-018 [P2] Monitoring ruchu na kafelkach OSM
@@ -198,14 +199,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Problem: rozwiązanie z Z-025 daje lokalną diagnostykę plus zdarzenie w Analytics po zgodzie. Zewnętrzna usługa (np. Sentry) dałaby stosy i grupowanie, ale oznacza nową zależność runtime na froncie (złamanie nienegocjowalnego ograniczenia projektu), nowego procesora danych w polityce prywatności i możliwy koszt po przekroczeniu darmowego limitu. Kontrakt `setSink` w `js/diag.js` jest punktem wymiany, więc wdrożenie byłoby podmianą samego ujścia.
 - Dowód: nieznane.
 - Pliki: js/diag.js, js/app.js.
-
-### Z-044 [P2] Tryb ciemny (`prefers-color-scheme: dark`) — decyzja właściciela
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: strona nie ma wariantu dla systemowego trybu ciemnego. Zmiana wpływa na wygląd dla wszystkich z ciemnym motywem systemu, dlatego wymaga zgody właściciela. Powiązane: Z-016 (szerszy zakres).
-- Dowód: brak `prefers-color-scheme` w css/style.css (sprawdzone 2026-11-16).
-- Wygląd i UX (esteta, specyfikacja z wejścia fali): tokeny ciemne `--surface #1b1c24`, `--ink #ececf1` (14,40:1), `--muted #a3a7b5` (7,07:1), `--accent #e872bd` (6,12:1), `--line #3a3c4a`, `--line-strong #6b6e82` (3,37:1), nowe `--on-accent`, `--dot-a`, `--dot-b`; `color-scheme: dark` na `.panel`, nie na `:root`. Mapa zostaje jasna: filtr `invert` na kafelkach odrzucony (psuje wodę, zieleń i etykiety). Ciemna mapa wymagałaby nowej palety stref, bo pasma 45 i 60 min dają na ciemnym tle kontrast 1,19 i 1,06:1. Swatche legendy w ciemnym motywie bez alfa, z obrysem. Przełącznik w interfejsie niepotrzebny.
-- Pliki: css/style.css, js/app.js.
 
 ### Z-047 [P2] Zapis miasta do użytku offline — decyzja właściciela
 - Status: nowe
@@ -269,6 +262,20 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Jak sprawdzić: nieznane (oczekiwane: liczba linii w każdym pliku dnia równa `counts.routes`; test nieznany).
 
 ## Zrobione
+
+### Z-044 [P2] Tryb ciemny (`prefers-color-scheme: dark`) — decyzja właściciela
+- Status: zrobione
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: strona nie ma wariantu dla systemowego trybu ciemnego. Zmiana wpływa na wygląd dla wszystkich z ciemnym motywem systemu, dlatego wymaga zgody właściciela. Powiązane: Z-016 (szerszy zakres).
+- Dowód: brak `prefers-color-scheme` w css/style.css (sprawdzone 2026-11-16).
+- Wygląd i UX (esteta, specyfikacja z wejścia fali): tokeny ciemne `--surface #1b1c24`, `--ink #ececf1` (14,40:1), `--muted #a3a7b5` (7,07:1), `--accent #e872bd` (6,12:1), `--line #3a3c4a`, `--line-strong #6b6e82` (3,37:1), nowe `--on-accent`, `--dot-a`, `--dot-b`; `color-scheme: dark` na `.panel`, nie na `:root`. Mapa zostaje jasna: filtr `invert` na kafelkach odrzucony (psuje wodę, zieleń i etykiety). Ciemna mapa wymagałaby nowej palety stref, bo pasma 45 i 60 min dają na ciemnym tle kontrast 1,19 i 1,06:1. Swatche legendy w ciemnym motywie bez alfa, z obrysem. Przełącznik w interfejsie niepotrzebny.
+- Wdrożono 2026-11-21 (w CHANGELOG.md: 2026-11-21, Dodane): przy systemowym trybie ciemnym panel, dymki na mapie oraz okna pomocy i polityki prywatności są ciemne; mapa, kolory pasm izochron i ich krycie bez zmian. Mapa zostaje jasna: odwrócenie kafelków filtrem odrzucono, bo warstwa stref to osobne płótno, a filtr zmienia tylko podkład, na którym pasma się składają (na ciemnym podkładzie pasmo 45–60 min spada z około 3,9:1 do 1,1:1, „ponad 60" do 1,6:1, a 30–45 i 45–60 zlewają się). Osobnej rampy dla ciemnego tła nie wprowadzono, bo rozjechałaby się z legendą, eksportem GeoJSON i zrzutami. Odrzucono też inne źródło kafelków (zakaz zależności i serwera) oraz przyciemnienie jasnych kafelków (pasmo 45–60 spada do około 3,4:1, to szacunek, nie pomiar). Bez przełącznika ręcznego, tylko `prefers-color-scheme`. Tokeny: pięć nadpisanych w trybie ciemnym; `--accent` jaśniejszy niż w jasnym, bo dotychczasowy na ciemnym tle ma 3,2:1. Trzy nowe tokeny elementów na mapie (linia trasy, pinezki spotkania, ramka i krzyżyk klawiatury) mają wartości stałe, nieprzesłaniane w trybie ciemnym. Osobne reguły: `color-scheme` (natywne kontrolki), jawne tło okien dialogowych, dymki Leaflet z literalnym białym tłem w swoim arkuszu (bez reguły miałby tekst pomocniczy 2,7:1), przycisk zamknięcia dymka, obrys 1 px na próbkach pasm w legendzie i tabeli statystyk (trzy z sześciu pasm mają na ciemnym panelu poniżej 3:1).
+- Kontrasty (policzone niezależnie, progi spełnione): tekst główny na panelu 14,32:1; pomocniczy na panelu 6,19:1; pomocniczy na kontrolkach 4,76:1 (najmniejszy zapas); tekst główny na kontrolkach 11,02:1; akcent na panelu 5,08:1; akcent na kontrolkach 3,91:1 (element nietekstowy); punkt A 4,09:1; punkt B 5,52:1; akcent mapowy na białym 5,45:1. Audyt na żywo (kolor wobec efektywnego tła): zero elementów poniżej 4,5:1 (84 w panelu i banerze zgody, 33 w oknie polityki).
+- Dowód, że mapa się nie zmienia: zrzut samej mapy w trybie jasnym i ciemnym jest pikselowo identyczny po ukryciu panelu i kontrolek (ten sam SHA-256). Zastrzeżenie: w pierwszej próbie, przy widocznym cieniu znacznika, 32 z 33 pikseli wokół znacznika różniły się, maks. 5 na 255 na kanał; po ukryciu cienia różnica znikła. Cień to obrazek rastrowy, nie CSS; przyczyny nie ustalono.
+- Czego się wyrzekamy: wieczorem mapa pozostaje jasną płachtą, ciemny jest panel (na telefonie do 62% wysokości ekranu). Kto chce ciemny panel przy jasnym systemie, nie ma jak go wymusić. Przyciemnienie kafelków to ewentualne osobne zadanie, wymagające pomiaru na prawdziwych kafelkach.
+- Niezweryfikowane: strzałki i najechanie na liście podpowiedzi, nagłówek historii i jej czyszczenie, stan bez wyników, tryb dwóch punktów z kropką B, przycisk zaproszenia w dymku spotkania, dymek kółka lokalizacji, rozwinięty wybierak godziny i lista wyboru, stany wygaszone; czy płótno stref przerysowuje się przy zmianie motywu (w kodzie nie ma nasłuchu na zmianę schematu, nie mierzono).
+- Pliki: css/style.css, CURRENT_STATE.md; testy: tests/dark-mode.test.mjs (nowy), tests/a11y-css.test.mjs i tests/keyboard-journey.test.mjs (zaktualizowane, bo sprawdzały linię trasy na tokenach panelu). README.md bez zmian (nie opisuje motywu); js/ i index.html nietknięte (wcześniej w plikach wpisano js/app.js).
+- Jak sprawdzić: `npm run check` — tests 527, pass 526, fail 0, skipped 1, lint czysty; weryfikacja w przeglądarce (panel, baner, okna, dymki, linia trasy, klawiatura, tryb spotkania, legenda; telefon i komputer).
 
 ### Z-076 [P2] Cap przerwy liczony zawsze w tempie pieszym, także w trybie rowerowym
 - Status: zrobione

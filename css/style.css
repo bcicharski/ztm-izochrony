@@ -22,7 +22,40 @@
   --map-bg: #f4f4f2;  /* tło mapy pod kafelkami */
   --dot-a: #2a81cb;   /* punkt A (kropka w wyszukiwarce) */
   --dot-b: #e8722d;   /* punkt B (tryb porównania) */
+  /* Elementy leżące na jasnej mapie (kafelki i pasma stref zostają jasne także
+     w trybie ciemnym — Z-044). Wartości literalne, nieprzesłaniane w ciemnym. */
+  --map-ink: #1c1c28;
+  --map-surface: #ffffff;
+  --map-accent: #b83289;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Tryb ciemny (Z-044): tylko panel, dymki i dialogi; mapa zostaje jasna.
+   Wyłącznie prefers-color-scheme — bez przełącznika i bez zapisu w localStorage. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1c1c28;
+    --ink: #ececf2;
+    --muted: #9a9cab;
+    --line: #30303f;
+    --accent: #de5fab;
+    color-scheme: dark;
+  }
+
+  #helpDialog,
+  #privacyDialog { background: var(--surface); }
+
+  /* dymki Leaflet mają w leaflet.css literalne white / #333 */
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-container a.leaflet-popup-close-button:hover,
+  .leaflet-container a.leaflet-popup-close-button:focus { color: var(--ink); }
+
+  /* kolory pasm to skala danych (bez zmian); obrys ratuje trzy pasma
+     o kontraście < 3:1 na ciemnym panelu */
+  .legend-cell .swatch,
+  .stats .swatch { box-shadow: inset 0 0 0 1px var(--muted); }
 }
 
 * { box-sizing: border-box; }
@@ -299,13 +332,13 @@ html, body {
   line-height: 23px;
   text-align: center;
   font: 700 13px system-ui, sans-serif;
-  color: var(--ink);
-  background: var(--surface);
-  border: 2px solid var(--ink);
+  color: var(--map-ink);
+  background: var(--map-surface);
+  border: 2px solid var(--map-ink);
   border-radius: 7px;
   box-shadow: var(--shadow);
 }
-.meet-pin.selected { color: var(--surface); background: var(--ink); }
+.meet-pin.selected { color: var(--map-surface); background: var(--map-ink); }
 .meet-pin-label {
   position: absolute;
   left: 38px;
@@ -316,12 +349,12 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--ink);
-  background: var(--surface);
+  color: var(--map-ink);
+  background: var(--map-surface);
   border-radius: 5px;
   box-shadow: var(--shadow);
 }
-.meet-pin-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 10px; }
+.meet-pin-wrap:focus-visible { outline: 2px solid var(--map-accent); outline-offset: -2px; border-radius: 10px; }
 
 /* ---------- wyszukiwarka ---------- */
 
@@ -1365,8 +1398,12 @@ html[data-approx] .legend .note-approx { display: flex; }
 }
 /* przycisk wypełniony akcentem: offset min. 2 px, inaczej obrys zleje się z tłem */
 .consent-actions button:not(.secondary):focus-visible { outline-offset: 3px; }
-/* elementy Leaflet mają overflow — obrys do wewnątrz */
-.leaflet-bar a:focus-visible,
+/* elementy Leaflet mają overflow — obrys do wewnątrz; przyciski zoomu leżą
+   na jasnej mapie (--map-accent), dymek jest motywowany (--accent) */
+.leaflet-bar a:focus-visible {
+  outline: 2px solid var(--map-accent);
+  outline-offset: -2px;
+}
 .leaflet-container a.leaflet-popup-close-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -1408,16 +1445,16 @@ html[data-approx] .legend .note-approx { display: flex; }
   cursor: pointer;
 }
 .locate-set:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.leaflet-bar a.locate-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.leaflet-bar a.locate-btn:focus-visible { outline: 2px solid var(--map-accent); outline-offset: -2px; }
 
 /* Schematyczna linia trasy na mapie (Z-010). Kolory wyłącznie z tokenów;
    grubości i promienie to stałe w js/map.js (JOURNEY_STYLE). */
-.jl-rim { stroke: var(--surface); }  /* jasny obrys otoczki (Z-072) */
-.jl-halo { stroke: var(--ink); }
-.jl-core { stroke: var(--surface); }
+.jl-rim { stroke: var(--map-surface); }  /* jasny obrys otoczki (Z-072) */
+.jl-halo { stroke: var(--map-ink); }
+.jl-core { stroke: var(--map-surface); }
 .jl-core-a { stroke: var(--dot-a); }
 .jl-core-b { stroke: var(--dot-b); }
-.jl-dot { fill: var(--surface); stroke: var(--ink); }
+.jl-dot { fill: var(--map-surface); stroke: var(--map-ink); }
 .jl-dot-a { fill: var(--dot-a); }
 .journey .journey-note { margin: 6px 0 0; font-size: 0.85em; }
 /* dymek spotkania (Z-071): opis czasu pod nazwą przystanku i przycisk zaproszenia */
@@ -1434,8 +1471,8 @@ html[data-approx] .legend .note-approx { display: flex; }
   inset: 0;
   z-index: 500;
   pointer-events: none;
-  border: 3px solid var(--ink);
-  box-shadow: inset 0 0 0 3px var(--surface);
+  border: 3px solid var(--map-ink);
+  box-shadow: inset 0 0 0 3px var(--map-surface);
 }
 #map:focus-visible + #mapKeys { display: block; }
 .map-cross {
@@ -1445,10 +1482,10 @@ html[data-approx] .legend .note-approx { display: flex; }
   width: 28px;
   height: 28px;
   margin: -14px 0 0 -14px;
-  border: 3px solid var(--ink);
+  border: 3px solid var(--map-ink);
   border-radius: 50%;
   background: transparent;
-  box-shadow: 0 0 0 3px var(--surface), inset 0 0 0 3px var(--surface);
+  box-shadow: 0 0 0 3px var(--map-surface), inset 0 0 0 3px var(--map-surface);
 }
 .map-keyhint {
   position: absolute;
@@ -1458,8 +1495,8 @@ html[data-approx] .legend .note-approx { display: flex; }
   max-width: calc(100vw - 32px);
   padding: 4px 10px;
   border-radius: var(--radius);
-  background: var(--ink);
-  color: var(--surface);
+  background: var(--map-ink);
+  color: var(--map-surface);
   font-size: 13px;
   white-space: nowrap;
 }

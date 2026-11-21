@@ -83,8 +83,8 @@ test('otoczka linii trasy: co najmniej jedna z krawędzi (ciemna/jasna) ma >= 3:
   }
 });
 
-test('jasny obrys otoczki: klasa .jl-rim na tokenie --surface, rysowany pod ciemną otoczką', () => {
-  assert.match(css, /\.jl-rim \{ stroke: var\(--surface\); \}/);
+test('jasny obrys otoczki: klasa .jl-rim na tokenie --map-surface, rysowany pod ciemną otoczką', () => {
+  assert.match(css, /\.jl-rim \{ stroke: var\(--map-surface\); \}/);
   const map = read('../js/map.js');
   assert.ok(map.indexOf("'jl-rim'") < map.indexOf("'jl-halo'"), 'obrys musi być pod otoczką');
 });

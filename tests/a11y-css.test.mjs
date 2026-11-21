@@ -147,11 +147,11 @@ test('summary (Z-062): każdy <summary> w index.html jest pod .sec albo .diag, a
 
 test('linia trasy (Z-010): kolory .jl-* wyłącznie z tokenów, a js/map.js nie ma kolorów na sztywno', () => {
   const expected = {
-    '.jl-halo': /stroke:\s*var\(--ink\)/,
-    '.jl-core': /stroke:\s*var\(--surface\)/,
+    '.jl-halo': /stroke:\s*var\(--map-ink\)/,
+    '.jl-core': /stroke:\s*var\(--map-surface\)/,
     '.jl-core-a': /stroke:\s*var\(--dot-a\)/,
     '.jl-core-b': /stroke:\s*var\(--dot-b\)/,
-    '.jl-dot': /fill:\s*var\(--surface\)[\s\S]*stroke:\s*var\(--ink\)/,
+    '.jl-dot': /fill:\s*var\(--map-surface\)[\s\S]*stroke:\s*var\(--map-ink\)/,
     '.jl-dot-a': /fill:\s*var\(--dot-a\)/,
   };
   for (const [sel, re] of Object.entries(expected)) {
