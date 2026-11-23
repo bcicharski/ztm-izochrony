@@ -297,3 +297,56 @@ test('Z-031: pułap awaryjny 25% łapie błędny gridBbox nawet bez wzrostu', ()
   assert.match(r.findings.join('\n'), /30%/);
   assert.equal(gate(gridMeta(1000, 249), gridMeta(1000, 249)).level, 'ok');
 });
+
+test('cofnięcie rozkładu: nowy feed kończy się wcześniej niż poprzedni = twarda blokada z obiema datami', () => {
+  const r = gate(meta({ feedEndDate: '20261110' }), meta({ feedEndDate: '20261230' }));
+  assert.equal(r.level, 'block');
+  assert.match(r.findings.join('\n'), /BLOKADA: rozkład cofnięty: nowy feed kończy się 10\.11\.2026, a obecny jest ważny do 30\.12\.2026/);
+});
+
+test('cofnięcie rozkładu: daty równe i późniejszy koniec nie blokują', () => {
+  assert.equal(gate(meta({ feedEndDate: '20261230' }), meta({ feedEndDate: '20261230' })).level, 'ok');
+  assert.equal(gate(meta({ feedEndDate: '20270131' }), meta({ feedEndDate: '20261230' })).level, 'ok');
+});
+
+test('cofnięcie rozkładu: brak baseline albo brak feedEndDate po którejkolwiek stronie = brak blokady', () => {
+  assert.equal(gate(meta({ feedEndDate: '20261110' }), null).level, 'ok');
+  const noEnd = meta();
+  delete noEnd.feedEndDate;
+  assert.equal(gate(noEnd, meta({ feedEndDate: '20261230' })).level, 'ok');
+  assert.equal(gate(meta({ feedEndDate: '20261110' }), noEnd).level, 'ok');
+});
+
+test('cofnięcie rozkładu: zawór go nie przepuszcza (stary wygasa w ≤ valveDays)', () => {
+  const base = meta({ feedEndDate: '20261119' }); // wygasa za 3 dni — zawór otwarty
+  // sam spadek kursów zawór przepuszcza awaryjnie (kontrola)
+  assert.equal(gate(withDays(base, { workday: day(5000) }), base).emergency, true);
+  // ten sam spadek + cofnięta data = blokada, bez przepuszczenia awaryjnego
+  const r = gate(withDays(meta({ feedEndDate: '20261110' }), { workday: day(5000) }), base);
+  assert.equal(r.level, 'block');
+  assert.equal(r.emergency, false);
+  // sama cofnięta data też blokuje
+  assert.equal(gate(meta({ feedEndDate: '20261110' }), base).level, 'block');
+});
+
+test('cofnięcie rozkładu: force przepuszcza je jak inne twarde znaleziska', () => {
+  const r = gate(meta({ feedEndDate: '20261110' }), meta({ feedEndDate: '20261230' }), { force: true });
+  assert.equal(r.level, 'warn');
+  assert.match(r.findings.join('\n'), /przepuszczone \(force\)/);
+});
+
+test('cofnięcie rozkładu: blokuje także bez counts po obu stronach (stary format meta)', () => {
+  const old = { city: 'x', feedEndDate: '20261230' };
+  const fresh = { city: 'x', feedEndDate: '20261110' };
+  const r = gate(fresh, old);
+  assert.equal(r.level, 'block');
+  assert.equal(r.noBaseline, false);
+  assert.match(r.findings.join('\n'), /BLOKADA: rozkład cofnięty: nowy feed kończy się 10\.11\.2026, a obecny jest ważny do 30\.12\.2026/);
+  assert.equal(gate(fresh, old, { force: true }).level, 'warn');
+  // bez cofnięcia (równe daty, brak daty, brak baseline) wczesne wyjście działa jak dotąd
+  assert.equal(gate(old, old).level, 'ok');
+  assert.equal(gate(old, old).noBaseline, true);
+  assert.equal(gate({ city: 'x' }, old).level, 'ok');
+  assert.equal(gate(fresh, null).noBaseline, true);
+  assert.equal(gate(null, old).noBaseline, true);
+});

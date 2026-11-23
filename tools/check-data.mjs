@@ -103,9 +103,23 @@ export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force 
   const delaysNote = fresh && delaysProfiles && !fresh.delays
     ? `${key}: są profile opóźnień (delays.json), ale w meta.json zniknęły metadane pokrycia (pole delays) — front nie pokaże informacji o opóźnieniach; napraw ponownym uruchomieniem tools/build-delays.mjs`
     : null;
+  // cofnięcie rozkładu: nowy feed kończy się wcześniej niż ten, który już mamy — twarda blokada
+  // (zawór jej nie przepuszcza; wpuszczenie starszego rozkładu, gdy obecny wygasa, to najgorszy moment).
+  // Data końca nie zależy od `counts`, więc sprawdzamy ją przed wczesnym wyjściem.
+  // Daty równe przechodzą; brak daty (albo meta/baseline) po którejkolwiek stronie = nie ma czego porównać.
+  const rollback = baseline?.feedEndDate && fresh?.feedEndDate && fresh.feedEndDate < baseline.feedEndDate
+    ? `rozkład cofnięty: nowy feed kończy się ${fmt(fresh.feedEndDate)}, a obecny jest ważny do ${fmt(baseline.feedEndDate)}`
+    : null;
   // brak odniesienia albo brak metryk po którejś stronie (stary format) = przejście
   if (!fresh?.counts || !baseline?.counts) {
     res.noBaseline = true;
+    if (rollback) { // blokada bez porównania metryk: raport ma pokazać sekcję szczegółów i podpowiedź force
+      res.noBaseline = false;
+      if (force) { res.findings.push(`OSTRZEŻENIE: ${rollback} — przepuszczone (force)`); res.level = 'warn'; }
+      else { res.findings.push(`BLOKADA: ${rollback}`); res.level = 'block'; }
+      if (delaysNote) res.findings.push(`OSTRZEŻENIE: ${delaysNote}`);
+      return res;
+    }
     if (delaysNote) { res.findings.push(`OSTRZEŻENIE: ${delaysNote}`); res.level = 'warn'; }
     return res;
   }
@@ -114,6 +128,7 @@ export function gateCity(key, cfg, fresh, baseline, { today = new Date(), force 
   const bc = baseline.counts, fc = fresh.counts;
   const add = (sev, text, hard = false) => found.push({ sev, hard, text });
   if (delaysNote) add('warn', delaysNote);
+  if (rollback) add('block', rollback, true);
 
   const compare = (label, rule, was, now) => {
     res.rows.push({ label, was, now });

@@ -225,6 +225,14 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Dowód: pobranie z `https://bip.mzk-gorzow.com.pl/gtfs.html` 2026-11-16: HTTP 200, 1,22 MB, poprawny ZIP z `shapes` i `transfers`; `feed_info.txt` 20261103-20261110; `calendar.txt` i 18122 wiersze `calendar_dates.txt` w tym samym oknie. `cdn.zbiorkom.live` i `api.zbiorkom.live` zwracają 404; strona główna zbiorkom to SPA bez linków do danych. Gorzowa nie ma na dane.gov.pl ani w sekcji dla deweloperów na stronie MZK.
 - Kierunki do rozważenia: częstsze odświeżanie tylko dla Gorzowa; sklejanie kolejnych tygodniowych paczek w dłuższy kalendarz; kontakt z MZK o dłuższy feed. Uwaga (2026-11-17): rejestr formatów w `tools/fetch-feeds.mjs` i tryb `resolve: "html-latest"` są już dostępne (Z-054, Z-051), więc wpięcie BIP MZK będzie tańsze niż zakładano.
 - Wymagane rozszerzenie, gdyby wpinać BIP: `pickLatestZip` dziś tam nie trafi (tekst linku „GTFS MZK Gorzów Wlkp." bez daty, data w href w formacie `DD-MM-RRRR`). Potrzebna gałąź: gdy żadna data się nie parsuje, a na stronie jest dokładnie jeden link `.zip`, wziąć ten link; opcjonalnie rozpoznawanie `DD-MM-RRRR`. Bez nowego trybu i bez nowego pola w `cities.json`. Credits, gdyby doszło do wpięcia: `{ "label": "MZK Gorzów Wlkp. (BIP)", "url": "https://bip.mzk-gorzow.com.pl/gtfs.html" }`.
+- Pomiar na żywych źródłach (2026-11-23):
+  - `cdn.zbiorkom.live` — nadal 404.
+  - `mkuran.pl` — plik się pobiera (HTTP 200, 995 KB), ale `feed_info.txt` ma `20261001,20261023`, czyli rozkład skończył się miesiąc temu. Bez zmian wobec poprzedniego sprawdzenia.
+  - BIP MZK — strona działa, ale wystawia tę samą paczkę co 16 listopada: okno 3–10 listopada, nazwa pliku `85_gtfs03-11-202610-11-202603112026071127.zip`. MZK nie opublikował nowego rozkładu od co najmniej trzech tygodni.
+  - SPROSTOWANIE założenia: poprzedni opis mówił, że BIP publikuje w oknach siedmiodniowych, więc build z niego byłby aktualny najwyżej przez tydzień. Pomiar pokazuje coś gorszego: publikacja nie jest cykliczna, a obecnie wystawiony rozkład jest już wygasły. Build z BIP wykonany dziś dałby dane starsze od tych, które mamy.
+  - Wpięcie BIP jest teraz bezpieczne dzięki zabezpieczeniu z Z-081: próba podmiany na starszy rozkład skończy się blokadą, a nie cichym cofnięciem danych.
+  - Martwy adres `mzk-gorzow` w `cities.json` zostaje jako prowizoryczna zapora; zdejmiemy go dopiero przy wpinaniu nowego źródła.
+  - Właściciel dostał 2026-11-23 gotowy draft pisma do MZK z prośbą o paczkę obejmującą dłuższy okres albo o stały adres najnowszego pliku. Pismo NIE zostało wysłane; decyzja i wysyłka należą do właściciela.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
 ### Z-074 [P3] Prawdziwa geometria przejazdu z GTFS — wymaga decyzji właściciela
@@ -262,6 +270,19 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Jak sprawdzić: nieznane (oczekiwane: liczba linii w każdym pliku dnia równa `counts.routes`; test nieznany).
 
 ## Zrobione
+
+### Z-081 [P1] Bramka jakości nie broniła przed cofnięciem rozkładu
+- Status: zrobione
+- Zgłoszone: 2026-11-23 (wdrozeniowiec)
+- Problem: `tools/check-data.mjs` porównywała świeże dane z poprzednią wersją pod kątem liczby kursów, przystanków i udziałów, ale nie sprawdzała, czy nowy rozkład nie kończy się wcześniej niż obecny. Data końca ważności trafiała wyłącznie do tekstu raportu, a decyzja o blokadzie jej nie uwzględniała. Cotygodniowe odświeżenie mogło więc zastąpić dobre dane starszymi. Zawór (miękkie blokady przepuszczane awaryjnie, gdy stary rozkład wygasa w ciągu kilku dni) pogarszał sprawę: w okresie końca danych bramka była najbardziej skłonna wpuścić gorsze dane.
+- Dowód: pomiar 2026-11-23 na żywym źródle: BIP MZK Gorzów wystawia paczkę z rozkładem ważnym od 3 do 10 listopada 2026 (`feed_info.txt`: `20261103,20261110`; `calendar.txt` i wszystkie 18122 wiersze `calendar_dates.txt` w tym samym oknie). Dane Gorzowa w repozytorium są ważne do 30 grudnia 2026. Bez zabezpieczenia wpięcie tego źródła cofnęłoby rozkład o siedem tygodni.
+- Wdrożono 2026-11-23: nowa reguła w bramce — rozkład kończący się wcześniej niż obecny to twarda blokada, której zawór nie przepuszcza. Daty równe przechodzą (przebudowa tego samego okna to nie cofnięcie). Brak poprzedniej wersji albo brak daty po którejkolwiek stronie nie blokuje. Reguła stoi przed wczesnym wyjściem dla braku pola z licznościami, więc działa także przy niepełnych metadanych; to była świadoma poprawka w drugim podejściu. Przykładowy komunikat: „BLOKADA: rozkład cofnięty: nowy feed kończy się 10.11.2026, a obecny jest ważny do 30.12.2026".
+- Ustalenia:
+  - Ręczne obejście (`--force`) przepuszcza także twarde blokady, w tym tę nową. Tak było wcześniej dla innych twardych blokad i nie zostało zmienione; to świadome obejście człowieka, nie luka.
+  - Jedno twarde znalezisko wyłącza zawór dla całego przebiegu, także dla miękkich spadków (zachowanie sprzed zmiany).
+  - Decyzja wdrożeniowca, odnotowana jako jego własna: w ścieżce blokady bez pola z licznościami raport nie jest oznaczany jako „brak poprzedniej wersji", bo inaczej zniknęłaby z niego podpowiedź, jak blokadę świadomie obejść.
+- Pliki: tools/check-data.mjs, tests/check-data.test.mjs. Nie zmieniano: `data/`, `data/cities.json`, workflow, `js/`.
+- Jak sprawdzić: testy — 6 nowych: blokada, daty równe, datę późniejszą, brak poprzedniej wersji, brak daty po którejś stronie, interakcja z zaworem, przypadek bez pola z licznościami, ręczne obejście oraz scenariusz Gorzowa z prawdziwymi datami. Dowód, że testy łapią lukę: na kodzie sprzed zmiany padły trzy testy, kluczowy z zaworem (spadek kursów przy wygasającym rozkładzie i cofniętej dacie stary kod przepuszczał jako `warn` zamiast `block`); po przeniesieniu reguły przed wczesne wyjście padał dodatkowo test przypadku bez liczności. `npm run check`: tests 533, pass 532, fail 0, skipped 1, lint czysty (wynik podany w zleceniu, nie wklejony dosłownie z terminala). Wynik na realnych danych: `node tools/check-data.mjs` wypisuje to samo co przed zmianą — problemy w 2 z 18 miast (Wrocław i GZM, rozkłady kończące się 29.11.2026, ostrzeżenia sprzed zmiany); nowa reguła nie zapaliła się nigdzie, czyli żadne miasto nie ma dziś cofniętej daty. Nie sprawdzone: zachowanie w workflow `refresh-data.yml` na żywo; wygląd raportu dla blokady przy niepełnych metadanych (sprawdzono tylko bezpieczeństwo ścieżki kodu).
 
 ### Z-044 [P2] Tryb ciemny (`prefers-color-scheme: dark`) — decyzja właściciela
 - Status: zrobione
