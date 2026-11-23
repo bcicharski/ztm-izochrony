@@ -1,11 +1,31 @@
 {
   "city": "krakow",
-  "generated": "2026-11-16T11:56:55.764Z",
-  "feedEndDate": "20261216",
+  "generated": "2026-11-23T13:31:10.890Z",
+  "feedEndDate": "20261223",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "ZTP Kraków — https://gtfs.ztp.krakow.pl/",
@@ -273,13 +293,11 @@
     "KML_SKA2_BUS": "ZKA SKA2",
     "KML_SKA3": "SKA3",
     "KM_R1": "R1",
-    "KM_R1_BUS": "Z1",
     "KM_R2": "R2",
     "KM_R21": "R21",
     "KM_R2_BUS": "Z2",
     "KM_R3": "R3",
     "KM_R31": "R31",
-    "KM_R3_BUS": "Z3",
     "KM_R6": "R6",
     "KM_R60": "R60",
     "KM_R60_BUS": "Z60",
@@ -309,7 +327,6 @@
     "KM_RE7": "RE7",
     "KM_RE8": "RE8",
     "KM_RE80": "RE80",
-    "KM_RE80_BUS": "ZE80",
     "KM_RE9": "RE9",
     "KM_RE90": "RE90",
     "KM_RE91": "RE91",
@@ -334,7 +351,6 @@
     "KS_S6": "S6",
     "KS_S61_BUS": "ZKA S61",
     "KS_S62": "S62",
-    "KS_S62_BUS": "ZKA S62",
     "KS_S6_BUS": "ZKA S6",
     "KS_S7": "S7",
     "KS_S71": "S71",
@@ -364,6 +380,7 @@
     "LKA_BUS": "ZKA Ł",
     "LKA_LP": "ŁP",
     "LKA_LS": "ŁS",
+    "PR_D18": "D18",
     "PR_IR": "IR",
     "PR_K2": "K2",
     "PR_K22": "K22",
@@ -380,18 +397,32 @@
     "PR_K52P": "K52P",
     "PR_K63": "K63",
     "PR_K7": "K7",
+    "PR_K71": "K71",
     "PR_K7P": "K7P",
     "PR_K7P_BUS": "ZKA K7P",
     "PR_K7_BUS": "ZKA K7",
     "PR_PKM1": "PKM1",
     "PR_PKM1_BUS": "ZKA PKM1",
     "PR_PKM4": "PKM4",
+    "PR_PM_R11": "R11",
+    "PR_PM_R12": "R12",
+    "PR_PM_R13": "R13",
+    "PR_PM_R14": "R14",
+    "PR_PM_R20": "R20",
+    "PR_PM_R3": "R3",
+    "PR_PM_R7": "R7",
+    "PR_PM_RE3": "RE3",
+    "PR_PM_RE7": "RE7",
+    "PR_PM_S2": "S2",
     "PR_REG": "REG",
     "PR_REG_BUS": "ZKA REG",
     "PR_RP": "REG P",
     "PR_RP_BUS": "ZKA REG P",
     "PR_SKA2": "SKA2",
     "PR_SKA3": "SKA3",
+    "PR_ZP_S1": "S1",
+    "PR_ZP_S2": "S2",
+    "PR_ZP_S3": "S3",
     "RJ": "RJ",
     "SKMT_R22": "R22",
     "SKMT_R3": "R3",
@@ -432,11 +463,41 @@
     "route_957": "16",
     "route_958": "17"
   },
+  "counts": {
+    "stops": 4389,
+    "routes": 227,
+    "transfers": 17987,
+    "days": {
+      "workday": {
+        "patterns": 667,
+        "trips": 16784,
+        "bytes": 954109,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 613,
+        "trips": 10349,
+        "bytes": 775803,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 592,
+        "trips": 9833,
+        "bytes": 762237,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 259,
+    "outsideShare": 0.059,
+    "maxOutsideKm": 82.2
+  },
   "delays": {
-    "routes": 87,
+    "routes": 89,
     "routesTotal": 215,
-    "keys": 2063,
-    "updated": "20261117",
+    "keys": 2081,
+    "updated": "20261123",
     "source": "gtfsrt"
   }
 }

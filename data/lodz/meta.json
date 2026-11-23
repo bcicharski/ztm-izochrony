@@ -1,27 +1,27 @@
 {
   "city": "lodz",
-  "generated": "2026-11-17T00:11:03.988Z",
+  "generated": "2026-11-23T13:31:40.535Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
   },
   "dayInfo": {
     "workday": {
-      "date": "20261117",
+      "date": "20261124",
       "weekday": 2,
       "regime": "school",
       "holiday": null
     },
     "saturday": {
-      "date": "20261121",
+      "date": "20261128",
       "weekday": 6,
       "regime": "school",
       "holiday": null
     },
     "sunday": {
-      "date": "20261122",
+      "date": "20261129",
       "weekday": 0,
       "regime": "school",
       "holiday": null
@@ -167,40 +167,40 @@
     "Z6": "Z6"
   },
   "counts": {
-    "stops": 2390,
+    "stops": 2391,
     "routes": 134,
-    "transfers": 10350,
+    "transfers": 10345,
     "days": {
       "workday": {
-        "patterns": 750,
-        "trips": 10228,
-        "bytes": 597587,
+        "patterns": 752,
+        "trips": 10229,
+        "bytes": 598711,
         "overtaking": 0
       },
       "saturday": {
-        "patterns": 633,
-        "trips": 7330,
-        "bytes": 499447,
+        "patterns": 634,
+        "trips": 7329,
+        "bytes": 499408,
         "overtaking": 0
       },
       "sunday": {
-        "patterns": 640,
-        "trips": 6603,
-        "bytes": 488111,
+        "patterns": 644,
+        "trips": 6600,
+        "bytes": 488628,
         "overtaking": 1
       }
     }
   },
   "grid": {
-    "outsideStops": 0,
-    "outsideShare": 0,
-    "maxOutsideKm": 0
+    "outsideStops": 2,
+    "outsideShare": 0.0008,
+    "maxOutsideKm": 5897.5
   },
   "delays": {
     "routes": 0,
     "routesTotal": 129,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

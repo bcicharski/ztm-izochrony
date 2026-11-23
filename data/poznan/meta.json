@@ -1,11 +1,31 @@
 {
   "city": "poznan",
-  "generated": "2026-11-16T11:57:11.391Z",
-  "feedEndDate": "20261130",
+  "generated": "2026-11-23T13:31:23.076Z",
+  "feedEndDate": "20261205",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "ZTM Poznań — https://www.ztm.poznan.pl/otwarte-dane/"
@@ -232,11 +252,41 @@
     "PKS": "PKS",
     "T7": "T7"
   },
+  "counts": {
+    "stops": 3351,
+    "routes": 219,
+    "transfers": 9316,
+    "days": {
+      "workday": {
+        "patterns": 1104,
+        "trips": 12074,
+        "bytes": 808181,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 612,
+        "trips": 7988,
+        "bytes": 588903,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 595,
+        "trips": 6928,
+        "bytes": 556944,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 106,
+    "outsideShare": 0.0316,
+    "maxOutsideKm": 16.8
+  },
   "delays": {
-    "routes": 155,
+    "routes": 157,
     "routesTotal": 213,
-    "keys": 3965,
-    "updated": "20261117",
+    "keys": 4006,
+    "updated": "20261123",
     "source": "gtfsrt"
   }
 }

@@ -1,11 +1,31 @@
 {
   "city": "lublin",
-  "generated": "2026-11-16T11:57:15.434Z",
+  "generated": "2026-11-23T13:31:28.030Z",
   "feedEndDate": "20270129",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "ZTM Lublin (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
@@ -87,11 +107,41 @@
     "N3": "N3",
     "Zie": "Zielona"
   },
+  "counts": {
+    "stops": 1316,
+    "routes": 75,
+    "transfers": 3351,
+    "days": {
+      "workday": {
+        "patterns": 707,
+        "trips": 5095,
+        "bytes": 415083,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 452,
+        "trips": 3006,
+        "bytes": 233466,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 362,
+        "trips": 2202,
+        "bytes": 197388,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 10,
+    "outsideShare": 0.0076,
+    "maxOutsideKm": 2.1
+  },
   "delays": {
     "routes": 0,
     "routesTotal": 72,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

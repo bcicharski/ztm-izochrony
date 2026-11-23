@@ -1,11 +1,31 @@
 {
   "city": "kielce",
-  "generated": "2026-11-16T11:54:28.730Z",
+  "generated": "2026-11-23T13:28:31.498Z",
   "feedEndDate": "20261231",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "ZTM Kielce (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
@@ -61,18 +81,47 @@
     "0W": "0W",
     "0Z": "0Z",
     "F": "F",
+    "H1": "H1",
+    "H2": "H2",
     "N1": "N1",
     "N2": "N2",
-    "S1": "S1",
-    "S2": "S2",
-    "S3": "S3",
     "Z": "Z"
+  },
+  "counts": {
+    "stops": 1351,
+    "routes": 53,
+    "transfers": 3133,
+    "days": {
+      "workday": {
+        "patterns": 353,
+        "trips": 2676,
+        "bytes": 307046,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 268,
+        "trips": 1490,
+        "bytes": 202971,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 249,
+        "trips": 1238,
+        "bytes": 191692,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 35,
+    "outsideShare": 0.0259,
+    "maxOutsideKm": 4
   },
   "delays": {
     "routes": 0,
     "routesTotal": 51,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

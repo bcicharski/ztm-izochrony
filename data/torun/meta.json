@@ -1,11 +1,31 @@
 {
   "city": "torun",
-  "generated": "2026-11-16T11:54:27.432Z",
+  "generated": "2026-11-23T13:28:29.899Z",
   "feedEndDate": "20261223",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "MZK Toruń (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
@@ -76,11 +96,41 @@
     "1_123B": "123B",
     "1_102": "102"
   },
+  "counts": {
+    "stops": 897,
+    "routes": 64,
+    "transfers": 2870,
+    "days": {
+      "workday": {
+        "patterns": 282,
+        "trips": 2889,
+        "bytes": 206594,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 185,
+        "trips": 1698,
+        "bytes": 146400,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 174,
+        "trips": 1687,
+        "bytes": 144529,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 45,
+    "outsideShare": 0.0502,
+    "maxOutsideKm": 5.5
+  },
   "delays": {
     "routes": 0,
     "routesTotal": 61,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

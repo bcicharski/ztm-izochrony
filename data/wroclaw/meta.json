@@ -1,11 +1,31 @@
 {
   "city": "wroclaw",
-  "generated": "2026-11-16T11:56:43.494Z",
-  "feedEndDate": "20261129",
+  "generated": "2026-11-23T13:30:59.394Z",
+  "feedEndDate": "20261206",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "Wrocław Otwarte Dane (MPK) — https://open-data.cui.wroclaw.pl"
@@ -149,11 +169,41 @@
     "K": "K",
     "N": "N"
   },
+  "counts": {
+    "stops": 2491,
+    "routes": 137,
+    "transfers": 12019,
+    "days": {
+      "workday": {
+        "patterns": 1060,
+        "trips": 12849,
+        "bytes": 1003869,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 783,
+        "trips": 8578,
+        "bytes": 671803,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 764,
+        "trips": 8267,
+        "bytes": 656563,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 11,
+    "outsideShare": 0.0044,
+    "maxOutsideKm": 1.3
+  },
   "delays": {
     "routes": 0,
     "routesTotal": 136,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

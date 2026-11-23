@@ -1,27 +1,27 @@
 {
   "city": "opole",
-  "generated": "2026-11-17T11:24:26.605Z",
+  "generated": "2026-11-23T13:28:36.168Z",
   "feedEndDate": "20261130",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
   },
   "dayInfo": {
     "workday": {
-      "date": "20261117",
+      "date": "20261124",
       "weekday": 2,
       "regime": "school",
       "holiday": null
     },
     "saturday": {
-      "date": "20261121",
+      "date": "20261128",
       "weekday": 6,
       "regime": "school",
       "holiday": null
     },
     "sunday": {
-      "date": "20261122",
+      "date": "20261129",
       "weekday": 0,
       "regime": "school",
       "holiday": null
@@ -93,7 +93,7 @@
     "routes": 0,
     "routesTotal": 27,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

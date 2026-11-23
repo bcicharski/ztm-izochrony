@@ -1,11 +1,31 @@
 {
   "city": "bialystok",
-  "generated": "2026-11-16T11:53:39.624Z",
+  "generated": "2026-11-23T13:28:16.742Z",
   "feedEndDate": "20270206",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "BKM Białystok — https://www.komunikacja.bialystok.pl/pl/rozklad-jazdy/dane_otwarte"
@@ -67,11 +87,41 @@
     "N5": "N5",
     "N6": "N6"
   },
+  "counts": {
+    "stops": 1083,
+    "routes": 55,
+    "transfers": 3259,
+    "days": {
+      "workday": {
+        "patterns": 270,
+        "trips": 3834,
+        "bytes": 224149,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 264,
+        "trips": 2827,
+        "bytes": 199843,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 253,
+        "trips": 2228,
+        "bytes": 188702,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 0,
+    "outsideShare": 0,
+    "maxOutsideKm": 0
+  },
   "delays": {
     "routes": 0,
     "routesTotal": 49,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }

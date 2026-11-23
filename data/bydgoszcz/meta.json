@@ -1,11 +1,31 @@
 {
   "city": "bydgoszcz",
-  "generated": "2026-11-16T11:57:16.771Z",
-  "feedEndDate": "20270420",
+  "generated": "2026-11-23T13:31:29.848Z",
+  "feedEndDate": "20270520",
   "dates": {
-    "workday": "20261117",
-    "saturday": "20261121",
-    "sunday": "20261122"
+    "workday": "20261124",
+    "saturday": "20261128",
+    "sunday": "20261129"
+  },
+  "dayInfo": {
+    "workday": {
+      "date": "20261124",
+      "weekday": 2,
+      "regime": "school",
+      "holiday": null
+    },
+    "saturday": {
+      "date": "20261128",
+      "weekday": 6,
+      "regime": "school",
+      "holiday": null
+    },
+    "sunday": {
+      "date": "20261129",
+      "weekday": 0,
+      "regime": "school",
+      "holiday": null
+    }
   },
   "sources": [
     "ZDMiKP Bydgoszcz (GTFS: mkuran.pl) — https://mkuran.pl/gtfs/"
@@ -65,9 +85,6 @@
     "97": "97",
     "98": "98",
     "99": "99",
-    "108": "108",
-    "109": "109",
-    "110": "110",
     "31N": "31N",
     "32N": "32N",
     "33N": "33N",
@@ -77,11 +94,41 @@
     "ZaT": "ZaT",
     "ZaT6": "ZaT6"
   },
+  "counts": {
+    "stops": 1184,
+    "routes": 62,
+    "transfers": 3583,
+    "days": {
+      "workday": {
+        "patterns": 319,
+        "trips": 4620,
+        "bytes": 263762,
+        "overtaking": 0
+      },
+      "saturday": {
+        "patterns": 260,
+        "trips": 3179,
+        "bytes": 205659,
+        "overtaking": 0
+      },
+      "sunday": {
+        "patterns": 252,
+        "trips": 2908,
+        "bytes": 198015,
+        "overtaking": 0
+      }
+    }
+  },
+  "grid": {
+    "outsideStops": 33,
+    "outsideShare": 0.0279,
+    "maxOutsideKm": 7.1
+  },
   "delays": {
     "routes": 0,
     "routesTotal": 62,
     "keys": 0,
-    "updated": "20261117",
+    "updated": "20261123",
     "source": null
   }
 }
