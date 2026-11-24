@@ -11,7 +11,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 Data ustalenia: 2026-11-24.
 - Teraz, w tej kolejności:
   - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione").
-  - Z-003 — następne w kolejce.
+  - Z-003 — w toku od 2026-11-24 (narzędzia pomiarowe wdrożone; optymalizacja czeka na decyzję właściciela).
   - Z-037 — po Z-003.
 - Następnie, jako ważne w drugiej kolejności: Z-013, Z-038, Z-009.
 - Z-009 nadal czeka na adresy profili społecznościowych od właściciela; bez nich nie da się go zacząć, mimo miejsca w kolejności.
@@ -103,6 +103,17 @@ Data ustalenia: 2026-11-24.
   - Świadomie NIE kontrolowane: krawędzie zerowej długości (1–262 na miasto) i pętle `a == b` (70–1512 na miasto) — cecha kontrakcji grafu, nie wada.
 - Pozostaje: cykliczne odświeżanie danych OSM (workflow z `build-walknet`, `build-water`, `build-bridges`). Nadpisuje `data/<miasto>/`, więc wymaga zgody właściciela. Dane mają 123–129 dni (Trójmiasto 63).
 
+### Z-003 [P1] Mniejsze dane
+- Status: w toku (narzędzia pomiarowe wdrożone 2026-11-24; zadanie otwarte; wdrożenie kodowania reszty czeka na decyzję właściciela)
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: walknet.json ładowany w całości — 3,3 MB dla Trójmiasta, ok. 2,4 MB po gzipie dla GZM. Pomysły: format binarny, kafle wokół widoku, wersjonowanie nazw plików.
+- Dowód: rozmiary plików w data/<miasto>/. Pomiar 2026-11-24 (`tools/measure-data.mjs`, tylko odczyt, `data/` nietknięte):
+  - Stan wyjściowy: graf pieszy to 63,5% danych pobieranych po gzipie (11 886 KB z 18 732 KB dla 18 miast), w GZM 68%. Całe pobranie po gzipie: Warszawa 3307 KB, GZM 3464 KB, Trójmiasto 1702 KB, Opole 214 KB, Gorzów 199 KB.
+  - OBALONE na liczbach: porządek węzłów (krzywa Hilberta zamiast pasm 500 m) od −2,0% do +1,0% w trzech miastach; Hilbert gorszy od obecnego; pasmowy porządek 500 m praktycznie optymalny; krok re-kodowania martwy. Format binarny 10–15% wobec JSON z tym samym kodowaniem (zestawienie 28–32% zawierało wkład kodowania długości), poniżej progu 15%, odrzucony. Przerzedzanie grafu: krawędzie krótsze niż 25 m to 34–54% krawędzi, ale 3,6–9,5% km sieci; mały zysk w bajtach, zmiana topologii (zysk w czasie liczenia niezmierzony).
+  - POTWIERDZONE: zapis długości krawędzi jako reszty względem odległości w linii prostej: −15,8% Trójmiasto (1048 → 883 KB), −16,3% GZM (2350 → 1966 KB), −17,0% Opole (129 → 107 KB), bez utraty dokładności (błąd położenia węzła 0,56 m, jak dziś). Grubsza kwantyzacja daje do 18,6%, ale kwantyzacja 1e4 to błąd do 5,6 m; nierozstrzygnięte, czy bezpieczne dla przyczepiania przystanków do krawędzi.
+  - Pozostaje do decyzji właściciela: zmiana dekodera w `js/walknet.js` (format v2 z obsługą v1) i nadpisanie `walknet.json` w 18 miastach. Zysk ok. 16% rozmiaru grafu, ok. 10% całego pobrania.
+- Pliki: tools/build-walknet.mjs, js/walknet.js, js/data.js. Wdrożone 2026-11-24 (narzędzia pomiarowe): tools/measure-data.mjs, tools/measure-lib.mjs, tests/measure-data.test.mjs.
+
 ## Zaprojektowane (gotowe do wdrożenia)
 
 ## Nowe (bez projektu rozwiązania)
@@ -142,13 +153,6 @@ Data ustalenia: 2026-11-24.
 - Luka 2 — jak sprawdzić przy wdrożeniu: test monotoniczności (nasiona mogą tylko skracać czas, nigdy go nie wydłużać, dla każdego piksela); regresja na Łodzi (bez przystanków poza siatką) — obraz i statystyki bez żadnej zmiany; regresja barierowa — siatka z pasem wody bez mostu, przystanek za krawędzią po stronie A: piksele po stronie B muszą zostać nieosiągalne; ten sam układ z mostem daje stronę B osiągalną i dłuższy czas; przystanek 10 km za krawędzią daje wynik identyczny jak dziś; narożnik siatki (nasiona na dwóch bokach, bez duplikatów); zgodność w tył obu rozszerzeń krotki i opcji `reset`.
 - Dowód: luka 2 — pomiar 2026-11-20 (wyżej) oraz `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Luki 1 i 3: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js (luki 1 i 3). Luka 2: js/walkgrid.js, js/isochrone.js, js/engine.js, testy w tests/ (walkgrid, isochrone, engine).
-
-### Z-003 [P1] Mniejsze dane
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: walknet.json ładowany w całości — 3,3 MB dla Trójmiasta, ok. 2,4 MB po gzipie dla GZM. Pomysły: format binarny, kafle wokół widoku, wersjonowanie nazw plików.
-- Dowód: rozmiary plików w data/<miasto>/.
-- Pliki: tools/build-walknet.mjs, js/walknet.js, js/data.js.
 
 ### Z-011 [P2] Realny „teraz"
 - Status: nowe
