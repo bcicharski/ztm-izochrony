@@ -6,6 +6,13 @@ Statusy: `nowe` -> `zaprojektowane` -> `w toku` -> `zrobione` -> `odrzucone`.
 
 Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
+## Kolejność ustalona z właścicielem
+
+Data ustalenia: 2026-11-24.
+- Teraz, w tej kolejności: Z-079, Z-003, Z-037.
+- Następnie, jako ważne w drugiej kolejności: Z-013, Z-038, Z-009.
+- Z-009 nadal czeka na adresy profili społecznościowych od właściciela; bez nich nie da się go zacząć, mimo miejsca w kolejności.
+
 ## W toku
 
 ### Z-019 [P1] Brakujące profile opóźnień dla GZM i Szczecina
@@ -169,20 +176,13 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 - Tryb ciemny (2026-11-21): zrobiony w Z-044, patrz wpis Z-044 w sekcji „Zrobione". Mapa i kolory pasm świadomie zostały jasne. „Wariant wysokiego kontrastu stref" z tego zadania to nadal otwarta, osobna sprawa; nie jest tym samym co tryb ciemny.
 - Pliki: css/style.css, index.html, js/app.js.
 
-### Z-018 [P2] Monitoring ruchu na kafelkach OSM
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: strona z reklamami używa publicznych kafelków tile.openstreetmap.org; przy wzroście ruchu trzeba przejść na własne źródło.
-- Dowód: js/map.js:26.
-- Pliki: js/map.js (decyzja poza kodem).
-- 2026-11-20: przesłanka „strona z reklamami" przestała obowiązywać, bo blok AdSense został usunięty (Z-064). Ograniczenie pozostaje: polityka kafelków OSM ogranicza ruch niezależnie od reklam, więc zadanie zostaje otwarte z tym samym problemem, bez tego uzasadnienia.
-
-### Z-037 [P2] Automatyczne ustawianie niedzieli w święto (decyzja właściciela)
+### Z-037 [P2] Automatyczne ustawianie niedzieli w święto
 - Status: nowe
 - Zgłoszone: nieznane
 - Problem: dziś w święto strona pokazuje komunikat z przyciskiem przełączającym na rozkład niedzielny (Z-022). Wariant pełny ustawiałby typ dnia sam. To naprawa (w Boże Ciało rozkład roboczy nie istnieje w terenie), ale zmienia domyślny stan kontrolki.
 - Dowód: nieznane.
 - Pliki: js/app.js.
+- Decyzja właściciela (2026-11-24): zatwierdzone, ma się przełączać automatycznie. Zadanie czeka na wdrożenie.
 
 ### Z-038 [P2] Skrócony tekst banera zgody (decyzja właściciela)
 - Status: nowe
@@ -234,14 +234,6 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
   - Martwy adres `mzk-gorzow` w `cities.json` zostaje jako prowizoryczna zapora; zdejmiemy go dopiero przy wpinaniu nowego źródła.
   - Właściciel dostał 2026-11-23 gotowy draft pisma do MZK z prośbą o paczkę obejmującą dłuższy okres albo o stały adres najnowszego pliku. Pismo NIE zostało wysłane; decyzja i wysyłka należą do właściciela.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
-
-### Z-074 [P3] Prawdziwa geometria przejazdu z GTFS — wymaga decyzji właściciela
-- Status: nowe
-- Zgłoszone: 2026-11-19 (nieznane)
-- Problem: linia trasy z Z-010 jest schematyczna (łamana po przystankach). Dołożenie `shapes.txt` do prekompilacji dałoby linię wzdłuż torów i ulic. Koszt: 15–20 MB nowych danych w repozytorium, 0,5–0,8 MB po kompresji na duże miasto przy każdej wizycie, przeliczenie 18 miast, nierówne pokrycie (Opole bez geometrii, bo konwerter TransXChange jej nie produkuje). Proponowany pierwszy etap, gdyby właściciel zatwierdził: geometria tylko dla kolei i metra. Decyzję warto podjąć po tym, jak będzie widać, czy schematyczna linia komukolwiek przeszkadza.
-- Dowód: w katalogu `tools/` nie ma ani jednego wystąpienia słowa „shape" (sprawdzone 2026-11-19); prekompilacja nie czyta geometrii z GTFS, więc nic z niej nie trafia do `data/<miasto>/`.
-- Pliki: tools/ (prekompilacja GTFS), data/<miasto>/ — dopiero po decyzji właściciela.
-- Jak sprawdzić: nieznane.
 
 ### Z-075 [P2] Wyciek `water.json` poza `gridBbox` jest przypadkowy
 - Status: nowe
@@ -939,3 +931,21 @@ Pułapki do wdrożenia:
 - Pliki: wariant 1 — bez zmian; wariant 2 — js/uilogic.js, js/app.js; wariant 3 — js/uilogic.js, js/app.js, index.html.
 - Jak sprawdzić: nieznane (zależy od wybranego wariantu).
 - Decyzja właściciela (2026-11-20): wariant 1 — eksport zostaje czystą geometrią stref policzonych; kół szacunkowych się do niego nie dodaje. Uzasadnienie: plik GeoJSON jest eksportem danych pomiarowych, a mieszanie do niego zgadywanych kół zaciemniłoby to rozróżnienie; kto wczytuje izochronę do QGIS, chce wyłącznie tego, co zostało policzone. Warianty 2 (koła jako osobne obiekty GeoJSON) i 3 (osobny eksport SVG z kreskowaniem) pozostają możliwe do wykonania w każdej chwili, gdyby pojawiła się realna potrzeba; wariant 2 jest tani.
+
+### Z-018 [P2] Monitoring ruchu na kafelkach OSM
+- Status: odrzucone
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: strona z reklamami używa publicznych kafelków tile.openstreetmap.org; przy wzroście ruchu trzeba przejść na własne źródło.
+- Dowód: js/map.js:26.
+- Pliki: js/map.js (decyzja poza kodem).
+- 2026-11-20: przesłanka „strona z reklamami" przestała obowiązywać, bo blok AdSense został usunięty (Z-064). Ograniczenie pozostaje: polityka kafelków OSM ogranicza ruch niezależnie od reklam, więc zadanie zostaje otwarte z tym samym problemem, bez tego uzasadnienia.
+- Decyzja właściciela (2026-11-24): nie będziemy przechodzić na własne kafelki map, zadanie nie ma racji bytu.
+
+### Z-074 [P3] Prawdziwa geometria przejazdu z GTFS — wymaga decyzji właściciela
+- Status: odrzucone
+- Zgłoszone: 2026-11-19 (nieznane)
+- Problem: linia trasy z Z-010 jest schematyczna (łamana po przystankach). Dołożenie `shapes.txt` do prekompilacji dałoby linię wzdłuż torów i ulic. Koszt: 15–20 MB nowych danych w repozytorium, 0,5–0,8 MB po kompresji na duże miasto przy każdej wizycie, przeliczenie 18 miast, nierówne pokrycie (Opole bez geometrii, bo konwerter TransXChange jej nie produkuje). Proponowany pierwszy etap, gdyby właściciel zatwierdził: geometria tylko dla kolei i metra. Decyzję warto podjąć po tym, jak będzie widać, czy schematyczna linia komukolwiek przeszkadza.
+- Dowód: w katalogu `tools/` nie ma ani jednego wystąpienia słowa „shape" (sprawdzone 2026-11-19); prekompilacja nie czyta geometrii z GTFS, więc nic z niej nie trafia do `data/<miasto>/`.
+- Pliki: tools/ (prekompilacja GTFS), data/<miasto>/ — dopiero po decyzji właściciela.
+- Jak sprawdzić: nieznane.
+- Decyzja właściciela (2026-11-24): zadanie nie ma sensu. Dotyczyło dołożenia prawdziwej geometrii przejazdu z `shapes.txt`, żeby linia trasy biegła torami i ulicami zamiast prosto między przystankami. Koszt był wyceniony na 15–20 MB nowych danych w repozytorium, 0,5–0,8 MB po kompresji na duże miasto przy każdej wizycie oraz przeliczenie 18 miast, przy nierównym pokryciu (Opole bez geometrii, bo konwerter TransXChange jej nie produkuje). Schematyczna linia z Z-010 zostaje.
