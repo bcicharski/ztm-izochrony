@@ -248,52 +248,115 @@ export async function collectCity(cfg, { names = {}, fetchImpl = fetch, decoder 
   }
 }
 
-async function main() {
-  const root = path.join(import.meta.dirname, '..');
-  const cities = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cities.json'), 'utf8'));
-  const outDir = path.join(root, 'data', 'delays');
-  fs.mkdirSync(outDir, { recursive: true });
+/**
+ * Wczytuje agregat miasta. Brak pliku = pierwszy przebieg ({}), to nie awaria.
+ * Plik nieczytelny albo nie będący obiektem JSON rzuca — wołający zgłasza to
+ * jako awarię miasta i NIE nadpisuje pliku (historia zbiera się tygodniami).
+ */
+function readAggregate(file) {
+  if (!fs.existsSync(file)) return {};
+  const agg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (agg === null || typeof agg !== 'object' || Array.isArray(agg)) throw new Error('agregat nie jest obiektem JSON');
+  return agg;
+}
 
-  const { dayType, hour } = localSlot();
+/**
+ * Zapis atomowy (konwencja jak w transxchange-to-gtfs: plik tymczasowy, na
+ * końcu rename). Plik tymczasowy leży w tym samym katalogu co docelowy, więc
+ * rename jest atomowy; po błędzie jest sprzątany, a plik docelowy nietknięty.
+ */
+export function writeAggregate(file, agg) {
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp`);
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(agg));
+    fs.renameSync(tmp, file);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
+/**
+ * Dolicza obserwacje do agregatu `agg` (mutuje go) z deduplikacją kursów.
+ * Zwraca { added, dup }.
+ */
+export function mergeObservations(agg, obs, { dayType, hour, today }) {
+  // Deduplikacja: ten sam kurs widziany w kolejnych odpytaniach liczył się
+  // wielokrotnie (co 10 min = kilka próbek jednego pojazdu), więc próg MIN_OBS
+  // osiągał jeden autobus w jedno popołudnie. Każdy kurs wchodzi do agregatu
+  // raz na godzinę w danym dniu (pierwsza obserwacja); pamięć w polu `_seen`,
+  // zerowana przy zmianie daty. build-delays.mjs pomija klucze zaczynające
+  // się od `_`.
+  const seen = agg._seen?.date === today ? agg._seen : { date: today, keys: {} };
+  let added = 0, dup = 0;
+  for (const [tripKey, { route, delaySec }] of obs) {
+    const seenKey = `${tripKey}|${hour}`;
+    if (seen.keys[seenKey]) { dup++; continue; }
+    seen.keys[seenKey] = 1;
+    const key = `${route}|${dayType}|${hour}`;
+    const row = agg[key] ?? [0, 0, 0, 0, 0, 0, 0, 0];
+    row[0] += 1;
+    row[1] += delaySec;
+    row[2 + bucketIndex(delaySec)] += 1;
+    agg[key] = row;
+    added++;
+  }
+  agg._seen = seen;
+  return { added, dup };
+}
+
+/**
+ * Przetwarza wszystkie miasta. Awaria jednego (uszkodzony agregat, błąd zapisu,
+ * brak uprawnień) staje się werdyktem fail tego miasta i nie przerywa pętli.
+ * Zwraca { reports, totalObs }. deps: collect, now — wstrzykiwane w testach.
+ */
+export async function runCollection(cities, { root, collect = collectCity, now = new Date() } = {}) {
+  const outDir = path.join(root, 'data', 'delays');
+  const { dayType, hour } = localSlot(now);
+  const today = localDate(now);
   let totalObs = 0;
   const reports = [];
 
   for (const [cityKey, cfg] of Object.entries(cities)) {
     if (!cfg.rt) { reports.push({ cityKey, verdict: cityVerdict(false, 0), urlResults: [] }); continue; }
-    const { obs, urlResults } = await collectCity(cfg, { names: routeNameMap(root, cityKey) });
+    const { obs, urlResults } = await collect(cfg, { names: routeNameMap(root, cityKey) });
     for (const u of urlResults) if (u.kind !== 'ok') console.warn(`${cityKey}: ${u.kind} — ${u.url} — ${u.detail}`);
     const verdict = cityVerdict(true, obs.size, urlResults);
-    reports.push({ cityKey, verdict, urlResults });
+    const report = { cityKey, verdict, urlResults };
+    reports.push(report);
     if (obs.size === 0) { console.warn(`${cityKey}: brak obserwacji`); continue; }
 
     const file = path.join(outDir, `${cityKey}.json`);
-    const agg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
-    // Deduplikacja: ten sam kurs widziany w kolejnych odpytaniach liczył się
-    // wielokrotnie (co 10 min = kilka próbek jednego pojazdu), więc próg MIN_OBS
-    // osiągał jeden autobus w jedno popołudnie. Każdy kurs wchodzi do agregatu
-    // raz na godzinę w danym dniu (pierwsza obserwacja); pamięć w polu `_seen`,
-    // zerowana przy zmianie daty. build-delays.mjs pomija klucze zaczynające
-    // się od `_`.
-    const today = localDate();
-    const seen = agg._seen?.date === today ? agg._seen : { date: today, keys: {} };
-    let added = 0, dup = 0;
-    for (const [tripKey, { route, delaySec }] of obs) {
-      const seenKey = `${tripKey}|${hour}`;
-      if (seen.keys[seenKey]) { dup++; continue; }
-      seen.keys[seenKey] = 1;
-      const key = `${route}|${dayType}|${hour}`;
-      const row = agg[key] ?? [0, 0, 0, 0, 0, 0, 0, 0];
-      row[0] += 1;
-      row[1] += delaySec;
-      row[2 + bucketIndex(delaySec)] += 1;
-      agg[key] = row;
-      added++;
+    let agg;
+    try {
+      agg = readAggregate(file);
+    } catch (err) {
+      // Nieczytelny agregat: nie zapisujemy nic (plik zostaje nietknięty do
+      // ręcznej naprawy), miasto dostaje werdykt fail, reszta jedzie dalej.
+      report.verdict = { status: 'fail', reason: 'agregat nieczytelny' };
+      report.urlResults = [...urlResults, { url: file, kind: 'aggregate-unreadable', detail: err.message }];
+      console.warn(`${cityKey}: agregat nieczytelny, pomijam zapis (plik nietknięty) — ${err.message}`);
+      continue;
     }
-    agg._seen = seen;
-    fs.writeFileSync(file, JSON.stringify(agg));
+    const { added, dup } = mergeObservations(agg, obs, { dayType, hour, today });
+    try {
+      writeAggregate(file, agg);
+    } catch (err) {
+      report.verdict = { status: 'fail', reason: 'zapis agregatu nieudany' };
+      report.urlResults = [...urlResults, { url: file, kind: 'aggregate-write-failed', detail: err.message }];
+      console.warn(`${cityKey}: zapis agregatu nieudany — ${err.message}`);
+      continue;
+    }
     totalObs += added;
     console.log(`${cityKey}: ${obs.size} obserwacji, nowych ${added}, powtórzonych ${dup} (slot ${dayType}/${hour}), kluczy: ${Object.keys(agg).length - 1}`);
   }
+  return { reports, totalObs };
+}
+
+async function main() {
+  const root = path.join(import.meta.dirname, '..');
+  const cities = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cities.json'), 'utf8'));
+  const { reports, totalObs } = await runCollection(cities, { root });
 
   console.log(`Razem: ${totalObs} obserwacji.`);
   const summary = renderSummary(reports);
@@ -302,7 +365,7 @@ async function main() {
     try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Kolektor opóźnień\n\n${summary}\n`); } catch { /* podsumowanie jest dodatkiem */ }
   }
   const failed = reports.filter(r => r.verdict.status === 'fail').map(r => r.cityKey);
-  if (failed.length) console.error(`BŁĄD: brak obserwacji dla miast z rt: ${failed.join(', ')}`);
+  if (failed.length) console.error(`BŁĄD: miasta z rt bez zapisanych obserwacji: ${failed.join(', ')}`);
   process.exitCode = exitCodeFor(reports);
 }
 

@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
-  extractGtfsRtObservations, classifyUrlResult, cityVerdict, exitCodeFor, renderSummary, collectCity,
+  extractGtfsRtObservations, classifyUrlResult, cityVerdict, exitCodeFor, renderSummary, collectCity, runCollection,
 } from '../tools/collect-delays.mjs';
 
 const U = 'https://example.test/tu.pb';
@@ -158,4 +161,99 @@ test('Gdańsk: błąd HTTP i JSON bez REALTIME to awaria', async () => {
   assert.equal(j.verdict.status, 'fail');
   const g = await verdictFor(cfg, { fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => '' }, json: async () => ({ 1: { departures: [{ status: 'REALTIME', delayInSeconds: 30, trip: 7, routeShortName: '5' }] } }) }) });
   assert.equal(g.verdict.status, 'ok');
+});
+
+// --- Z-079: odporność pętli po miastach na uszkodzony agregat (katalog tymczasowy, bez sieci) ---
+
+const NOW = new Date('2026-11-24T10:00:00Z'); // wtorek 11:00 w Warszawie
+const mkRoot = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ztm-delays-'));
+const cities3 = { a: { rt: {} }, b: { rt: {} }, c: { rt: {} } };
+const fakeCollect = async () => ({
+  obs: new Map([['t1', { route: '10', delaySec: 90 }]]),
+  urlResults: [{ url: U, kind: 'ok', detail: '1 obserwacji' }],
+});
+const aggFile = (root, k) => path.join(root, 'data', 'delays', `${k}.json`);
+const quiet = async fn => {
+  const w = console.warn, l = console.log;
+  console.warn = console.log = () => {};
+  try { return await fn(); } finally { console.warn = w; console.log = l; }
+};
+const verdictOf = (reports, k) => reports.find(r => r.cityKey === k);
+
+test('Z-079: uszkodzony agregat pierwszego miasta nie zabiera zapisu pozostałym', async () => {
+  const root = mkRoot();
+  fs.mkdirSync(path.join(root, 'data', 'delays'), { recursive: true });
+  fs.writeFileSync(aggFile(root, 'a'), '{"10|0|11": [1, 2,'); // ucięty JSON
+  const { reports } = await quiet(() => runCollection(cities3, { root, collect: fakeCollect, now: NOW }));
+  assert.equal(verdictOf(reports, 'a').verdict.status, 'fail');
+  assert.equal(verdictOf(reports, 'a').urlResults.at(-1).kind, 'aggregate-unreadable');
+  for (const k of ['b', 'c']) {
+    assert.equal(verdictOf(reports, k).verdict.status, 'ok');
+    assert.equal(JSON.parse(fs.readFileSync(aggFile(root, k), 'utf8'))['10|0|11'][0], 1);
+  }
+  assert.equal(exitCodeFor(reports), 1);
+  assert.match(renderSummary(reports), /aggregate-unreadable/); // podsumowanie się renderuje
+  assert.equal(fs.readFileSync(aggFile(root, 'a'), 'utf8'), '{"10|0|11": [1, 2,'); // stary plik nietknięty
+});
+
+test('Z-079: agregat będący nie-obiektem (null, tablica) też jest awarią miasta', async () => {
+  const root = mkRoot();
+  fs.mkdirSync(path.join(root, 'data', 'delays'), { recursive: true });
+  fs.writeFileSync(aggFile(root, 'a'), 'null');
+  fs.writeFileSync(aggFile(root, 'b'), '[]');
+  const { reports } = await quiet(() => runCollection(cities3, { root, collect: fakeCollect, now: NOW }));
+  assert.deepEqual(reports.map(r => r.verdict.status), ['fail', 'fail', 'ok']);
+});
+
+test('Z-079: poprawne agregaty — zachowanie bez zmian, kod 0, dedup działa', async () => {
+  const root = mkRoot();
+  const run = () => quiet(() => runCollection(cities3, { root, collect: fakeCollect, now: NOW }));
+  const first = await run();
+  assert.equal(first.totalObs, 3);
+  assert.equal(exitCodeFor(first.reports), 0);
+  const second = await run(); // ten sam kurs w tej samej godzinie = duplikat
+  assert.equal(second.totalObs, 0);
+  assert.equal(JSON.parse(fs.readFileSync(aggFile(root, 'a'), 'utf8'))['10|0|11'][0], 1);
+});
+
+test('Z-079: brak pliku agregatu (pierwsze uruchomienie) nie jest awarią', async () => {
+  const root = mkRoot(); // katalog data/delays nie istnieje
+  const { reports } = await quiet(() => runCollection({ a: { rt: {} } }, { root, collect: fakeCollect, now: NOW }));
+  assert.equal(reports[0].verdict.status, 'ok');
+  assert.ok(fs.existsSync(aggFile(root, 'a')));
+});
+
+test('Z-079: błąd zapisu jednego miasta nie przerywa pozostałych', async () => {
+  const root = mkRoot();
+  fs.mkdirSync(aggFile(root, 'a'), { recursive: true }); // katalog w miejscu pliku -> odczyt/zapis rzuca
+  const { reports } = await quiet(() => runCollection(cities3, { root, collect: fakeCollect, now: NOW }));
+  assert.deepEqual(reports.map(r => r.verdict.status), ['fail', 'ok', 'ok']);
+});
+
+test('Z-079: przerwany zapis zostawia stary agregat nietknięty i nie zostawia pliku tymczasowego', async () => {
+  const root = mkRoot();
+  const dir = path.join(root, 'data', 'delays');
+  fs.mkdirSync(dir, { recursive: true });
+  const old = JSON.stringify({ '10|0|11': [5, 50, 0, 0, 5, 0, 0, 0], _seen: { date: '2020-01-01', keys: {} } });
+  fs.writeFileSync(aggFile(root, 'a'), old);
+  const realWrite = fs.writeFileSync;
+  // zapis przerwany w pół drogi: część bajtów ląduje w pliku, potem wyjątek
+  fs.writeFileSync = (p, data, ...rest) => {
+    if (String(p).startsWith(dir)) { realWrite(p, String(data).slice(0, 10), ...rest); throw new Error('przerwano'); }
+    return realWrite(p, data, ...rest);
+  };
+  let reports;
+  try {
+    ({ reports } = await quiet(() => runCollection({ a: { rt: {} }, b: { rt: {} } }, { root, collect: fakeCollect, now: NOW })));
+  } finally { fs.writeFileSync = realWrite; }
+  assert.equal(reports[0].verdict.status, 'fail');
+  assert.equal(reports[0].urlResults.at(-1).kind, 'aggregate-write-failed');
+  assert.equal(fs.readFileSync(aggFile(root, 'a'), 'utf8'), old); // stary w całości
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['a.json']); // bez śmieci, b też nie zapisane przez stub
+});
+
+test('Z-079: udany zapis nie zostawia pliku tymczasowego', async () => {
+  const root = mkRoot();
+  await quiet(() => runCollection({ a: { rt: {} } }, { root, collect: fakeCollect, now: NOW }));
+  assert.deepEqual(fs.readdirSync(path.join(root, 'data', 'delays')), ['a.json']);
 });

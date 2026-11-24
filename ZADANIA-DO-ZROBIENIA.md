@@ -245,14 +245,6 @@ Data ustalenia: 2026-11-24.
 - Jak sprawdzić: nieznane.
 
 
-### Z-079 [P2] Uszkodzony agregat jednego miasta przerywa cały przebieg kolektora
-- Status: nowe
-- Zgłoszone: 2026-11-20 (nieznane; znalezione przy Z-019)
-- Problem: uszkodzony plik agregatu jednego miasta wywróciłby cały proces `tools/collect-delays.mjs` już po zebraniu danych: podsumowanie przebiegu nie zostałoby wydrukowane, a miasta przetwarzane po nim straciłyby zapis.
-- Dowód: nieznane (numer linii nie podano); zachowanie opisane w zgłoszeniu z 2026-11-20, nienaprawione.
-- Pliki: tools/collect-delays.mjs.
-- Jak sprawdzić: nieznane.
-
 ### Z-080 [P3] Lista linii zapisywana w plikach dnia zależy od kolejności budowania dni
 - Status: nowe
 - Zgłoszone: 2026-11-20 (nieznane; znalezione przy Z-053)
@@ -262,6 +254,18 @@ Data ustalenia: 2026-11-24.
 - Jak sprawdzić: nieznane (oczekiwane: liczba linii w każdym pliku dnia równa `counts.routes`; test nieznany).
 
 ## Zrobione
+
+### Z-079 [P2] Uszkodzony agregat jednego miasta przerywa cały przebieg kolektora
+- Status: zrobione
+- Zgłoszone: 2026-11-20 (nieznane; znalezione przy Z-019)
+- Problem: uszkodzony plik agregatu jednego miasta wywróciłby cały proces `tools/collect-delays.mjs` już po zebraniu danych: podsumowanie przebiegu nie zostałoby wydrukowane, a miasta przetwarzane po nim straciłyby zapis.
+- Dowód: odtworzone na kopii starego skryptu z lokalnym serwerem i trzema miastami: ucięty plik pierwszego miasta dawał błąd parsowania, przerwanie procesu, brak podsumowania, a dwa pozostałe miasta nie zostały zapisane mimo poprawnie pobranych danych. Parsowanie agregatu stało w pętli po miastach bez zabezpieczenia, a wywołanie całej funkcji nie miało przechwycenia błędu.
+- Wdrożono 2026-11-24: pętla po miastach wyniesiona do osobnej, testowalnej funkcji. Odczyt agregatu rozróżnia brak pliku (stan normalny, pierwsze uruchomienie) od pliku nieczytelnego lub o złym kształcie (awaria tego miasta). Awaria odczytu i awaria zapisu dają werdykt błędu dla swojego miasta, trafiają do tabeli podsumowania z powodem i nie przerywają pozostałych. Zapis idzie przez plik tymczasowy w tym samym katalogu co docelowy i atomowe przeniesienie (konwencja jak w konwerterze TransXChange). Po nieudanym zapisie plik tymczasowy jest sprzątany, a docelowy zostaje nietknięty. Podsumowanie drukuje się zawsze, a kod wyjścia odzwierciedla awarię.
+- Zakres rozszerzony w trakcie: zapis agregatu nie był atomowy (kolektor pisał wprost na plik docelowy), więc najbardziej prawdopodobnym producentem uszkodzonego pliku był sam kolektor przerwany w trakcie zapisu (przebieg w GitHub Actions może zostać ucięty limitem czasu albo anulowany). Atomowy zapis wszedł w to samo zadanie.
+- Świadomy wybór: uszkodzony plik nie jest nadpisywany ani przemianowywany; zostaje bajt w bajt. Skutek: obserwacje z tego przebiegu dla tego miasta są tracone, a miasto zgłasza awarię w każdym kolejnym przebiegu, dopóki plik nie zostanie naprawiony ręcznie. Historia opóźnień jest do odzyskania z historii gita.
+- Sprawdzone inne miejsca: odczyt listy miast może wywrócić całość, ale bez tej listy nie ma czego przetwarzać (nie zmieniano); mapa nazw linii i dopisywanie do podsumowania przebiegu mają już własne zabezpieczenia; funkcja zbierająca dane jednego miasta nie rzuca od Z-019.
+- Pliki: tools/collect-delays.mjs, tests/collect-delays.test.mjs. `data/`, workflow, `js/` i `data/cities.json` nietknięte.
+- Jak sprawdzić: 7 nowych testów: uszkodzony agregat pierwszego miasta (pozostałe zapisane, stary plik nietknięty); zły kształt danych zamiast obiektu; poprawne agregaty bez zmian zachowania; brak pliku i brak katalogu jako stan normalny; katalog w miejscu pliku; przerwany zapis; brak pliku tymczasowego po udanym zapisie. Test przerwanego zapisu padał przed poprawką (stary agregat zostawał nadpisany uciętą treścią). Dla wady głównej dowodem jest realny przebieg starego skryptu, bo na starym kodzie testów jednostkowych nie dało się zaimportować. `npm run check`: tests 540, pass 539, fail 0, skipped 1, lint czysty. Niezweryfikowane: przebieg w GitHub Actions i na realnych feedach; atomowość przeniesienia sprawdzona lokalnie na Windows, nie na runnerze.
 
 ### Z-081 [P1] Bramka jakości nie broniła przed cofnięciem rozkładu
 - Status: zrobione
