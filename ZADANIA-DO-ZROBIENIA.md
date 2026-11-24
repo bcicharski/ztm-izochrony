@@ -9,7 +9,10 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 ## Kolejność ustalona z właścicielem
 
 Data ustalenia: 2026-11-24.
-- Teraz, w tej kolejności: Z-079, Z-003, Z-037.
+- Teraz, w tej kolejności:
+  - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione").
+  - Z-003 — następne w kolejce.
+  - Z-037 — po Z-003.
 - Następnie, jako ważne w drugiej kolejności: Z-013, Z-038, Z-009.
 - Z-009 nadal czeka na adresy profili społecznościowych od właściciela; bez nich nie da się go zacząć, mimo miejsca w kolejności.
 
