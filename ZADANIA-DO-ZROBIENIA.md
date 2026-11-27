@@ -106,6 +106,12 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Asercje (identyczny wynik we wszystkich 18 miastach): trzy pliki obecne; zero NaN; zero współrzędnych poza 48,9–55,0 N, 14,0–24,2 E; zero krawędzi z indeksem poza zakresem; zero węzłów izolowanych; poligon wody ≥ 4 punkty, linia wody lub mostu ≥ 2 punkty; ≥ 1 poligon wody i ≥ 1 linia mostu; węzły i krawędzie > 0.
   - Świadomie NIE kontrolowane: krawędzie zerowej długości (1–262 na miasto) i pętle `a == b` (70–1512 na miasto) — cecha kontrakcji grafu, nie wada.
 - Pozostaje: cykliczne odświeżanie danych OSM (workflow z `build-walknet`, `build-water`, `build-bridges`). Nadpisuje `data/<miasto>/`, więc wymaga zgody właściciela. Dane mają 123–129 dni (Trójmiasto 63).
+- Podpunkt (2026-11-27; status bez zmian): pozostała część zadania to automat cyklicznie przeliczający dane OSM (graf pieszy, woda, mosty). Do rozstrzygnięcia przed wdrożeniem:
+  - częstotliwość: dane OSM zmieniają się wolno, a pełne przeliczenie 18 miast to godziny pobierania z Overpassa;
+  - bramka: kontroler spójności z pierwszej części tego zadania (`node tools/check-osm.mjs`) już istnieje i sprawdza dokładnie te trzy pliki; automat ma się na nim opierać;
+  - odporność na częściową awarię: nie nadpisać dobrych danych gorszymi przy awarii źródła. Dzisiejsza przebudowa wody pokazała, że Overpass zwraca błąd 502 dla pojedynczych miast, a przy powtórzeniu przechodzi;
+  - zakres przebiegu: wszystkie miasta naraz czy po kilka na przebieg.
+  - Automat musi uwzględnić zmiany z dziś: graf pieszy zapisuje nowy, oszczędniejszy format (Z-003, etap 2); narzędzie budujące wodę stosuje margines 2 km z przycięciem (Z-075).
 
 ## Zaprojektowane (gotowe do wdrożenia)
 
@@ -193,6 +199,34 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Właściciel dostał 2026-11-23 gotowy draft pisma do MZK z prośbą o paczkę obejmującą dłuższy okres albo o stały adres najnowszego pliku. Pismo NIE zostało wysłane; decyzja i wysyłka należą do właściciela.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
+### Z-082 [P2] Fala rastrowa liczy tempem pieszym także w trybie rowerowym
+- Status: nowe
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: zapasowa ścieżka liczenia na rastrze (używana, gdy graf ulic nie jest jeszcze wczytany) bierze promień rozlania i tempo fali z prędkości pieszej również wtedy, gdy użytkownik wybrał tryb „rower w pojeździe", w którym wyjście z przystanku jest rowerowe. Ścieżka główna robi to inaczej — niespójność.
+- Dowód: znalezione przy projektowaniu Z-013 i nie naprawiane, bo było poza zakresem tamtego zadania. Numer linii: nieznany.
+- Pliki: js/engine.js.
+
+### Z-083 [P2] Wigilia oznaczona jako dzień wolny bez ograniczenia roku
+- Status: nowe
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: w module kalendarza 24 grudnia jest oznaczona jako dzień wolny bez warunku na rok, a w Polsce jest wolna dopiero od 2025. Dla dat wstecznych sprzed 2025 odpowiedź byłaby błędna. Przy dzisiejszym zastosowaniu (pytamy zawsze o „dziś") nie ma to wpływu; ujawni się, gdy pojawi się wybór daty historycznej.
+- Dowód: znalezione przy Z-037. Numer linii: nieznany.
+- Pliki: js/calendar.js.
+
+### Z-084 [P3] Święto wypadające w sobotę nie przełącza rozkładu na niedzielny
+- Status: nowe
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: po wdrożeniu Z-037 święto w dzień roboczy przełącza rozkład na niedzielny, ale święto wypadające w sobotę zostaje sobotą. To zachowanie sprzed zmiany, nierozstrzygnięte. Do ustalenia: czy w sobotnie święto komunikacja jedzie rozkładem sobotnim czy niedzielnym. To pytanie o teren, nie o kod, i prawdopodobnie odpowiedź zależy od miasta.
+- Dowód: znalezione przy Z-037. Numer linii: nieznany.
+- Pliki: js/uilogic.js.
+
+### Z-085 [P3] Komentarz w arkuszu stylów wspomina usunięty przycisk
+- Status: nowe
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: komentarz przy regule stylu nadal opisuje przycisk „Pokaż niedzielę", usunięty w Z-037. Reguła obsługuje teraz tylko przycisk kopiowania raportu diagnostycznego. Drobiazg porządkowy.
+- Dowód: znalezione przy Z-037. Numer linii: nieznany.
+- Pliki: css/style.css.
+
 ## Zrobione
 
 ### Z-075 [P2] Wyciek `water.json` poza `gridBbox` jest przypadkowy
@@ -245,6 +279,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Wynik wcześniejszy (2026-11-20; częściowy, 3 z 18 miast): progi są w porządku, logika bez zmian; zgadzają się z polami `counts` i `grid`. Pola miały Łódź, Olsztyn i Opole; dla nich wszystkie wielkości z `counts` i `grid` policzono tą samą funkcją co build i porównano z `meta.json`: zero różnic, w tym `outsideStops`, `outsideShare` i `maxOutsideKm`. Jedyna rozbieżność (liczba linii w plikach dnia Łodzi 129 / 133 / 134 wobec `counts.routes` 134) ma przyczynę w kodzie i została zgłoszona jako Z-080 (naprawiona 2026-11-27).
 - Pliki: tools/check-data.mjs (wdrożenie 2026-11-27: żadne; zadanie weryfikacyjne, kod bez zmian; komentarz przy `outsideShareWarn` dopisany 2026-11-20 zostaje aktualny).
 - Testy: bez zmian. Niezweryfikowane: Gorzów i Zielona Góra, do czasu przebudowy ich danych.
+- Notatka (2026-11-27): Gorzów i Zielona Góra nadal nie mają pól `counts` i `grid` w metadanych; dostaną je dopiero przy pierwszej przebudowie swoich danych rozkładowych. Dla Gorzowa oznacza to „po rozwiązaniu Z-055”, bo jego źródło jest świadomie martwe. Zadanie pozostaje zamknięte.
 
 ### Z-080 [P3] Lista linii zapisywana w plikach dnia zależy od kolejności budowania dni
 - Status: zrobione (wdrożone 2026-11-27)
