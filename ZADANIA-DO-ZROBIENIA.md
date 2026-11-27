@@ -27,6 +27,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Z-037 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-082, Z-083, Z-085, Z-086 — ZROBIONE 2026-11-27 (wpisy w „Zrobione”, poza kolejnością).
   - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione"), poza kolejnością.
+  - Z-087 — ZROBIONE 2026-11-27 (wpis w „Zrobione"). Z-088 — ZAMKNIĘTE 2026-11-27 jako zamierzone, bez zmiany zachowania (wpis w „Zrobione").
 - Wstrzymane (nie pominięte; właściciel wymienił je 2026-11-24 jako ważne w drugiej kolejności, nic tego nie odwołało; w zleceniu z 2026-11-27 ich nie ma):
   - Z-038 — czeka na decyzję właściciela: treść prawna banera zgody, nie wolno jej zmieniać bez jego słowa.
   - Z-009 — czeka na adresy profili społecznościowych od właściciela; bez nich nie ma czego wstawić.
@@ -199,22 +200,4 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Problem: po wdrożeniu Z-037 święto w dzień roboczy przełącza rozkład na niedzielny, ale święto wypadające w sobotę zostaje sobotą. To zachowanie sprzed zmiany, nierozstrzygnięte. Do ustalenia: czy w sobotnie święto komunikacja jedzie rozkładem sobotnim czy niedzielnym. To pytanie o teren, nie o kod, i prawdopodobnie odpowiedź zależy od miasta.
 - Dowód: znalezione przy Z-037. Numer linii: nieznany.
 - Pliki: js/uilogic.js.
-
-### Z-087 [P3] Martwy selektor stylu przycisku w komunikacie o dniu
-- Status: nowe
-- Zgłoszone: 2026-11-27 (nieznane)
-- Trudność: nieznane     Decyzja właściciela: nieznane
-- Problem: selektor stylu dla przycisku w komunikacie o dniu jest martwym kodem; komunikat nie zawiera już żadnych przycisków po usunięciu przycisku w Z-037. Do sprzątnięcia.
-- Dowód: znalezione przy Z-085 (2026-11-27).
-- Pliki: css/style.css.
-- Jak sprawdzić: nieznane.
-
-### Z-088 [P2] Końcówka fali pieszej po sieci ulic w trybie „rower w pojeździe"
-- Status: nowe
-- Zgłoszone: 2026-11-27 (nieznane)
-- Trudność: nieznane     Decyzja właściciela: nieznane
-- Problem: końcówka fali pieszej po sieci ulic używa tempa pieszego w trybie „rower w pojeździe", mimo że wyjście z przystanku jest tam rowerowe. To ta sama rodzina błędu co Z-082, w innym miejscu.
-- Dowód: znalezione przy Z-082 (2026-11-27). Nie sprawdzono, czy jest to zamierzone; wymaga rozstrzygnięcia przed naprawą.
-- Pliki: js/engine.js.
-- Jak sprawdzić: nieznane.
 

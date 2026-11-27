@@ -10,7 +10,7 @@ const app = read('js/app.js');
 const mapJs = read('js/map.js');
 
 // Liczba użyć var(--tap) w CSS: 17 po Z-028..Z-030, 19 po dołożeniu przycisków
-// z Z-022 (#dayNote button) i Z-025 (#diagCopy, .diag summary), 21 po kontrolce
+// z Z-022 (przycisk „Pokaż niedzielę", usunięty w Z-037; liczba użyć bez zmian) i Z-025 (#diagCopy, .diag summary), 21 po kontrolce
 // lokalizacji z Z-002 (.locate-btn min-width/min-height, .locate-set). Zabezpiecza pola
 // dotykowe 44 px: zagęszczanie marginesów ani porządki w CSS nie mogą usunąć
 // żadnej deklaracji wysokości. Podnoś tę stałą, gdy dochodzi kolejna kontrolka.

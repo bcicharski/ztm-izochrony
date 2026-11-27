@@ -684,6 +684,17 @@ test('tempo marszu (Z-013): speedsFor przy mnożniku 1 zwraca te same obiekty, p
   const bikeTo = speedsFor('bike', 'to', m);
   assert.equal(bikeTo.accessMps, NET_WALK_MPS * m);
   assert.equal(bikeTo.egressMps, NET_BIKE_MPS);
+  // Z-088: tempo rozlania na 75 m od sieci (crowWalk) = marsz × mnożnik w każdym
+  // trybie i kierunku; przy „rower w pojeździe" różne od tempa wyjścia (celowo)
+  for (const access of ['foot', 'bike', 'bike-onboard']) {
+    for (const dir of ['from', 'to']) {
+      for (const mult of [1, m]) {
+        assert.equal(speedsFor(access, dir, mult).crowWalk, WALK_MPS * mult, `crowWalk ${access}/${dir} ×${mult}`);
+      }
+    }
+  }
+  assert.notEqual(onboard.crowWalk, onboard.crowEgress);
+  assert.equal(onboard.crowWalk, WALK_MPS * m);
 });
 
 test('tempo marszu (Z-013): cap „do miejsca" nie zależy od porównania prędkości — pieszy dostaje 90 min przy każdym tempie', () => {

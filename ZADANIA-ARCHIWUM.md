@@ -12,6 +12,24 @@ wpisy poniżej zachowują dotychczasową kolejność).
 
 <!-- NOWE-ZROBIONE -->
 
+### Z-087 [P3] Martwy selektor stylu przycisku w komunikacie o dniu
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-27 (nieznane)
+- Trudność: nieznane     Decyzja właściciela: nieznane
+- Problem: selektor stylu dla przycisku w komunikacie o dniu jest martwym kodem; komunikat nie zawiera już żadnych przycisków po usunięciu przycisku w Z-037. Do sprzątnięcia.
+- Dowód: znalezione przy Z-085 (2026-11-27).
+- Pliki: css/style.css.
+- Jak sprawdzić: nieznane.
+
+### Z-088 [P2] Końcówka fali pieszej po sieci ulic w trybie „rower w pojeździe"
+- Status: zrobione 2026-11-27 — zamknięte jako zamierzone (rozstrzygnięcie: tak ma być), bez zmiany zachowania; wdrożono zamek na intencję: komentarz przy linii w `js/engine.js` oraz asercje w istniejącym teście z Z-013 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-27 (nieznane)
+- Trudność: nieznane     Decyzja właściciela: nieznane
+- Problem: końcówka fali pieszej po sieci ulic używa tempa pieszego w trybie „rower w pojeździe", mimo że wyjście z przystanku jest tam rowerowe. To ta sama rodzina błędu co Z-082, w innym miejscu.
+- Dowód: znalezione przy Z-082 (2026-11-27). Nie sprawdzono, czy jest to zamierzone; wymaga rozstrzygnięcia przed naprawą.
+- Pliki: js/engine.js.
+- Jak sprawdzić: nieznane.
+
 ### Z-082 [P2] Fala rastrowa liczy tempem pieszym także w trybie rowerowym
 - Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
 - Zgłoszone: 2026-11-27 (nieznane)

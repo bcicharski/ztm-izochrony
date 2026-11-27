@@ -939,8 +939,7 @@ html[data-approx] .legend .note-approx { display: flex; }
   color: var(--ink);
 }
 
-/* przycisk „Kopiuj raport diagnostyczny" (#diagCopy; Z-025). Selektor #dayNote button to pozostałość po usuniętym (Z-037) przycisku „Pokaż niedzielę" — #dayNote nie ma już przycisków */
-#dayNote button,
+/* przycisk „Kopiuj raport diagnostyczny" (#diagCopy; Z-025) */
 #diagCopy {
   min-height: var(--tap);
   padding: 0 12px;
@@ -953,11 +952,8 @@ html[data-approx] .legend .note-approx { display: flex; }
   cursor: pointer;
   touch-action: manipulation;
 }
-#dayNote button { display: block; margin-top: 6px; }
 #diagCopy { width: 100%; }
-#dayNote button:hover,
 #diagCopy:hover { border-color: var(--accent); }
-#dayNote button:focus-visible,
 #diagCopy:focus-visible,
 .diag summary:focus-visible {
   outline: 2px solid var(--accent);

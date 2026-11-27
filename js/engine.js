@@ -256,6 +256,13 @@ export class Engine {
     }
     if (!painted) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
     for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
+    // Rozlanie na SPREAD_M od sieci zawsze idzie tempem pieszym (crowWalk), także
+    // przy „rower w pojeździe" — celowo, nie tempem wyjścia (Z-088). Te 75 m to
+    // odcinek poza grafem (podwórze, trawnik, parking), który rowerzysta pokonuje
+    // prowadząc rower. Zasięg wyznacza tu limit w metrach, nie w sekundach, więc
+    // tempo zmienia tylko czas doliczany w obrębie tych metrów (najwyżej ok. 42 s)
+    // i nie ucina strefy — to różnica wobec Z-082, gdzie tempo ustalało promień fali.
+    // Pole jest osobne od dojścia i wyjścia i przy kierunku „do" nie zamienia ról.
     return computeTimeGrid(grid, null, SPREAD_M, { mps: speeds.crowWalk ?? WALK_MPS });
   }
 

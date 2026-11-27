@@ -38,7 +38,6 @@ const SIZED = [
   '.time-row select',
   '.share-btn',
   '.coffee-btn',
-  '#dayNote button', // „Pokaż niedzielę" (Z-022)
   '#clearLimits',    // „Zdejmij limity" (Z-012)
   '#diagCopy',       // „Kopiuj raport diagnostyczny" (Z-025)
   '.sec > summary',  // sekcje panelu (Z-059)
