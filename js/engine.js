@@ -350,7 +350,7 @@ export class Engine {
       const ringReach = Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * egressCrow);
       const waveFor = (mins, origin) => {
         const time = this.walkWaveOnNet(grid, net, mins, origin, speeds, maxWalkSec)
-          ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * speeds.crowWalk, { mps: speeds.crowWalk });
+          ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * egressCrow, { mps: egressCrow });
         const ring = outsideSeeds(grid, net, mins, { mps: egressCrow, reachM: ringReach });
         return ring.length ? computeTimeGrid(grid, ring, ringReach, { reset: false, mps: egressCrow }) : time;
       };

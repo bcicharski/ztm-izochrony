@@ -65,3 +65,13 @@ test('komunikat o danych: niezgodność reżimu, święto dziś, święto w dany
   const hm = { dayInfo: { sunday: { date: '20260106', regime: 'holiday-season', holiday: 'Trzech Króli' } } };
   assert.equal(dayDataNotice(hm, 'sunday', '20260301').holiday, 'Trzech Króli');
 });
+
+test('Wigilia (Z-083): dzień wolny dopiero od 2025 r.; pozostałe święta bez zmian', () => {
+  assert.equal(holidayName('20241224'), null);
+  assert.equal(holidayName('20231224'), null);
+  assert.equal(holidayName('20251224'), 'Wigilia');
+  assert.equal(holidayName('20261224'), 'Wigilia');
+  assert.equal(holidayName('20241225'), 'Boże Narodzenie');
+  assert.equal(holidayName('20241226'), 'Drugi dzień Bożego Narodzenia');
+  assert.equal(holidayName('20240101'), 'Nowy Rok');
+});

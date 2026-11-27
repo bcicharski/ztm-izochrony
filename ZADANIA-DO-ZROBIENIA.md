@@ -10,7 +10,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## Wskaźniki (aktualizuje kronikarz)
 
-- Najwyższy użyty numer: Z-086 (następne zadanie dostaje Z-087).
+- Najwyższy użyty numer: Z-088 (następne zadanie dostaje Z-089).
 - Ostatnia analiza: nieznane (pierwsza fala po migracji ustawi datę i hash commita; `analityk` skanuje przyrostowo od tego commita).
 
 ## Kolejność ustalona z właścicielem
@@ -25,6 +25,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Z-013 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; zakres zawężony do tempa marszu, schody i bezbarierowość poza zakresem).
   - Z-003 — ZROBIONE 2026-11-27 (etap 1 i etap 2 wdrożone; wpis w „Zrobione").
   - Z-037 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
+  - Z-082, Z-083, Z-085, Z-086 — ZROBIONE 2026-11-27 (wpisy w „Zrobione”, poza kolejnością).
   - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione"), poza kolejnością.
 - Wstrzymane (nie pominięte; właściciel wymienił je 2026-11-24 jako ważne w drugiej kolejności, nic tego nie odwołało; w zleceniu z 2026-11-27 ich nie ma):
   - Z-038 — czeka na decyzję właściciela: treść prawna banera zgody, nie wolno jej zmieniać bez jego słowa.
@@ -110,15 +111,6 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 
 ## Nowe (bez projektu rozwiązania)
 
-### Z-086 [P2] Workflow używa niezadeklarowanego wejścia `force`
-- Status: nowe
-- Zgłoszone: 2026-11-27 (nieznane)
-- Trudność: nieznane     Decyzja właściciela: nieznane
-- Problem: krok bramki jakości danych w `refresh-data.yml` odwołuje się do wejścia `force`, którego nie ma w definicji ręcznego uruchomienia; przy ręcznym przebiegu jest zawsze pusty, więc obejście bramki nie działa.
-- Dowód: znalezione przy Z-023 (2026-11-27), nienaprawione, bo poza tamtym zakresem; numer linii nieznany.
-- Pliki: .github/workflows/refresh-data.yml.
-- Jak sprawdzić: nieznane.
-
 ### Z-007 [P2] Znane luki modelu
 - Status: nowe (częściowo zrobione: luka 2 wdrożona 2026-11-21; luka 3 ODRZUCONA 2026-11-27; luka 1 ZATWIERDZONA 2026-11-27, bez projektu; zadanie NIE jest zamknięte — jedyny otwarty punkt: luka 1)
 - Decyzja: ZATWIERDZONE do wdrożenia 2026-11-20 z zastrzeżeniem terminu — patrz „Decyzja właściciela (2026-11-20)" niżej. Luka 2 ma gotowy projekt; wdrożenie zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie, czyli rdzeń produktu. Luki 1 i 3 bez projektu.
@@ -201,20 +193,6 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Właściciel dostał 2026-11-23 gotowy draft pisma do MZK z prośbą o paczkę obejmującą dłuższy okres albo o stały adres najnowszego pliku. Pismo NIE zostało wysłane; decyzja i wysyłka należą do właściciela.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
-### Z-082 [P2] Fala rastrowa liczy tempem pieszym także w trybie rowerowym
-- Status: nowe
-- Zgłoszone: 2026-11-27 (nieznane)
-- Problem: zapasowa ścieżka liczenia na rastrze (używana, gdy graf ulic nie jest jeszcze wczytany) bierze promień rozlania i tempo fali z prędkości pieszej również wtedy, gdy użytkownik wybrał tryb „rower w pojeździe", w którym wyjście z przystanku jest rowerowe. Ścieżka główna robi to inaczej — niespójność.
-- Dowód: znalezione przy projektowaniu Z-013 i nie naprawiane, bo było poza zakresem tamtego zadania. Numer linii: nieznany.
-- Pliki: js/engine.js.
-
-### Z-083 [P2] Wigilia oznaczona jako dzień wolny bez ograniczenia roku
-- Status: nowe
-- Zgłoszone: 2026-11-27 (nieznane)
-- Problem: w module kalendarza 24 grudnia jest oznaczona jako dzień wolny bez warunku na rok, a w Polsce jest wolna dopiero od 2025. Dla dat wstecznych sprzed 2025 odpowiedź byłaby błędna. Przy dzisiejszym zastosowaniu (pytamy zawsze o „dziś") nie ma to wpływu; ujawni się, gdy pojawi się wybór daty historycznej.
-- Dowód: znalezione przy Z-037. Numer linii: nieznany.
-- Pliki: js/calendar.js.
-
 ### Z-084 [P3] Święto wypadające w sobotę nie przełącza rozkładu na niedzielny
 - Status: nowe
 - Zgłoszone: 2026-11-27 (nieznane)
@@ -222,10 +200,21 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Dowód: znalezione przy Z-037. Numer linii: nieznany.
 - Pliki: js/uilogic.js.
 
-### Z-085 [P3] Komentarz w arkuszu stylów wspomina usunięty przycisk
+### Z-087 [P3] Martwy selektor stylu przycisku w komunikacie o dniu
 - Status: nowe
 - Zgłoszone: 2026-11-27 (nieznane)
-- Problem: komentarz przy regule stylu nadal opisuje przycisk „Pokaż niedzielę", usunięty w Z-037. Reguła obsługuje teraz tylko przycisk kopiowania raportu diagnostycznego. Drobiazg porządkowy.
-- Dowód: znalezione przy Z-037. Numer linii: nieznany.
+- Trudność: nieznane     Decyzja właściciela: nieznane
+- Problem: selektor stylu dla przycisku w komunikacie o dniu jest martwym kodem; komunikat nie zawiera już żadnych przycisków po usunięciu przycisku w Z-037. Do sprzątnięcia.
+- Dowód: znalezione przy Z-085 (2026-11-27).
 - Pliki: css/style.css.
+- Jak sprawdzić: nieznane.
+
+### Z-088 [P2] Końcówka fali pieszej po sieci ulic w trybie „rower w pojeździe"
+- Status: nowe
+- Zgłoszone: 2026-11-27 (nieznane)
+- Trudność: nieznane     Decyzja właściciela: nieznane
+- Problem: końcówka fali pieszej po sieci ulic używa tempa pieszego w trybie „rower w pojeździe", mimo że wyjście z przystanku jest tam rowerowe. To ta sama rodzina błędu co Z-082, w innym miejscu.
+- Dowód: znalezione przy Z-082 (2026-11-27). Nie sprawdzono, czy jest to zamierzone; wymaga rozstrzygnięcia przed naprawą.
+- Pliki: js/engine.js.
+- Jak sprawdzić: nieznane.
 

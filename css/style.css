@@ -939,7 +939,7 @@ html[data-approx] .legend .note-approx { display: flex; }
   color: var(--ink);
 }
 
-/* przycisk „Pokaż niedzielę" w #dayNote i „Kopiuj raport diagnostyczny" (Z-022, Z-025) */
+/* przycisk „Kopiuj raport diagnostyczny" (#diagCopy; Z-025). Selektor #dayNote button to pozostałość po usuniętym (Z-037) przycisku „Pokaż niedzielę" — #dayNote nie ma już przycisków */
 #dayNote button,
 #diagCopy {
   min-height: var(--tap);

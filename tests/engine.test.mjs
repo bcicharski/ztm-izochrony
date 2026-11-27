@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Engine, speedsFor } from '../js/engine.js';
-import { buildWalkGrid, pixelIndex, outsideSeeds } from '../js/walkgrid.js';
+import { buildWalkGrid, pixelIndex, outsideSeeds, UNREACH } from '../js/walkgrid.js';
 import { NET_WALK_MPS, NET_BIKE_MPS } from '../js/walknet.js';
 import { WALK_MPS, BIKE_MPS, M_PER_DEG_LAT } from '../js/data.js';
 import { makeRaw, makeWalkRaw, everyN } from './helpers.mjs';
@@ -758,4 +758,29 @@ test('tempo marszu (Z-013): dymek trasy „tylko pieszo" w linii prostej liczy a
   const base = e.journey(target).sec;
   await run(e, { walkOnly: true, pace: 2.5 });
   near(e.journey(target).sec / base, 4.5 / 2.5, 1e-9, 'stosunek czasów');
+});
+
+// --- Z-082: zapasowa fala rastrowa (graf ulic jeszcze niewczytany) liczy tempem wyjścia ---
+
+test('fala rastrowa bez grafu ulic (Z-082): zasięg od przystanku liczy tempem wyjścia — rower w pojeździe dalej niż pieszo', async () => {
+  globalThis.ImageData ??= class { constructor(w, h) { this.data = new Uint8ClampedArray(w * h * 4); } };
+  let resolveWalk;
+  const walkLoaded = new Promise(r => { resolveWalk = r; });
+  const e = new Engine({ createCanvas: fakeCanvas, onWalkNet: resolveWalk });
+  assert.equal(await e.setCity('tstRasterFallback', { gridBbox: [49.99, 19.99, 50.07, 20.03] }), true);
+  await walkLoaded;
+  e.walkNet = null; // graf ulic „jeszcze nie wczytany" → walkWaveOnNet zwraca null, działa fallback rastrowy
+  /** Pole [m²] pikseli lądu dosiężnych falą (spacer z punktu i od przystanków łącznie). */
+  const area = async access => {
+    await run(e, { access, maxWalkSec: LIM, point: NEAR_S0 });
+    const g = e.last.grid, t = e.last.gridTime;
+    let n = 0;
+    for (let i = 0; i < t.length; i++) if (t[i] < UNREACH && g.land[i]) n++;
+    return n * g.res * g.res;
+  };
+  const foot = await area('foot');
+  const onboard = await area('bike-onboard');
+  // pieszo: koło ~ π(limit × tempo pieszo)² wokół przystanku S0 i punktu startu; rower w pojeździe: promień ×3,3
+  assert.ok(foot < 4 * Math.PI * (LIM * WALK_MPS) ** 2, `pieszo: pole ${foot} m² w granicach limit × tempo pieszo`);
+  assert.ok(onboard > foot * 3, `rower w pojeździe (${onboard} m²) wyraźnie większy niż pieszo (${foot} m²)`);
 });

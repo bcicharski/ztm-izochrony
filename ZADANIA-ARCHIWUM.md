@@ -12,6 +12,36 @@ wpisy poniżej zachowują dotychczasową kolejność).
 
 <!-- NOWE-ZROBIONE -->
 
+### Z-082 [P2] Fala rastrowa liczy tempem pieszym także w trybie rowerowym
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: zapasowa ścieżka liczenia na rastrze (używana, gdy graf ulic nie jest jeszcze wczytany) bierze promień rozlania i tempo fali z prędkości pieszej również wtedy, gdy użytkownik wybrał tryb „rower w pojeździe", w którym wyjście z przystanku jest rowerowe. Ścieżka główna robi to inaczej — niespójność.
+- Dowód: znalezione przy projektowaniu Z-013 i nie naprawiane, bo było poza zakresem tamtego zadania. Numer linii: nieznany.
+- Pliki: js/engine.js.
+
+### Z-083 [P2] Wigilia oznaczona jako dzień wolny bez ograniczenia roku
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: w module kalendarza 24 grudnia jest oznaczona jako dzień wolny bez warunku na rok, a w Polsce jest wolna dopiero od 2025. Dla dat wstecznych sprzed 2025 odpowiedź byłaby błędna. Przy dzisiejszym zastosowaniu (pytamy zawsze o „dziś") nie ma to wpływu; ujawni się, gdy pojawi się wybór daty historycznej.
+- Dowód: znalezione przy Z-037. Numer linii: nieznany.
+- Pliki: js/calendar.js.
+
+### Z-085 [P3] Komentarz w arkuszu stylów wspomina usunięty przycisk
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-27 (nieznane)
+- Problem: komentarz przy regule stylu nadal opisuje przycisk „Pokaż niedzielę", usunięty w Z-037. Reguła obsługuje teraz tylko przycisk kopiowania raportu diagnostycznego. Drobiazg porządkowy.
+- Dowód: znalezione przy Z-037. Numer linii: nieznany.
+- Pliki: css/style.css.
+
+### Z-086 [P2] Workflow używa niezadeklarowanego wejścia `force`
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-27 (nieznane)
+- Trudność: nieznane     Decyzja właściciela: nieznane
+- Problem: krok bramki jakości danych w `refresh-data.yml` odwołuje się do wejścia `force`, którego nie ma w definicji ręcznego uruchomienia; przy ręcznym przebiegu jest zawsze pusty, więc obejście bramki nie działa.
+- Dowód: znalezione przy Z-023 (2026-11-27), nienaprawione, bo poza tamtym zakresem; numer linii nieznany.
+- Pliki: .github/workflows/refresh-data.yml.
+- Jak sprawdzić: nieznane.
+
 ### Z-075 [P2] Wyciek `water.json` poza `gridBbox` jest przypadkowy
 - Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
 - Zgłoszone: 2026-11-20 (nieznane)

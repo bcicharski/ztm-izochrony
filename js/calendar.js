@@ -32,7 +32,6 @@ const FIXED_HOLIDAYS = {
   '0815': 'Wniebowzięcie NMP',
   '1101': 'Wszystkich Świętych',
   '1111': '11 listopada',
-  '1224': 'Wigilia', // dzień ustawowo wolny od 2025 r. (Dz.U. 2024 poz. 1965)
   '1225': 'Boże Narodzenie',
   '1226': 'Drugi dzień Bożego Narodzenia',
 };
@@ -41,6 +40,8 @@ const FIXED_HOLIDAYS = {
 export function holidayName(ymd) {
   const fixed = FIXED_HOLIDAYS[ymd.slice(4)];
   if (fixed) return fixed;
+  // Wigilia: dzień ustawowo wolny dopiero od 2025 r. (Dz.U. 2024 poz. 1965)
+  if (ymd.slice(4) === '1224' && +ymd.slice(0, 4) >= 2025) return 'Wigilia';
   const easter = easterSunday(+ymd.slice(0, 4));
   if (ymd === easter) return 'Wielkanoc';
   if (ymd === addDays(easter, 1)) return 'Poniedziałek Wielkanocny';

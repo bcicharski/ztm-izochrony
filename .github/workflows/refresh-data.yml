@@ -21,6 +21,10 @@ on:
         required: false
         type: boolean
         default: false
+      force:
+        description: 'Bramka jakości danych: miasta po przecinku (np. krakow,lodz) albo all, dla których spadek jest świadomie przepuszczany'
+        required: false
+        type: string
       skip_refresh:
         description: 'Pomiń zadanie rozkładowe (tylko ręczne uruchomienie — do prób samego OSM; planowy przebieg zawsze robi oba)'
         required: false
