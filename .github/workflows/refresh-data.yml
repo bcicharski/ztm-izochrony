@@ -1,4 +1,5 @@
-# Cotygodniowe odświeżenie prekompilowanych danych rozkładowych z GTFS ZTM Gdańsk.
+# Cotygodniowe odświeżenie prekompilowanych danych: najpierw dane OSM (zadanie
+# `osm`, kilka miast na przebieg — Z-023), potem rozkłady z GTFS (zadanie `refresh`).
 # Po wypchnięciu zmian GitHub Pages (tryb "deploy from branch") publikuje je automatycznie.
 name: Odśwież dane rozkładowe
 
@@ -6,15 +7,266 @@ on:
   schedule:
     - cron: '30 3 * * 1'   # poniedziałki, 3:30 UTC
   workflow_dispatch:        # możliwość ręcznego uruchomienia z zakładki Actions
+    inputs:
+      cities:
+        description: 'Zadanie OSM: lista miast po przecinku (np. opole,gorzow) — pomija rotację'
+        required: false
+        type: string
+      limit:
+        description: 'Zadanie OSM: najwyżej tyle miast w przebiegu (domyślnie 3; przy liście miast ignorowane)'
+        required: false
+        type: string
+      skip_diff_gate:
+        description: 'Zadanie OSM: pomiń bramkę porównawczą (kontroler spójności zostaje zawsze)'
+        required: false
+        type: boolean
+        default: false
+      skip_refresh:
+        description: 'Pomiń zadanie rozkładowe (tylko ręczne uruchomienie — do prób samego OSM; planowy przebieg zawsze robi oba)'
+        required: false
+        type: boolean
+        default: false
+
+# Dwa przebiegi naraz (np. ręczny w trakcie planowego) pchałyby na tę samą gałąź
+# i jeden skończyłby odrzuceniem; kolejny czeka, nie przerywa trwającego.
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
 
 jobs:
+  # Dlaczego OSM w tym samym workflow, przed rozkładami: build-data.mjs liczy czasy
+  # przesiadek z walknet.json i water.json. Graf przeliczony bez przeliczenia
+  # rozkładów rozjeżdża się z nimi, a rozkładowy build bywa pomijany (błąd feedu)
+  # albo cofany (bramka jakości) — rozjazd trwałby tygodniami. `needs: osm` wymusza kolejność.
+  osm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330   # twardy limit GitHuba to 360; per miasto i tak działają limity niżej
+    permissions:
+      contents: write
+    env:
+      # Bramka porównawcza (tools/check-osm-diff.mjs) działa w trybie RAPORTOWANIA:
+      # progi nie są jeszcze skalibrowane, więc nic nie blokuje. Tryb blokujący włącza
+      # się osobną, odwracalną zmianą: wpisz tu --enforce (po kalibracji progów).
+      DIFF_ENFORCE: ''
+      # Odczekanie przed ponowieniem miast, które padły na pobraniu (sekundy).
+      OSM_RETRY_WAIT: '600'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Miasta idą SEKWENCYJNIE (Overpass limituje równoległe zapytania). Każde jest
+      # atomowe: albo trzy pliki (walknet, water, bridges) przechodzą obie bramki, albo
+      # wszystkie trzy wracają do wersji z commita. Wynik KAŻDEJ próby — także cofniętej
+      # i nieudanej — trafia do data/osm-state.json; bez tego rotacja wybierałaby
+      # w kółko te same miasta.
+      - name: Przelicz graf pieszy, wodę i mosty
+        env:
+          CITIES_INPUT: ${{ github.event.inputs.cities }}
+          LIMIT_INPUT: ${{ github.event.inputs.limit }}
+          SKIP_DIFF_GATE: ${{ github.event.inputs.skip_diff_gate }}
+        run: |
+          OSM_TMP="$RUNNER_TEMP/osm"; INFLIGHT="$OSM_TMP/inflight"
+          mkdir -p "$OSM_TMP"; rm -f "$INFLIGHT"
+          today=$(date -u +%F)
+
+          # --- wybór miast (rotacja albo jawna lista z ręcznego uruchomienia) ---
+          args=()
+          if [ -n "$CITIES_INPUT" ]; then args+=(--cities "$CITIES_INPUT"); fi
+          if [ -n "$LIMIT_INPUT" ]; then args+=(--limit "$LIMIT_INPUT"); fi
+          # bez potoku: kod wyjścia rotacji (np. nieznane miasto) ma przerwać krok
+          selected=$(node tools/osm-rotate.mjs "${args[@]}" --format csv)
+          selected="${selected//,/ }"
+          echo "Wybrane miasta: ${selected:-—}"
+          if [ -z "${selected// /}" ]; then
+            echo "Nic do odświeżenia w tym przebiegu." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Cofnięcie CAŁEJ trójki plików miasta do wersji z commita (brak pliku w commicie = usuń).
+          revert_city() {
+            local c="$1" f
+            for f in walknet water bridges; do
+              if git cat-file -e "HEAD:data/$c/$f.json" 2>/dev/null; then
+                git checkout HEAD -- "data/$c/$f.json"
+              else
+                rm -f "data/$c/$f.json"
+              fi
+            done
+          }
+
+          record_state() {   # $1 miasto, $2 ok|gate|error, $3 notatka
+            CITY="$1" RESULT="$2" NOTE="$3" TODAY="$today" node --input-type=module -e "
+              import { readState, writeState, recordAttempt } from './tools/osm-state.mjs';
+              const e = process.env;
+              writeState(recordAttempt(readState(), e.CITY, { date: e.TODAY, result: e.RESULT, note: e.NOTE }));
+            "
+          }
+
+          report_city() {    # $1 miasto, $2 etykieta przebiegu
+            local c="$1"
+            {
+              echo "### $c — $RESULT $2"
+              [ -n "$NOTE" ] && echo "$NOTE"
+              if [ -s "$OSM_TMP/$c.diff.md" ]; then echo; cat "$OSM_TMP/$c.diff.md"; fi
+              if [ "$RESULT" = gate ] && [ -s "$OSM_TMP/$c.check.md" ]; then echo; cat "$OSM_TMP/$c.check.md"; fi
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # Ustawia RESULT (ok|gate|error), NOTE i FETCHFAIL (1 = padło pobieranie z Overpassa).
+          process_city() {
+            local c="$1" base="$OSM_TMP/base/$1" log="$OSM_TMP/$1.log" f rc=0 d_rc=0
+            RESULT=""; NOTE=""; FETCHFAIL=0
+            rm -f "$OSM_TMP/$c.diff.md" "$OSM_TMP/$c.check.md"
+            echo "$c" > "$INFLIGHT"   # znacznik: przy przerwaniu krok „Zapisz” cofnie to miasto
+
+            # wersja odniesienia z bieżącego commita (jak check-data.mjs: git show HEAD:…)
+            rm -rf "$base"; mkdir -p "$base"
+            for f in walknet water bridges; do
+              if git cat-file -e "HEAD:data/$c/$f.json" 2>/dev/null; then
+                git show "HEAD:data/$c/$f.json" > "$base/$f.json"
+              fi
+            done
+
+            echo "::group::Budowa $c"
+            { timeout 60m node --max-old-space-size=6144 tools/build-walknet.mjs "$c" \
+              && timeout 30m node tools/build-water.mjs "$c" \
+              && timeout 30m node tools/build-bridges.mjs "$c"; } > "$log" 2>&1 || rc=$?
+            tail -n 80 "$log"
+            echo "::endgroup::"
+            if [ "$rc" -ne 0 ]; then
+              revert_city "$c"
+              if grep -q 'Overpass: HTTP' "$log"; then FETCHFAIL=1; NOTE="błąd pobrania z Overpassa"; else NOTE="błąd budowy (kod $rc)"; fi
+              RESULT=error
+              echo "::warning::$c: $NOTE — dane cofnięte do wersji z commita"
+              rm -f "$INFLIGHT"; return 0
+            fi
+
+            # bramka 1: kontroler spójności (zawsze; --ignore-warnings = tylko BŁĄD blokuje)
+            if ! node tools/check-osm.mjs "$c" --ignore-warnings > "$OSM_TMP/$c.check.md" 2>&1; then
+              cat "$OSM_TMP/$c.check.md"
+              revert_city "$c"; RESULT=gate; NOTE="kontroler spójności nie przeszedł — dane cofnięte"
+              echo "::warning::$c: $NOTE"
+              rm -f "$INFLIGHT"; return 0
+            fi
+
+            # bramka 2: porównanie z wersją odniesienia (bez niej — nowe miasto — nie ma z czym)
+            if [ "$SKIP_DIFF_GATE" = true ]; then
+              NOTE="bramka porównawcza pominięta na życzenie"
+            elif [ ! -f "$base/walknet.json" ]; then
+              NOTE="brak wersji odniesienia w commicie — bramka porównawcza pominięta"
+            else
+              # $DIFF_ENFORCE celowo bez cudzysłowu: pusty = brak argumentu
+              node tools/check-osm-diff.mjs "$c" --new "data/$c/walknet.json" --old "$base/walknet.json" $DIFF_ENFORCE > "$OSM_TMP/$c.diff.md" 2>&1 || d_rc=$?
+              cat "$OSM_TMP/$c.diff.md"
+              if [ "$d_rc" -ne 0 ]; then
+                if [ -n "$DIFF_ENFORCE" ]; then
+                  revert_city "$c"; RESULT=gate; NOTE="bramka porównawcza zablokowała — dane cofnięte"
+                  echo "::warning::$c: $NOTE"
+                  rm -f "$INFLIGHT"; return 0
+                fi
+                echo "::warning::$c: bramka porównawcza zakończyła się kodem $d_rc (tryb raportowania — nie blokuje)"
+              fi
+            fi
+            RESULT=ok
+            rm -f "$INFLIGHT"
+          }
+
+          declare -A FINAL
+          retry=""
+          for c in $selected; do
+            process_city "$c"
+            record_state "$c" "$RESULT" "$NOTE"
+            report_city "$c" ""
+            FINAL[$c]=$RESULT
+            if [ "$FETCHFAIL" -eq 1 ]; then retry="$retry $c"; fi
+          done
+
+          # jeden dodatkowy przebieg tylko dla miast, które padły na pobraniu — po odczekaniu
+          if [ -n "${retry// /}" ]; then
+            echo "Ponawiam po ${OSM_RETRY_WAIT} s:$retry"
+            sleep "$OSM_RETRY_WAIT"
+            for c in $retry; do
+              process_city "$c"
+              record_state "$c" "$RESULT" "$NOTE"
+              report_city "$c" "(ponowienie)"
+              FINAL[$c]=$RESULT
+            done
+          fi
+
+          built=""; reverted=""; failed=""
+          for c in $(printf '%s\n' "${!FINAL[@]}" | sort); do
+            case "${FINAL[$c]}" in
+              ok) built="$built $c" ;;
+              gate) reverted="$reverted $c" ;;
+              *) failed="$failed $c" ;;
+            esac
+          done
+          {
+            echo "OSM_BUILT=${built# }"
+            echo "OSM_REVERTED=${reverted# }"
+            echo "OSM_FAILED=${failed# }"
+          } >> "$GITHUB_ENV"
+          echo "Zbudowane:${built:- —}; cofnięte (bramka):${reverted:- —}; nieudane:${failed:- —}"
+
+      # Zawsze (poza anulowaniem), także po awarii poprzedniego kroku: plik stanu musi
+      # trafić do repozytorium, nawet gdy wszystkie miasta zostały cofnięte.
+      - name: Zapisz dane OSM i stan
+        if: ${{ !cancelled() }}
+        run: |
+          INFLIGHT="$RUNNER_TEMP/osm/inflight"
+          # Poprzedni krok przerwany w środku miasta (awaria, limit czasu): cofnij je i zapisz jako nieudane,
+          # żeby do commita nie trafiło pół miasta.
+          if [ -s "$INFLIGHT" ]; then
+            c=$(cat "$INFLIGHT")
+            echo "::warning::przebieg przerwany w trakcie miasta $c — cofam"
+            for f in walknet water bridges; do
+              if git cat-file -e "HEAD:data/$c/$f.json" 2>/dev/null; then git checkout HEAD -- "data/$c/$f.json"; else rm -f "data/$c/$f.json"; fi
+            done
+            CITY="$c" TODAY=$(date -u +%F) node --input-type=module -e "
+              import { readState, writeState, recordAttempt } from './tools/osm-state.mjs';
+              const e = process.env;
+              writeState(recordAttempt(readState(), e.CITY, { date: e.TODAY, result: 'error', note: 'przebieg przerwany w trakcie miasta' }));
+            "
+            OSM_FAILED="${OSM_FAILED:+$OSM_FAILED }$c"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Brak zmian (żadne miasto nie było wybrane)."
+            exit 0
+          fi
+          git commit -m "Odświeżono dane OSM" \
+            -m "Zbudowane: ${OSM_BUILT:-—}" \
+            -m "Cofnięte (bramka): ${OSM_REVERTED:-—}" \
+            -m "Nieudane: ${OSM_FAILED:-—}"
+          if ! git push; then
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push
+          fi
+
   refresh:
+    needs: osm
+    # Rozkłady mają się odświeżyć także wtedy, gdy zadanie OSM padło albo go pominięto —
+    # awaria Overpassa nie może wstrzymać odświeżania rozkładów (stąd nie samo `needs`).
+    # Pominięcie działa wyłącznie przy ręcznym uruchomieniu; harmonogram zawsze robi oba zadania.
+    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.skip_refresh) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write   # zgłoszenie, gdy miasto zostało pominięte albo rozkład wygasa
     steps:
+      # Jawna gałąź: bez `ref` checkout bierze commit z chwili startu workflow, czyli
+      # drzewo SPRZED commita z danymi OSM, a push z niego skończyłby się odrzuceniem
+      # (brak przewinięcia).
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:

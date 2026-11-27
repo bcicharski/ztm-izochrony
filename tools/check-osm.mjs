@@ -20,7 +20,11 @@
  *     bboxa siatką komórek, udział punktów wody i mostów w bboxie;
  *  4. sanity: brak NaN, współrzędne w Polsce, liczby > 0, indeksy krawędzi
  *     w zakresie, brak węzłów izolowanych, udział największej spójnej składowej;
- *  5. wiek plików (mtime) — zawsze w raporcie.
+ *  5. wiek danych — zawsze w raporcie. Źródło: `data/osm-state.json` (data
+ *     ostatniego powodzenia odświeżenia miasta; tools/osm-state.mjs). Awaryjnie,
+ *     gdy miasta nie ma w stanie: data modyfikacji plików — w CI to data pobrania
+ *     repozytorium (`actions/checkout` nie zachowuje mtime), więc tam pokazuje
+ *     ~0 dni i NIE świadczy o świeżości danych.
  *
  * Progi i asercje wyznaczone pomiarem na 18 miastach z data/ (2026-11-20),
  * rozkłady w komentarzach przy LIMITS. Tam, gdzie pomiar był identyczny
@@ -41,6 +45,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { decodeWalkNet } from '../js/walknet.js';
+import { readState, ageDays } from './osm-state.mjs';
 
 /**
  * Progi. Pomiar 2026-11-20, 18 miast (min / mediana / max, najgorsze miasto):
@@ -242,19 +247,24 @@ const CHECKERS = { walknet: checkWalkNet, water: checkWater, bridges: checkBridg
 
 /**
  * Kontrola jednego miasta.
- * @returns {{findings: string[], metrics: object, ages: object}}
- *   ages: { <plik>: wiek w dniach | null }, metrics: { walknet, water, bridges }
+ * @returns {{findings: string[], metrics: object, ages: object, ageSource: 'stan'|'mtime'}}
+ *   ages: { <plik>: wiek w dniach | null }, metrics: { walknet, water, bridges };
+ *   ageSource: skąd wiek — wpis w stanie (data ostatniego powodzenia, jedna dla
+ *   wszystkich plików miasta) albo data modyfikacji plików (awaryjnie).
  */
-export function checkCity(key, cfg, { root, today = new Date() }) {
+export function checkCity(key, cfg, { root, today = new Date(), state = readState(path.join(root, 'data', 'osm-state.json')) }) {
   const bbox = cfg.gridBbox ?? cfg.bbox;
-  const res = { findings: [], metrics: {}, ages: {} };
+  const res = { findings: [], metrics: {}, ages: {}, ageSource: 'mtime' };
+  const stateAge = ageDays(state.cities?.[key]?.lastSuccess, today);
+  if (stateAge != null) res.ageSource = 'stan';
   if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(isNum)) {
     res.findings.push(err('cities.json: brak poprawnego gridBbox/bbox [s, w, n, e]'));
     return res;
   }
   for (const f of FILES) {
     const file = path.join(root, 'data', key, `${f}.json`);
-    try { res.ages[f] = Math.max(0, Math.floor((today.getTime() - fs.statSync(file).mtimeMs) / DAY_MS)); } catch { res.ages[f] = null; }
+    if (stateAge != null) res.ages[f] = fs.existsSync(file) ? stateAge : null;
+    else try { res.ages[f] = Math.max(0, Math.floor((today.getTime() - fs.statSync(file).mtimeMs) / DAY_MS)); } catch { res.ages[f] = null; }
     const { data, error } = readJson(file);
     if (error) { res.findings.push(err(`${f}.json: ${error}`)); continue; }
     const { findings, metrics } = CHECKERS[f](data, bbox);
@@ -307,7 +317,8 @@ export function run(argv, { root = path.join(import.meta.dirname, '..'), today =
   }
   const keys = wanted.length ? wanted : Object.keys(cities);
 
-  const results = keys.map(key => ({ key, name: cities[key].name, ...checkCity(key, cities[key], { root, today }) }));
+  const state = readState(path.join(root, 'data', 'osm-state.json'));
+  const results = keys.map(key => ({ key, name: cities[key].name, ...checkCity(key, cities[key], { root, today, state }) }));
   const bad = results.filter(r => r.findings.length);
   const todayIso = today.toISOString().slice(0, 10);
   const lines = [];
@@ -321,13 +332,14 @@ export function run(argv, { root = path.join(import.meta.dirname, '..'), today =
       for (const f of r.findings) lines.push(`  - ${f}`);
     }
   }
-  lines.push('\n### Wiek plików (data modyfikacji, dni)\n');
-  lines.push('| Miasto | walknet | water | bridges |', '|---|---|---|---|');
+  lines.push('\n### Wiek danych (dni od ostatniego powodzenia odświeżenia)\n');
+  lines.push('| Miasto | walknet | water | bridges | źródło |', '|---|---|---|---|---|');
   for (const r of results) {
     const a = f => (r.ages[f] == null ? '—' : String(r.ages[f]));
-    lines.push(`| ${r.key} | ${a('walknet')} | ${a('water')} | ${a('bridges')} |`);
+    lines.push(`| ${r.key} | ${a('walknet')} | ${a('water')} | ${a('bridges')} | ${r.ageSource} |`);
   }
-  lines.push('\nWiek nie jest błędem — informuje, kiedy warto przeliczyć dane (`tools/build-walknet.mjs`, `build-water.mjs`, `build-bridges.mjs`).');
+  lines.push('\n«stan» = `data/osm-state.json`; «mtime» = data modyfikacji pliku (brak wpisu w stanie) — w CI to data pobrania repozytorium, a nie świeżość danych.');
+  lines.push('Wiek nie jest błędem — informuje, kiedy warto przeliczyć dane (`tools/build-walknet.mjs`, `build-water.mjs`, `build-bridges.mjs`).');
   if (wantStats) lines.push('\n### Rozkłady zmierzonych wielkości\n', statsTable(results));
   const failing = ignoreWarnings ? results.filter(r => r.findings.some(f => f.startsWith('BŁĄD'))) : bad;
   return { code: failing.length ? 1 : 0, out: lines.join('\n') + '\n' };

@@ -197,7 +197,7 @@ test('run: komplet poprawnych danych = kod 0, tabela wieku zawsze w raporcie', (
   const r = run([], { root, today: TODAY });
   assert.equal(r.code, 0);
   assert.match(r.out, /Wszystkie 2 miast: dane OSM spójne/);
-  assert.match(r.out, /Wiek plików/);
+  assert.match(r.out, /Wiek danych/);
   assert.match(r.out, /\| a \| \d+ \| \d+ \| \d+ \|/);
 });
 
@@ -281,4 +281,26 @@ test('run --ignore-warnings: samo ostrzeżenie = kod 0 (nadal drukowane), błąd
   const hard = run(['--ignore-warnings'], { root, today: TODAY });
   assert.equal(hard.code, 1);
   assert.match(hard.out, /water\.json: brak pliku/);
+});
+
+test('wiek danych: z pliku stanu (ostatnie powodzenie), nie z mtime; bez wpisu awaryjnie mtime z adnotacją', () => {
+  const root = makeRoot({ a: {}, b: {} });
+  putGood(root, 'a'); putGood(root, 'b');
+  // mtime wszystkich plików to „teraz" (jak po actions/checkout), więc stary wiek może pochodzić tylko ze stanu
+  fs.writeFileSync(path.join(root, 'data', 'osm-state.json'), JSON.stringify({
+    version: 1, cities: { a: { lastAttempt: '2026-11-18', lastSuccess: '2026-08-12', result: 'ok' }, duch: { lastSuccess: '2000-01-01' } },
+  }));
+  const r = run([], { root, today: TODAY });
+  assert.match(r.out, /\| a \| 100 \| 100 \| 100 \| stan \|/); // 2026-08-12 -> 2026-11-20 = 100 dni
+  assert.match(r.out, /\| b \| \d+ \| \d+ \| \d+ \| mtime \|/);
+  assert.match(r.out, /w CI to data pobrania repozytorium/);
+});
+
+test('wiek danych: nieudana próba bez powodzenia nie daje wieku ze stanu (mtime awaryjnie); brak pliku stanu jest tolerowany', () => {
+  const root = makeRoot({ a: {} });
+  putGood(root, 'a');
+  fs.writeFileSync(path.join(root, 'data', 'osm-state.json'), JSON.stringify({ cities: { a: { lastAttempt: '2026-11-19', result: 'gate' } } }));
+  assert.match(run([], { root, today: TODAY }).out, /\| a \| \d+ \| \d+ \| \d+ \| mtime \|/);
+  fs.rmSync(path.join(root, 'data', 'osm-state.json'));
+  assert.equal(run([], { root, today: TODAY }).code, 0);
 });

@@ -96,7 +96,39 @@ const OVERPASS_MIRRORS = [
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
-export async function fetchOverpass(query, tries = 4) {
+/** Komunikaty w polu uwag Overpassa, które oznaczają przerwane lub odrzucone zapytanie. */
+const OVERPASS_FAILURE = /runtime error|timed? ?out|rate_limited|out of memory|too many requests|too busy|dispatcher|server is probably (?:too )?busy/i;
+
+/**
+ * Overpass potrafi odpowiedzieć HTTP 200 i urwać wynik w połowie: zwraca wtedy
+ * składniowo poprawną, ale niepełną listę elementów, a powód podaje w polu
+ * `remark` ("runtime error: Query timed out…"). Dla XML jest to opisane w
+ * dokumentacji; dla JSON nazwa pola nie jest potwierdzona — dlatego sprawdzamy
+ * każde pole tekstowe poza znanymi (`remark`, `error`, `warning`, a także
+ * dowolne inne), żeby inna nazwa też zadziałała.
+ * @returns {string|null} treść komunikatu o błędzie albo null, gdy odpowiedź jest pełna
+ */
+export function overpassRemarkError(body) {
+  if (!body || typeof body !== 'object') return null;
+  for (const [k, v] of Object.entries(body)) {
+    if (k === 'elements' || typeof v !== 'string') continue;
+    if (k === 'generator' || k === 'version') continue;
+    if (OVERPASS_FAILURE.test(v)) return `${k}: ${v}`;
+  }
+  return null;
+}
+
+const defaultSleep = s => new Promise(r => setTimeout(r, s * 1000));
+
+/**
+ * Pobiera zapytanie z Overpassa z ponawianiem (na przemian dwa mirrory).
+ * Ponawia: błędy sieci, HTTP 429/502/503/504, ciało niebędące JSON-em oraz
+ * odpowiedź 200 z komunikatem o błędzie w `remark` (urwany wynik).
+ * @param {string} query
+ * @param {number} [tries] liczba prób (domyślnie 6)
+ * @param {{sleep?: (s:number)=>Promise<void>}} [opts] `sleep` — podmiana oczekiwania w testach
+ */
+export async function fetchOverpass(query, tries = 6, { sleep = defaultSleep } = {}) {
   for (let attempt = 1; ; attempt++) {
     // przy kolejnych próbach przełączaj się między mirrorami
     const url = OVERPASS_MIRRORS[(attempt - 1) % OVERPASS_MIRRORS.length];
@@ -108,13 +140,23 @@ export async function fetchOverpass(query, tries = 4) {
       },
       body: 'data=' + encodeURIComponent(query),
     }).catch(err => ({ ok: false, status: err.message }));
-    if (res.ok) return res.json();
-    if (attempt >= tries || (typeof res.status === 'number' && ![429, 502, 503, 504].includes(res.status))) {
+    let why = res.status;
+    if (res.ok) {
+      try {
+        const body = await res.json();
+        const remark = overpassRemarkError(body);
+        if (!remark) return body;
+        why = `200 z uwagą «${remark}» (wynik urwany)`;
+      } catch (err) {
+        why = `200, ale ciało nie jest JSON-em (${err.message})`;
+      }
+    } else if (typeof res.status === 'number' && ![429, 502, 503, 504].includes(res.status)) {
       throw new Error(`Overpass: HTTP ${res.status}`);
     }
+    if (attempt >= tries) throw new Error(`Overpass: HTTP ${why}`);
     const waitS = attempt * 20;
-    console.log(`Overpass ${res.status} (${url.split('/')[2]}) — ponawiam za ${waitS} s (próba ${attempt}/${tries})…`);
-    await new Promise(r => setTimeout(r, waitS * 1000));
+    console.log(`Overpass ${why} (${url.split('/')[2]}) — ponawiam za ${waitS} s (próba ${attempt}/${tries})…`);
+    await sleep(waitS);
   }
 }
 

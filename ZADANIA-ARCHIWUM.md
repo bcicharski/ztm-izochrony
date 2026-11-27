@@ -815,3 +815,30 @@ Pułapki do wdrożenia:
 ## Historia wpisów skróconych w kolejce
 
 <!-- NOWA-HISTORIA -->
+
+### Z-023 — pełny wpis z 2026-11-27 (skrócony w kolejce; treść dosłowna sprzed skrócenia)
+### Z-023 [P2] Odświeżanie danych OSM
+- Status: w toku
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: walknet.json, water.json, bridges.json i gridBbox nie mają cyklicznego odświeżania ani kontroli spójności.
+- Dowód: żaden workflow nie wywołuje build-walknet, build-water ani build-bridges. Dane OSM mają datę modyfikacji z lipca 2026 (17 miast, 123–129 dni przed 2026-11-20; potwierdzone `git log` dla `data/gzm/walknet.json`, 2026-07-20); 2026-09-18 (63 dni) dotyczy tylko Trójmiasta. Wcześniejsza data 2026-09-18 z tego opisu była błędna, bo wzięta z `ls` jednego miasta.
+- Wdrożone 2026-11-20 (część): kontrola spójności danych OSM, bez zmiany danych. Narzędzie `node tools/check-osm.mjs [miasto ...] [--stats] [--ignore-warnings]` sprawdza `walknet.json`, `water.json` i `bridges.json` w każdym mieście i wykrywa plik uszkodzony, pusty albo niespójny z `gridBbox`. Krok „Kontrola danych OSM" w CI, na końcu joba `check`, z `if: always()` i `--ignore-warnings`. Ograniczenie: w CI wiek plików liczony z daty modyfikacji po checkoutcie pokazuje ok. zero dni, więc tam działa tylko kontrola spójności; prawdziwy wiek pokazuje uruchomienie lokalne.
+  - Progi ustalone pomiarem na 18 miastach 2026-11-20 (`--stats` drukuje tabelę ponownie). Format: wielkość — min / mediana / max — najgorsze miasto.
+    - węzły grafu — 21 765 / 75 853 / 425 081 — gorzow najmniej, gzm najwięcej
+    - krawędzie grafu — 31 169 / 107 748 / 604 894 — gorzow najmniej
+    - węzły w `gridBbox` — 98,9% / 99,7% / 99,8% — opole najgorsze
+    - pokrycie bboxa (siatka 10x10) — 76% / 100% / 100% — trojmiasto najgorsze (morze)
+    - rozpiętość grafu do bboxa (mniejsza oś) — 1,065 / 1,147 / 1,300 — warszawa najgorsza
+    - największa spójna składowa — 94,7% / 97,4% / 98,8% — torun najgorszy
+    - woda: punkty w `gridBbox` — 31,4% / 82,6% / 93,8% — zielonagora najgorsza
+    - mosty: punkty w `gridBbox` — 99,4% / 100% / 100% — gorzow najgorszy
+  - Progi (BŁĄD, chyba że napisano inaczej): węzły w bboxie < 90%; pokrycie siatki < 50%; rozpiętość < 0,9 bboxa; największa składowa < 85% — OSTRZEŻENIE, nie błąd; mosty w bboxie < 95%; woda w bboxie < 10% (rozkład szeroki, rzeki wystają daleko za bbox).
+  - Asercje (identyczny wynik we wszystkich 18 miastach): trzy pliki obecne; zero NaN; zero współrzędnych poza 48,9–55,0 N, 14,0–24,2 E; zero krawędzi z indeksem poza zakresem; zero węzłów izolowanych; poligon wody ≥ 4 punkty, linia wody lub mostu ≥ 2 punkty; ≥ 1 poligon wody i ≥ 1 linia mostu; węzły i krawędzie > 0.
+  - Świadomie NIE kontrolowane: krawędzie zerowej długości (1–262 na miasto) i pętle `a == b` (70–1512 na miasto) — cecha kontrakcji grafu, nie wada.
+- Pozostaje: cykliczne odświeżanie danych OSM (workflow z `build-walknet`, `build-water`, `build-bridges`). Nadpisuje `data/<miasto>/`, więc wymaga zgody właściciela. Dane mają 123–129 dni (Trójmiasto 63).
+- Podpunkt (2026-11-27; status bez zmian): pozostała część zadania to automat cyklicznie przeliczający dane OSM (graf pieszy, woda, mosty). Do rozstrzygnięcia przed wdrożeniem:
+  - częstotliwość: dane OSM zmieniają się wolno, a pełne przeliczenie 18 miast to godziny pobierania z Overpassa;
+  - bramka: kontroler spójności z pierwszej części tego zadania (`node tools/check-osm.mjs`) już istnieje i sprawdza dokładnie te trzy pliki; automat ma się na nim opierać;
+  - odporność na częściową awarię: nie nadpisać dobrych danych gorszymi przy awarii źródła. Dzisiejsza przebudowa wody pokazała, że Overpass zwraca błąd 502 dla pojedynczych miast, a przy powtórzeniu przechodzi;
+  - zakres przebiegu: wszystkie miasta naraz czy po kilka na przebieg.
+  - Automat musi uwzględnić zmiany z dziś: graf pieszy zapisuje nowy, oszczędniejszy format (Z-003, etap 2); narzędzie budujące wodę stosuje margines 2 km z przycięciem (Z-075).

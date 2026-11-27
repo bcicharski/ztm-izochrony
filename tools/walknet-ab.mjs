@@ -130,7 +130,7 @@ export function compareNets(oldNet, newNet, stops, { points = 100 } = {}) {
 }
 
 /** Przystanki miasta z data/<miasto>/workday.json (te same, których używa silnik). */
-function loadStops(dir) {
+export function loadStops(dir) {
   const raw = JSON.parse(fs.readFileSync(path.join(dir, 'workday.json'), 'utf8'));
   return { lat: raw.stops.lat.map(v => v / 1e5), lon: raw.stops.lon.map(v => v / 1e5) };
 }

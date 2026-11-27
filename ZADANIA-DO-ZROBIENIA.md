@@ -10,7 +10,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## Wskaźniki (aktualizuje kronikarz)
 
-- Najwyższy użyty numer: Z-085 (następne zadanie dostaje Z-086).
+- Najwyższy użyty numer: Z-086 (następne zadanie dostaje Z-087).
 - Ostatnia analiza: nieznane (pierwsza fala po migracji ustawi datę i hash commita; `analityk` skanuje przyrostowo od tego commita).
 
 ## Kolejność ustalona z właścicielem
@@ -21,7 +21,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Z-075 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-080 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-053 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; potwierdzenie bez zmiany kodu).
-  - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
+  - Z-023 — w toku (kontrola spójności wdrożona 2026-11-20; cykliczne odświeżanie kroki 1–6 wdrożone 2026-11-27; zostają krok 7 i pierwsze ręczne uruchomienie).
   - Z-013 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; zakres zawężony do tempa marszu, schody i bezbarierowość poza zakresem).
   - Z-003 — ZROBIONE 2026-11-27 (etap 1 i etap 2 wdrożone; wpis w „Zrobione").
   - Z-037 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
@@ -95,34 +95,29 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Niezweryfikowane: zachowanie przy niedostępnym `localStorage` (kod w `try/catch`, nie wymuszano); wybór z żywych wyników Nominatim.
 
 ### Z-023 [P2] Odświeżanie danych OSM
-- Status: w toku
+- Status: w toku (kroki 1–6 wdrożone 2026-11-27; krok 7 i pierwsze ręczne uruchomienie workflow przed nami)
 - Zgłoszone: 2026-11-16 (analityk)
-- Problem: walknet.json, water.json, bridges.json i gridBbox nie mają cyklicznego odświeżania ani kontroli spójności.
-- Dowód: żaden workflow nie wywołuje build-walknet, build-water ani build-bridges. Dane OSM mają datę modyfikacji z lipca 2026 (17 miast, 123–129 dni przed 2026-11-20; potwierdzone `git log` dla `data/gzm/walknet.json`, 2026-07-20); 2026-09-18 (63 dni) dotyczy tylko Trójmiasta. Wcześniejsza data 2026-09-18 z tego opisu była błędna, bo wzięta z `ls` jednego miasta.
-- Wdrożone 2026-11-20 (część): kontrola spójności danych OSM, bez zmiany danych. Narzędzie `node tools/check-osm.mjs [miasto ...] [--stats] [--ignore-warnings]` sprawdza `walknet.json`, `water.json` i `bridges.json` w każdym mieście i wykrywa plik uszkodzony, pusty albo niespójny z `gridBbox`. Krok „Kontrola danych OSM" w CI, na końcu joba `check`, z `if: always()` i `--ignore-warnings`. Ograniczenie: w CI wiek plików liczony z daty modyfikacji po checkoutcie pokazuje ok. zero dni, więc tam działa tylko kontrola spójności; prawdziwy wiek pokazuje uruchomienie lokalne.
-  - Progi ustalone pomiarem na 18 miastach 2026-11-20 (`--stats` drukuje tabelę ponownie). Format: wielkość — min / mediana / max — najgorsze miasto.
-    - węzły grafu — 21 765 / 75 853 / 425 081 — gorzow najmniej, gzm najwięcej
-    - krawędzie grafu — 31 169 / 107 748 / 604 894 — gorzow najmniej
-    - węzły w `gridBbox` — 98,9% / 99,7% / 99,8% — opole najgorsze
-    - pokrycie bboxa (siatka 10x10) — 76% / 100% / 100% — trojmiasto najgorsze (morze)
-    - rozpiętość grafu do bboxa (mniejsza oś) — 1,065 / 1,147 / 1,300 — warszawa najgorsza
-    - największa spójna składowa — 94,7% / 97,4% / 98,8% — torun najgorszy
-    - woda: punkty w `gridBbox` — 31,4% / 82,6% / 93,8% — zielonagora najgorsza
-    - mosty: punkty w `gridBbox` — 99,4% / 100% / 100% — gorzow najgorszy
-  - Progi (BŁĄD, chyba że napisano inaczej): węzły w bboxie < 90%; pokrycie siatki < 50%; rozpiętość < 0,9 bboxa; największa składowa < 85% — OSTRZEŻENIE, nie błąd; mosty w bboxie < 95%; woda w bboxie < 10% (rozkład szeroki, rzeki wystają daleko za bbox).
-  - Asercje (identyczny wynik we wszystkich 18 miastach): trzy pliki obecne; zero NaN; zero współrzędnych poza 48,9–55,0 N, 14,0–24,2 E; zero krawędzi z indeksem poza zakresem; zero węzłów izolowanych; poligon wody ≥ 4 punkty, linia wody lub mostu ≥ 2 punkty; ≥ 1 poligon wody i ≥ 1 linia mostu; węzły i krawędzie > 0.
-  - Świadomie NIE kontrolowane: krawędzie zerowej długości (1–262 na miasto) i pętle `a == b` (70–1512 na miasto) — cecha kontrakcji grafu, nie wada.
-- Pozostaje: cykliczne odświeżanie danych OSM (workflow z `build-walknet`, `build-water`, `build-bridges`). Nadpisuje `data/<miasto>/`, więc wymaga zgody właściciela. Dane mają 123–129 dni (Trójmiasto 63).
-- Podpunkt (2026-11-27; status bez zmian): pozostała część zadania to automat cyklicznie przeliczający dane OSM (graf pieszy, woda, mosty). Do rozstrzygnięcia przed wdrożeniem:
-  - częstotliwość: dane OSM zmieniają się wolno, a pełne przeliczenie 18 miast to godziny pobierania z Overpassa;
-  - bramka: kontroler spójności z pierwszej części tego zadania (`node tools/check-osm.mjs`) już istnieje i sprawdza dokładnie te trzy pliki; automat ma się na nim opierać;
-  - odporność na częściową awarię: nie nadpisać dobrych danych gorszymi przy awarii źródła. Dzisiejsza przebudowa wody pokazała, że Overpass zwraca błąd 502 dla pojedynczych miast, a przy powtórzeniu przechodzi;
-  - zakres przebiegu: wszystkie miasta naraz czy po kilka na przebieg.
-  - Automat musi uwzględnić zmiany z dziś: graf pieszy zapisuje nowy, oszczędniejszy format (Z-003, etap 2); narzędzie budujące wodę stosuje margines 2 km z przycięciem (Z-075).
+- Problem: walknet.json, water.json, bridges.json i gridBbox nie miały cyklicznego odświeżania; dane OSM miały 123–129 dni.
+- Dowód: żaden workflow nie wywoływał build-walknet, build-water ani build-bridges (stan 2026-11-16); `git log` dla `data/gzm/walknet.json` (2026-07-20).
+- Wdrożone: kontrola spójności 2026-11-20 (`tools/check-osm.mjs`, krok CI); cotygodniowe odświeżenie OSM w `refresh-data.yml` 2026-11-27 — najwyżej trzy miasta na przebieg wg wieku danych, najwyżej jedno duże; bramka `tools/check-osm-diff.mjs` tylko raportuje; cofanie całego miasta przy niezaliczonej bramce; stan w `data/osm-state.json`. Szczegóły: CHANGELOG, sekcja 2026-11-27.
+- Pozostaje: (7) przełączenie bramki porównawczej w tryb blokujący po 2–3 obserwowanych przebiegach; (8) pierwsze ręczne uruchomienie na jednym małym mieście z pominięciem przeliczenia rozkładów. Niezweryfikowane: workflow na GitHubie nie był uruchamiany.
+- Pokrewne: Z-086 (wejście `force` niezadeklarowane w workflow).
+- Pliki: tools/osm-rotate.mjs, tools/osm-state.mjs, tools/check-osm-diff.mjs, tools/check-osm.mjs, tools/geo.mjs, tools/walknet-ab.mjs, .github/workflows/refresh-data.yml; `data/<miasto>/` nietknięte.
+- Jak sprawdzić: ręczny przebieg workflow na jednym małym mieście (krok 8); po 2–3 przebiegach ocena bramki porównawczej (krok 7).
+- Pełna historia: ZADANIA-ARCHIWUM.md, „Historia wpisów skróconych w kolejce" (Z-023, 2026-11-27).
 
 ## Zaprojektowane (gotowe do wdrożenia)
 
 ## Nowe (bez projektu rozwiązania)
+
+### Z-086 [P2] Workflow używa niezadeklarowanego wejścia `force`
+- Status: nowe
+- Zgłoszone: 2026-11-27 (nieznane)
+- Trudność: nieznane     Decyzja właściciela: nieznane
+- Problem: krok bramki jakości danych w `refresh-data.yml` odwołuje się do wejścia `force`, którego nie ma w definicji ręcznego uruchomienia; przy ręcznym przebiegu jest zawsze pusty, więc obejście bramki nie działa.
+- Dowód: znalezione przy Z-023 (2026-11-27), nienaprawione, bo poza tamtym zakresem; numer linii nieznany.
+- Pliki: .github/workflows/refresh-data.yml.
+- Jak sprawdzić: nieznane.
 
 ### Z-007 [P2] Znane luki modelu
 - Status: nowe (częściowo zrobione: luka 2 wdrożona 2026-11-21; luka 3 ODRZUCONA 2026-11-27; luka 1 ZATWIERDZONA 2026-11-27, bez projektu; zadanie NIE jest zamknięte — jedyny otwarty punkt: luka 1)
