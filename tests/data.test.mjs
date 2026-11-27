@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeNetwork, REV_C, MIN_TRANSFER_S, profileLag, splitOvertaking, buildPatternEntries, delayCoverage } from '../js/data.js';
+import { STATION_TRANSFER_MAX_S, COMPLEX_MAX_M, isRailRouteType, isStationTransfer, distM, decodeNetwork, REV_C, MIN_TRANSFER_S, profileLag, splitOvertaking, buildPatternEntries, delayCoverage } from '../js/data.js';
 import { makeRaw, everyN, rng, randomNetSpec, overtakingBuildPattern } from './helpers.mjs';
 
 const stops = [0, 1, 2].map(i => ({ name: `S${i}`, lat: 50 + i * 0.0045, lon: 20 }));
@@ -173,4 +173,95 @@ test('delayCoverage: cztery stany pokrycia profilami', () => {
   assert.equal(delayCoverage({ city: 'x' }, { rt: {} }).state, 'unknown');
   assert.equal(delayCoverage(null, undefined).state, 'unknown');
   assert.equal(delayCoverage(d(0, { routesTotal: null }), {}).routesTotal, null);
+});
+
+// --- Z-007 luka 1: przesiadki bez spaceru do/ze stacji kolejowej -------------
+
+
+const M250 = 250 / 111320; // 250 m na północ [°]
+/** Sieć: 0 = autobus, 1 = stacja 250 m dalej, 2/3 = dwa autobusy 250 m od siebie. */
+function stationNet(sec01 = 200, routes) {
+  const st = [
+    { name: 'Bus', lat: 50, lon: 20 }, { name: 'Stacja', lat: 50 + M250, lon: 20 },
+    { name: 'Bus2', lat: 51, lon: 20 }, { name: 'Bus3', lat: 51 + M250, lon: 20 },
+  ];
+  return decodeNetwork(makeRaw({
+    stops: st,
+    routes: routes ?? [{ n: '1', t: 3 }, { n: 'S1', t: 2 }],
+    patterns: [
+      { r: 0, s: [0, 2, 3], p: [[300, 300]], t: [[28800, 0]] },
+      { r: 1, s: [1, 1 + 0], p: [[300]], t: [[28800, 0]] },
+    ],
+    transfers: [[0, 1, sec01], [2, 3, 200]],
+  }));
+}
+
+test('stacje: peron 250 m od autobusu wchodzi, autobus przy autobusie w tej samej odległości nie', () => {
+  const net = stationNet();
+  assert.deepEqual([...net.station], [0, 1, 0, 0]);
+  assert.deepEqual(net.sameGroupAdj[0], [1, 200]);
+  assert.deepEqual(net.sameGroupAdj[1], [0, 200]);
+  assert.deepEqual(net.sameGroupAdj[2], []);
+  assert.deepEqual(net.sameGroupAdj[3], []);
+});
+
+test('stacje: czas decyduje, nie odległość — para za progiem odpada', () => {
+  assert.deepEqual(stationNet(STATION_TRANSFER_MAX_S).sameGroupAdj[0], [1, STATION_TRANSFER_MAX_S]);
+  assert.deepEqual(stationNet(STATION_TRANSFER_MAX_S + 1).sameGroupAdj[0], []);
+});
+
+test('stacje: brak albo niekompletna lista tras = zachowanie dotychczasowe', () => {
+  // brak pola routes w surowym JSON
+  const raw = makeRaw({ stops: [{ name: 'A', lat: 50, lon: 20 }, { name: 'B', lat: 50 + M250, lon: 20 }], routes: [], patterns: [], transfers: [[0, 1, 200]] });
+  delete raw.routes;
+  const net = decodeNetwork(raw);
+  assert.deepEqual([...net.station], [0, 0]);
+  assert.deepEqual(net.sameGroupAdj[0], []);
+  // wzorzec wskazujący nieistniejącą trasę nie jest stacyjny
+  const broken = stationNet(200, [{ n: '1', t: 3 }]);
+  assert.deepEqual([...broken.station], [0, 0, 0, 0]);
+  assert.deepEqual(broken.sameGroupAdj[0], []);
+});
+
+test('stacje: klasy tras — kolej to 2 i 100–117, metro (1) nie', () => {
+  for (const t of [2, 100, 109, 117]) assert.equal(isRailRouteType(t), true, String(t));
+  for (const t of [0, 1, 3, 11, 99, 118, 700, 800, 900]) assert.equal(isRailRouteType(t), false, String(t));
+  assert.equal(isStationTransfer(null, 0, 1, 10), false);
+});
+
+test('stacje: sieć odwrócona niesie status stacyjny', () => {
+  const net = stationNet();
+  assert.equal(net.reversed.station, net.station);
+});
+
+test('stacje: próg nie przekracza najostrzejszego limitu spaceru z interfejsu', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const vals = [...html.matchAll(/name="walkmax"[^>]*value="(\d+)"/g)].map(m => Number(m[1]));
+  assert.ok(vals.length >= 1);
+  assert.ok(STATION_TRANSFER_MAX_S <= Math.min(...vals) * 60, `${STATION_TRANSFER_MAX_S} s > ${Math.min(...vals)} min`);
+});
+
+test('niezmiennik: każda para w sameGroupAdj = ta sama grupa, albo ≤150 m, albo stacja i czas w progu', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const root = path.join(import.meta.dirname, '..', 'data');
+  let checked = 0;
+  for (const city of fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory())) {
+    const file = path.join(root, city.name, 'workday.json');
+    if (!fs.existsSync(file)) continue;
+    const net = decodeNetwork(JSON.parse(fs.readFileSync(file, 'utf8')));
+    for (let a = 0; a < net.nStops; a++) {
+      const adj = net.sameGroupAdj[a];
+      for (let k = 0; k < adj.length; k += 2) {
+        const b = adj[k], sec = adj[k + 1];
+        const same = net.group[a] === net.group[b];
+        const close = distM(net.lat[a], net.lon[a], net.lat[b], net.lon[b]) <= COMPLEX_MAX_M;
+        const stat = isStationTransfer(net.station, a, b, sec);
+        if (!(same || close || stat)) assert.fail(`${city.name}: ${a}->${b} ${sec}s poza regułą`);
+        checked++;
+      }
+    }
+  }
+  assert.ok(checked > 0);
 });

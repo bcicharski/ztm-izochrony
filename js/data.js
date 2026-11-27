@@ -35,6 +35,25 @@ export const MIN_TRANSFER_S = 60;
  * (findAccessStops), i przy przesiadkach w trakcie podróży (sameGroupAdj).
  */
 export const COMPLEX_MAX_M = 150;
+/**
+ * Przesiadka w trybie bez spaceru do/ze stacji kolejowej [s] (Z-007, luka 1).
+ * Peron bywa 150–400 m od przystanku naziemnego, a pary i tak siedzą w danych
+ * z czasem marszu po grafie ulic. Próg to CZAS, nie odległość (obejście
+ * ogrodzenia samo odpada) i nie przekracza najostrzejszego limitu spaceru
+ * w interfejsie (5 min) — tryb „bez spaceru" nie dopuszcza dłuższego przejścia
+ * niż tryb ze spacerem. Pomiar: tests/data.test.mjs pilnuje niezmiennika.
+ */
+export const STATION_TRANSFER_MAX_S = 300;
+/** Typ środka transportu GTFS klasy kolejowej: 2 oraz 100–117 (metro, 1, to NIE stacja). */
+export const isRailRouteType = t => t === 2 || (t >= 100 && t <= 117);
+/**
+ * Czy para przystanków (a, b) o czasie przejścia `sec` wchodzi do przesiadek
+ * „bez spaceru" ponad zespół i promień węzła: co najmniej jeden koniec stacyjny
+ * i czas w progu. `station` brak (stara sieć/niepełne trasy) = nigdy.
+ */
+export function isStationTransfer(station, a, b, sec) {
+  return !!station && (station[a] === 1 || station[b] === 1) && sec <= STATION_TRANSFER_MAX_S;
+}
 /** Stała odwrócenia czasu dla wyszukiwania "do miejsca" [s]. */
 export const REV_C = 48 * 3600;
 
@@ -109,10 +128,16 @@ export function decodeNetwork(raw) {
   const patterns = raw.patterns.map(p => decodePattern(p, scale));
 
   // indeks: przystanek -> [pattern, pozycja] (spłaszczone pary)
+  // — w tym samym przebiegu: przystanek „stacyjny" = obsługiwany przez trasę
+  // klasy kolejowej (brak/niekompletna lista tras = nikt nie jest stacyjny)
+  const routes = Array.isArray(raw.routes) ? raw.routes : null;
+  const station = new Uint8Array(n);
   const patternsAtStop = Array.from({ length: n }, () => []);
   patterns.forEach((p, pi) => {
+    const rail = routes ? isRailRouteType(routes[p.route]?.t) : false;
     for (let pos = 0; pos < p.stops.length; pos++) {
       patternsAtStop[p.stops[pos]].push(pi, pos);
+      if (rail) station[p.stops[pos]] = 1;
     }
   });
 
@@ -146,8 +171,8 @@ export function decodeNetwork(raw) {
   // więc zawierają komplet kandydatów; pary z tego samego zespołu już dodane)
   for (const [a, b, sec] of raw.transfers) {
     if (group[a] === group[b]) continue;
-    if (distM(lat[a], lon[a], lat[b], lon[b]) > COMPLEX_MAX_M) continue;
     const s = Math.max(sec, MIN_TRANSFER_S);
+    if (distM(lat[a], lon[a], lat[b], lon[b]) > COMPLEX_MAX_M && !isStationTransfer(station, a, b, s)) continue;
     sameGroupAdj[a].push(b, s);
     sameGroupAdj[b].push(a, s);
   }
@@ -159,6 +184,7 @@ export function decodeNetwork(raw) {
     nStops: n,
     stopName: raw.stops.name,
     lat, lon, group,
+    station,
     patterns,
     // wzorce z wyprzedzaniem (monotone === false); router skanuje je liniowo
     overtakingPatterns: patterns.reduce((n, p) => n + (p.monotone ? 0 : 1), 0),
@@ -355,6 +381,7 @@ function reverseNetwork(net) {
     stopName: net.stopName,
     routes: net.routes,
     lat: net.lat, lon: net.lon, group: net.group,
+    station: net.station,
     patterns,
     patternsAtStop,
     transferAdj: net.transferAdj,   // przejścia piesze są symetryczne

@@ -495,3 +495,23 @@ test('stops: etapy walk i access nie dostają pola stops', () => {
   const legs = computeReachability(net, opts({ walk: true, lat: 50, lon: 20.0005, timeMin: 479 })).journeyTo(2);
   for (const l of legs.filter(x => x.kind !== 'ride')) assert.equal('stops' in l, false);
 });
+
+test('findAccessStops: start obok stacji bez spaceru daje ją z niezerowym kosztem (Z-007)', () => {
+  const M250 = 250 / 111320;
+  const net = makeNet({
+    stops: [{ name: 'Bus', lat: 50, lon: 20 }, { name: 'Stacja', lat: 50 + M250, lon: 20 }, { name: 'Bus2', lat: 50 + 2 * M250, lon: 20 }],
+    routes: [{ n: '1', t: 3 }, { n: 'S1', t: 2 }],
+    patterns: [
+      { r: 0, s: [0, 2], p: [[300]], t: [[28800, 0]] },
+      { r: 1, s: [1, 1], p: [[300]], t: [[28800, 0]] },
+    ],
+    transfers: [[0, 1, 200], [1, 2, 200], [0, 2, 400]],
+  });
+  const acc = findAccessStops(net, 50, 20, false);
+  const m = new Map(); for (let k = 0; k < acc.length; k += 2) m.set(acc[k], acc[k + 1]);
+  assert.equal(m.get(0), 0);
+  assert.equal(m.get(1), 200);          // realny czas, nie 0
+  assert.equal(m.has(2), false);        // autobus–autobus bez stacji nie wchodzi
+  const slow = findAccessStops(net, 50, 20, false, null, undefined, Infinity, 2);
+  assert.equal(slow.indexOf(1) >= 0 ? slow[slow.indexOf(1) + 1] : -1, 400); // skala tempa
+});

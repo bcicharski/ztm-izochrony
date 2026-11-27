@@ -6,7 +6,7 @@
  * Oprócz czasów zwraca wskaźniki rodziców, z których można odtworzyć trasę.
  */
 
-import { WALK_MPS, MIN_TRANSFER_S, REV_C, distM, COMPLEX_MAX_M } from './data.js';
+import { WALK_MPS, MIN_TRANSFER_S, REV_C, distM, COMPLEX_MAX_M, isStationTransfer } from './data.js';
 
 const MAX_ROUNDS = 5;          // maks. 4 przesiadki
 /**
@@ -69,7 +69,7 @@ export function computeReachability(net, opts) {
     // mnożnik czasu przejść pieszych w obrębie węzła (Z-013): 1 = dane bez zmian
     transferScale: opts.transferScale > 0 && Number.isFinite(opts.transferScale) ? opts.transferScale : 1,
   };
-  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec, opts.accessMps ?? WALK_MPS, lim.maxWalkSec);
+  const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec, opts.accessMps ?? WALK_MPS, lim.maxWalkSec, lim.transferScale);
   if (sources.length === 0) {
     return { minutes: new Float64Array(g.nStops).fill(Infinity), journeyTo: () => null };
   }
@@ -131,8 +131,10 @@ export function computeReachability(net, opts) {
  *   Obcina i wpisy z `accessSec`, i gałąź w linii prostej — ta druga jest
  *   jedynym miejscem, gdzie limit da się wymusić, gdy graf ulic się jeszcze
  *   nie wczytał (`accessSec === null`).
+ * @param {number} transferScale  mnożnik czasu przejść w węźle (Z-013); dotyczy
+ *   tylko przystanków stacyjnych dołożonych w trybie bez spaceru.
  */
-export function findAccessStops(g, lat, lon, walk, accessSec = null, accessMps = WALK_MPS, maxAccessSec = Infinity) {
+export function findAccessStops(g, lat, lon, walk, accessSec = null, accessMps = WALK_MPS, maxAccessSec = Infinity, transferScale = 1) {
   const out = [];
   if (walk) {
     const maxDist = Math.min(HORIZON_S, maxAccessSec) * accessMps; // i tak przycięte horyzontem
@@ -157,6 +159,19 @@ export function findAccessStops(g, lat, lon, walk, accessSec = null, accessMps =
     for (let i = 0; i < g.nStops; i++) {
       if (g.group[i] === grp || distM(g.lat[nearest], g.lon[nearest], g.lat[i], g.lon[i]) <= COMPLEX_MAX_M) {
         out.push(i, 0);
+      }
+    }
+    // stacje kolejowe w zasięgu przejścia (Z-007): TA SAMA para co w sameGroupAdj,
+    // z REALNYM czasem przejścia — zero kosztu dałoby darmowe 300 m na starcie
+    const inSet = new Set();
+    for (let k = 0; k < out.length; k += 2) inSet.add(out[k]);
+    for (let k = 0, len = out.length; k < len; k += 2) {
+      const from = out[k], adj = g.transferAdj[from];
+      for (let m = 0; m < adj.length; m += 2) {
+        const to = adj[m];
+        if (inSet.has(to) || !isStationTransfer(g.station, from, to, adj[m + 1])) continue;
+        inSet.add(to);
+        out.push(to, Math.max(Math.round(adj[m + 1] * transferScale), MIN_TRANSFER_S));
       }
     }
   }
