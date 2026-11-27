@@ -9,6 +9,7 @@
 
 import zlib from 'node:zlib';
 import { M_PER_DEG_LAT } from '../js/data.js';
+import { chordM } from '../js/walknet.js';
 
 /** Rozmiar po gzipie na zadanym poziomie (serwer: 6; maksimum: 9). */
 export const gzipSize = (buf, level) => zlib.gzipSync(buf, { level }).length;
@@ -152,13 +153,8 @@ export function nodeOrder(pts, order) {
   return idx.sort((i, j) => (row(i) - row(j)) || (pts.lon[i] - pts.lon[j]) || (i - j));
 }
 
-/** Długość cięciwy [m] między węzłami o skwantyzowanych współrzędnych — jak distM w build-walknet. */
-export function chordM(qLatA, qLonA, qLatB, qLonB, q) {
-  const latA = qLatA / q, latB = qLatB / q;
-  return Math.hypot(
-    (qLonB - qLonA) / q * M_PER_DEG_LAT * Math.cos(latA * Math.PI / 180),
-    (latB - latA) * M_PER_DEG_LAT);
-}
+/** Cięciwa — jedna definicja w js/walknet.js (dekoder i enkoder muszą liczyć tak samo). */
+export { chordM };
 
 /**
  * Buduje w pamięci logiczną treść wariantu (te same pięć strumieni co walknet.json v1).

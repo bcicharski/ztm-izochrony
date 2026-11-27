@@ -32,8 +32,41 @@ export const SNAP_MAX_M = 400;
 const CELL_M = 250;
 
 /**
+ * Długość cięciwy [m] między węzłami o skwantyzowanych współrzędnych — jedyna
+ * definicja, wspólna dla dekodera i dla enkodera z tools/ (format v2 zapisuje
+ * długość krawędzi jako resztę względem tej wartości, więc obie strony MUSZĄ
+ * liczyć ją identycznie). Szerokość do cosinusa bierze z początku odcinka.
+ * @param {number} q kwantyzacja (stopnie × q = liczby całkowite)
+ */
+export function chordM(qLatA, qLonA, qLatB, qLonB, q) {
+  const latA = qLatA / q, latB = qLatB / q;
+  return Math.hypot(
+    (qLonB - qLonA) / q * M_PER_DEG_LAT * Math.cos(latA * Math.PI / 180),
+    (latB - latA) * M_PER_DEG_LAT);
+}
+
+/**
+ * Długości krawędzi [m] z surowego pliku. Dwa formaty, rozpoznawane po POLU:
+ *  - v1: `edges.len` — długość jako wartość (pliki w pamięci podręcznej
+ *    przeglądarek; zwracane bez kopiowania, dekodowanie bez zmian),
+ *  - v2: `edges.res` — reszta względem `round(chordM)` końców krawędzi.
+ * Po polu, nie po `version`, bo to pole decyduje, jak czytać dane; `version`
+ * jest tylko informacją dla człowieka.
+ */
+function edgeLengths(raw, qLat, qLon, from, to, q) {
+  const { len, res } = raw.edges;
+  if (len) return len;
+  if (!res) throw new Error('walknet: brak długości krawędzi (edges.len ani edges.res)');
+  const out = new Array(res.length);
+  for (let i = 0; i < res.length; i++) {
+    out[i] = res[i] + Math.round(chordM(qLat[from[i]], qLon[from[i]], qLat[to[i]], qLon[to[i]], q));
+  }
+  return out;
+}
+
+/**
  * Dekoduje zapis różnicowy do struktur routingu (CSR).
- * @param {object} raw zawartość walknet.json
+ * @param {object} raw zawartość walknet.json (v1 albo v2)
  * @returns {object} sieć gotowa do `computeNodeTimes`
  */
 export function decodeWalkNet(raw) {
@@ -42,14 +75,18 @@ export function decodeWalkNet(raw) {
   const n = dLat.length;
   const lat = new Float64Array(n);
   const lon = new Float64Array(n);
+  // współrzędne całkowite (po kwantyzacji) — potrzebne formatowi v2 do cięciwy
+  const qLat = new Float64Array(n);
+  const qLon = new Float64Array(n);
   let aLat = 0, aLon = 0;
   for (let i = 0; i < n; i++) {
     aLat += dLat[i]; aLon += dLon[i];
+    qLat[i] = aLat; qLon[i] = aLon;
     lat[i] = aLat / q; lon[i] = aLon / q;
   }
 
   // krawędzie: a zapisane różnicowo, b względem a
-  const { a: eA, b: eB, len: eLen } = raw.edges;
+  const { a: eA, b: eB } = raw.edges;
   const m = eA.length;
   const from = new Int32Array(m);
   const to = new Int32Array(m);
@@ -59,6 +96,7 @@ export function decodeWalkNet(raw) {
     from[i] = acc;
     to[i] = acc + eB[i];
   }
+  const eLen = edgeLengths(raw, qLat, qLon, from, to, q);
 
   // lista sąsiedztwa w formacie CSR (obie strony każdej krawędzi)
   const deg = new Int32Array(n + 1);

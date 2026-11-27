@@ -235,6 +235,9 @@ tools/fetch-feeds.mjs  pobieranie i rozpakowanie feedów miasta
 tools/transxchange-to-gtfs.mjs konwerter TransXChange -> GTFS (Opole), parser: tools/xmlstream.mjs
 tools/build-data.mjs   prekompilacja GTFS (wiele feedów) -> data/<miasto>/*.json
 tools/build-walknet.mjs graf dróg pieszych z OSM -> data/<miasto>/walknet.json
+tools/walknet-codec.mjs enkoder walknet.json (v2: długość krawędzi jako reszta od cięciwy; dekoder czyta v1 i v2)
+tools/reencode-walknet.mjs przekodowanie walknet.json na v2 (domyślnie na sucho; --write)
+tools/walknet-ab.mjs   brama jakości: trasowanie po starym i nowym walknet.json
 tools/build-water.mjs  maska wody z OSM/Overpass -> data/<miasto>/water.json
 tools/build-bridges.mjs mosty/kładki/mola z OSM -> data/<miasto>/bridges.json
 tools/build-city.mjs   granice administracyjne -> data/<miasto>/city.json

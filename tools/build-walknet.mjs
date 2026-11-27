@@ -28,18 +28,20 @@
  * połączenia z resztą, błędy danych) zostają w pliku — odfiltrowuje je dekoder
  * w js/walknet.js, wyznaczając największą spójną składową przy wczytaniu.
  *
- * Format (v1): współrzędne kwantyzowane 1e5 jak w pozostałych plikach danych,
- * węzły uporządkowane przestrzennie (kubełki 500 m) i zapisane różnicowo —
- * dzięki temu gzip serwera ściska plik ok. 3×.
- *   { version, quant, nodes: {dLat, dLon}, edges: {a, b, len} }
+ * Format (v2, kodowanie w tools/walknet-codec.mjs): współrzędne kwantyzowane 1e5
+ * jak w pozostałych plikach danych, węzły uporządkowane przestrzennie (kubełki
+ * 500 m) i zapisane różnicowo — dzięki temu gzip serwera ściska plik ok. 3×.
+ *   { version, quant, nodes: {dLat, dLon}, edges: {a, b, res} }
  *   a  — różnice indeksu początku względem poprzedniej krawędzi
  *   b  — indeks końca względem początku tej krawędzi
- *   len— długość krawędzi w metrach
+ *   res— długość krawędzi w metrach MINUS zaokrąglona cięciwa jej końców
+ * Dekoder (js/walknet.js) czyta też v1 (`len` — długość wprost).
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fetchOverpass, M_PER_DEG_LAT } from './geo.mjs';
+import { encodeWalkNet } from './walknet-codec.mjs';
 
 const arg = process.argv[2];
 const cities = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'data', 'cities.json'), 'utf8'));
@@ -155,24 +157,14 @@ out skel qt;`;
 
   const qLat = order.map(i => Math.round(pos(i)[0] * QUANT));
   const qLon = order.map(i => Math.round(pos(i)[1] * QUANT));
-  const dLat = qLat.map((v, i) => (i ? v - qLat[i - 1] : v));
-  const dLon = qLon.map((v, i) => (i ? v - qLon[i - 1] : v));
-
   const remapped = keptEdges
     .map(([a, b, len]) => [remap.get(a), remap.get(b), len])
     .sort((x, y) => (x[0] - y[0]) || (x[1] - y[1]));
-  const eA = remapped.map((edge, i) => (i ? edge[0] - remapped[i - 1][0] : edge[0]));
-  const eB = remapped.map(edge => edge[1] - edge[0]);
   const eLen = remapped.map(edge => edge[2]);
 
   const outFile = path.join(import.meta.dirname, '..', 'data', cityKey, 'walknet.json');
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  fs.writeFileSync(outFile, JSON.stringify({
-    version: 1,
-    quant: QUANT,
-    nodes: { dLat, dLon },
-    edges: { a: eA, b: eB, len: eLen },
-  }));
+  fs.writeFileSync(outFile, JSON.stringify(encodeWalkNet({ qLat, qLon, quant: QUANT, edges: remapped })));
   const totalKm = eLen.reduce((sum, v) => sum + v, 0) / 1000;
   console.log(`${cityKey}: węzły ${order.length}, krawędzie ${remapped.length}, ` +
     `sieć ${totalKm.toFixed(0)} km, plik ${(fs.statSync(outFile).size / 1e6).toFixed(2)} MB`);
