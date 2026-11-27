@@ -122,3 +122,77 @@ export async function fetchOverpass(query, tries = 4) {
 export function quantize(ring) {
   return ring.map(p => [Math.round(p.lat * 1e5), Math.round(p.lon * 1e5)]);
 }
+
+// --- maska wody: zasięg pobierania i przycinanie -----------------------------
+// Overpass zwraca pełną geometrię każdego obiektu, który ma choć jeden punkt
+// w prostokącie zapytania (rzeki wystają o dziesiątki km). Maska musi więc
+// kończyć się jednakowo w każdą stronę: pobieramy z zapasem i przycinamy do
+// tego samego prostokąta.
+
+/**
+ * Zapas wokół siatki pieszej [km]: przystanek leży do 1 km za krawędzią siatki,
+ * a jego koło ma promień ograniczony do 1 km — maska musi sięgać 2 km.
+ */
+export const WATER_MARGIN_KM = 2;
+
+/** Prostokąt {s,w,n,e} (stopnie) poszerzony o `marginKm` w każdą stronę. */
+export function waterQueryBbox([s, w, n, e], marginKm = WATER_MARGIN_KM) {
+  const dLat = marginKm / (M_PER_DEG_LAT / 1000);
+  const dLon = dLat / Math.cos(((s + n) / 2) * Math.PI / 180);
+  return { s: s - dLat, w: w - dLon, n: n + dLat, e: e + dLon };
+}
+
+/** Przycina otwartą linię [[lat,lon],...] do prostokąta (Liang-Barsky); zwraca listę fragmentów. */
+export function clipLineToBbox(line, { s, w, n, e }) {
+  const out = [];
+  let cur = null;
+  for (let i = 0; i < line.length - 1; i++) {
+    const [y0, x0] = line[i], [y1, x1] = line[i + 1];
+    const dx = x1 - x0, dy = y1 - y0;
+    let t0 = 0, t1 = 1, hit = true;
+    for (const [p, q] of [[-dx, x0 - w], [dx, e - x0], [-dy, y0 - s], [dy, n - y0]]) {
+      if (p === 0) { if (q < 0) { hit = false; break; } continue; }
+      const r = q / p;
+      if (p < 0) { if (r > t1) { hit = false; break; } if (r > t0) t0 = r; }
+      else { if (r < t0) { hit = false; break; } if (r < t1) t1 = r; }
+    }
+    if (!hit) { cur = null; continue; }
+    if (!cur) { cur = [[Math.round(y0 + t0 * dy), Math.round(x0 + t0 * dx)]]; out.push(cur); }
+    cur.push([Math.round(y0 + t1 * dy), Math.round(x0 + t1 * dx)]);
+    if (t1 < 1) cur = null;
+  }
+  return out.filter(l => l.length >= 2);
+}
+
+/** Przycina pierścień [[lat,lon],...] do prostokąta (Sutherland-Hodgman); zachowuje obieg. null = poza. */
+export function clipRingToBbox(ring, { s, w, n, e }) {
+  const cut = (a, c, axis, v) => {
+    const t = (v - a[axis]) / (c[axis] - a[axis]);
+    return axis === 1 ? [a[0] + t * (c[0] - a[0]), v] : [v, a[1] + t * (c[1] - a[1])];
+  };
+  const edges = [
+    [p => p[1] >= w, 1, w], [p => p[1] <= e, 1, e],
+    [p => p[0] >= s, 0, s], [p => p[0] <= n, 0, n],
+  ];
+  let pts = ring;
+  for (const [inside, axis, v] of edges) {
+    const o = [];
+    for (let i = 0; i < pts.length; i++) {
+      const cu = pts[i], pr = pts[(i + pts.length - 1) % pts.length];
+      if (inside(cu)) { if (!inside(pr)) o.push(cut(pr, cu, axis, v)); o.push(cu); }
+      else if (inside(pr)) o.push(cut(pr, cu, axis, v));
+    }
+    pts = o;
+    if (!pts.length) return null;
+  }
+  return pts.length >= 4 ? pts.map(p => [Math.round(p[0]), Math.round(p[1])]) : null;
+}
+
+/** Przycina maskę {polys, lines} (współrzędne *1e5) do prostokąta {s,w,n,e} (stopnie). */
+export function clipWaterToBbox({ polys, lines }, bbox) {
+  const b = { s: bbox.s * 1e5, w: bbox.w * 1e5, n: bbox.n * 1e5, e: bbox.e * 1e5 };
+  return {
+    polys: polys.map(r => clipRingToBbox(r, b)).filter(Boolean),
+    lines: lines.flatMap(l => clipLineToBbox(l, b)),
+  };
+}

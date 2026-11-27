@@ -9,6 +9,10 @@
  *   node tools/build-water.mjs <miasto> [ścieżka-do-zapisanej-odpowiedzi-overpass.json]
  *   (miasto = klucz z data/cities.json; bez drugiego argumentu pobiera z overpass-api.de)
  *
+ * Zasięg: siatka piesza + zapas WATER_MARGIN_KM (tools/geo.mjs); Overpass oddaje
+ * całe obiekty, więc wynik jest przycinany do tego samego prostokąta — maska
+ * kończy się jednakowo w każdą stronę.
+ *
  * Format wyjścia:
  *   {
  *     polys: [ [ [lat*1e5, lon*1e5], ... ], ... ],  // pierścienie zamknięte
@@ -22,7 +26,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fetchOverpass, stitch, isClosed, orient, simplify, areaKm2, signedArea, quantize } from './geo.mjs';
+import { fetchOverpass, stitch, isClosed, orient, simplify, areaKm2, signedArea, quantize, waterQueryBbox, clipWaterToBbox, WATER_MARGIN_KM } from './geo.mjs';
 
 const cityKey = process.argv[2];
 const cities = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'data', 'cities.json'), 'utf8'));
@@ -34,7 +38,8 @@ const cfg = cities[cityKey];
 // maska musi pokrywać CAŁĄ siatkę pieszą, więc bierze `gridBbox` (bbox poszerzony
 // o przystanki tuż za granicą sieci); brak pola = stary bbox
 const gb = cfg.gridBbox ?? cfg.bbox;
-const BBOX = { s: gb[0], w: gb[1], n: gb[2], e: gb[3] };
+// zakres maski = siatka + zapas; serwer zwraca całe obiekty, więc wynik i tak przycinamy
+const BBOX = waterQueryBbox(gb, WATER_MARGIN_KM);
 const SEA = cfg.seaClose ?? null; // domknięcie morza — tylko miasta nadmorskie
 const MIN_AREA_KM2 = 0.02;   // pomijaj oczka mniejsze niż ~2 ha
 const SIMPLIFY_M = 15;       // tolerancja upraszczania Douglas-Peucker
@@ -133,6 +138,7 @@ for (const chain of stitchedLines) {
 }
 
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
-fs.writeFileSync(outFile, JSON.stringify({ polys, lines }));
-console.log(`Zapisano ${polys.length} pierścieni (${nPts} punktów) + ${lines.length} linii (${nLinePts} punktów), ` +
+const clipped = clipWaterToBbox({ polys, lines }, BBOX);
+fs.writeFileSync(outFile, JSON.stringify(clipped));
+console.log(`Zapisano ${clipped.polys.length} pierścieni + ${clipped.lines.length} linii po przycięciu (przed: ${polys.length} + ${lines.length}, ${nPts + nLinePts} punktów), ` +
   `plik ${(fs.statSync(outFile).size / 1024).toFixed(0)} kB -> ${outFile}`);
