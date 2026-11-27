@@ -3,7 +3,7 @@
  */
 
 
-import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, distM } from './data.js';
+import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, distM, DEFAULT_PACE_KMH, normalizePace } from './data.js';
 import { BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateControl, createJourneyPane, createJourneyLayer } from './map.js';
 import {
@@ -16,7 +16,7 @@ import {
   zonesToGeoJSON, exportFileName, shouldShowIntro,
   meetHeading, meetRowText, meetInviteText, meetFasterNote, meetWindowNote, meetEmptyText, meetSummaryText,
   PANEL_SECTIONS_KEY, PANEL_SECTION_IDS, parseSectionState, serializeSectionState,
-  timeSectionSummary, accessSectionSummary, delaySectionSummary, dataSectionSummary,
+  timeSectionSummary, accessSectionSummary, paceHint, delaySectionSummary, dataSectionSummary,
   isJourneyKey, MAP_KEY_HINT, MAP_ARIA_LABEL,
 } from './uilogic.js';
 import { Engine } from './engine.js';
@@ -55,6 +55,7 @@ const state = {
   direction: 'from',
   walk: true,
   access: 'foot', // 'foot' | 'bike' (zostaje na przystanku) | 'bike-onboard'
+  pace: DEFAULT_PACE_KMH, // tempo marszu [km/h] z listy WALK_PACES_KMH (Z-013); rowera nie dotyczy
   mode: 'time',
   timeMin: Math.floor(now.minutes / 5) * 5,
   day: todayDay,
@@ -101,7 +102,7 @@ let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dn
 
   if (u.point) { state.point = L.latLng(u.point.lat, u.point.lng); pointFromUrl = true; }
   if (u.point2) { state.point2 = L.latLng(u.point2.lat, u.point2.lng); point2Chosen = true; }
-  for (const k of ['compare', 'meet', 'meetCrit', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe', 'maxTransfers', 'maxWalkMin']) {
+  for (const k of ['compare', 'meet', 'meetCrit', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe', 'maxTransfers', 'maxWalkMin', 'pace']) {
     if (k in u) state[k] = u[k];
   }
   dayFromUrl = u.dayFromUrl;
@@ -193,13 +194,15 @@ $('walkToggle').addEventListener('change', e => {
   recompute();
 });
 $('accessSelect').addEventListener('change', e => { state.access = e.target.value; syncLimits(); recompute(); });
+// tempo marszu (Z-013): lista zamknięta; nigdy wygaszana — skaluje też przejścia w węźle
+$('paceSelect').addEventListener('change', e => { state.pace = normalizePace(e.target.value); syncLimits(); recompute(); });
 
 // --- limity przesiadek i spaceru (Z-012) ---------------------------------------
 
 /** Kontekst dla czystych funkcji z uilogic.js. */
 const limitCtx = () => ({
   maxTransfers: state.maxTransfers, maxWalkMin: state.maxWalkMin,
-  walk: state.walk, walkOnly: isWalkOnly(), mode: state.mode, access: state.access,
+  walk: state.walk, walkOnly: isWalkOnly(), mode: state.mode, access: state.access, pace: state.pace,
 });
 
 /** Limity SKUTECZNE w bieżącym trybie, w jednostkach interfejsu (minuty). */
@@ -228,6 +231,8 @@ function syncLimits() {
   }
   $('walkMaxHint').textContent = hints.walk;
   $('trHint').textContent = hints.transfers;
+  $('paceSelect').value = String(state.pace);
+  $('paceHint').textContent = paceHint(state.pace);
 }
 for (const el of document.querySelectorAll('input[name="walkmax"]')) {
   el.addEventListener('change', () => { state.maxWalkMin = el.value === '' ? null : +el.value; syncLimits(); recompute(); });
@@ -695,6 +700,7 @@ $('exportBtn').addEventListener('click', async () => {
       cautious: state.safe,
       max_transfers: uiLimits().maxTransfers ?? undefined, // pominięte, gdy bez limitu
       max_walk_min: uiLimits().maxWalkMin ?? undefined,
+      walk_pace_kmh: state.pace !== DEFAULT_PACE_KMH ? state.pace : undefined, // pominięte przy tempie domyślnym
       feed_date: cityMeta?.dates?.[dayKey] ?? null,
       generated: new Date().toISOString(),
     });
@@ -813,7 +819,7 @@ let feedStale = false;  // rozkład po terminie ważności
 function renderSections() {
   const views = {
     secTime: timeSectionSummary(state, initialDefaults),
-    secAccess: accessSectionSummary({ walk: state.walk, access: state.access, groups: cityCfg().veh, veh: state.veh, ...uiLimits() }),
+    secAccess: accessSectionSummary({ walk: state.walk, access: state.access, groups: cityCfg().veh, veh: state.veh, pace: state.pace, ...uiLimits() }),
     secDelay: delaySectionSummary(state),
     secData: dataSectionSummary({ feedDate: feedYmd, stale: feedStale }),
   };
@@ -1399,6 +1405,7 @@ async function recompute() {
     direction: state.direction,
     walk: state.walk,
     access: state.access,
+    pace: state.pace,
     mode: state.mode,
     timeMin: state.timeMin,
     types: types ? [...types] : null,

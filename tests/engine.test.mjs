@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { Engine } from '../js/engine.js';
+import { Engine, speedsFor } from '../js/engine.js';
 import { buildWalkGrid, pixelIndex, outsideSeeds } from '../js/walkgrid.js';
 import { NET_WALK_MPS, NET_BIKE_MPS } from '../js/walknet.js';
 import { WALK_MPS, BIKE_MPS, M_PER_DEG_LAT } from '../js/data.js';
@@ -634,4 +634,128 @@ test('nasiona brzegowe (Z-007): przystanki dalej niż 1 km od siatki nie dają n
   assert.deepEqual(outsideSeeds(grid, net, minutes, { reachM: 1000 }), []);
   assert.ok(zones.zones.some(z => z.circles.length > 0));
   assert.equal(maxRadius(zones), 1000, 'cap kół bez zmian (OUTSIDE_MAX_RADIUS_M)');
+});
+
+// --- Z-013: tempo marszu ---------------------------------------------------------------
+
+test('tempo marszu (Z-013): brak parametru i 4,5 km/h dają identyczne wyniki, tempa te same', async () => {
+  const e = await makeEngine('tstPaceCompat');
+  for (const extra of [{}, { access: 'bike' }, { access: 'bike-onboard' }, { direction: 'to' }, { walk: false }, { walkOnly: true }, { maxWalkSec: 3600 }, { stats: true }]) {
+    const a = await run(e, extra);
+    const minsA = [...e.last.minutes], speedsA = e.last.speeds;
+    const b = await run(e, { ...extra, pace: 4.5 });
+    const label = JSON.stringify(extra);
+    assert.deepEqual([...e.last.minutes], minsA, `minuty: ${label}`);
+    assert.deepEqual(b.zones.zones, a.zones.zones, `koła: ${label}`);
+    assert.deepEqual(b.zones.stats, a.zones.stats, `statystyki: ${label}`);
+    assert.equal(b.zones.reachable, a.zones.reachable);
+    assert.deepEqual(e.last.speeds, speedsA, `tempa: ${label}`);
+  }
+  // wartość spoza listy = domyślna
+  const a = await run(e, {}), minsA = [...e.last.minutes];
+  for (const bad of [4.4, 0, -1, 'szybko', null, 100]) {
+    const b = await run(e, { pace: bad });
+    assert.deepEqual([...e.last.minutes], minsA, `pace=${bad}`);
+    assert.deepEqual(b.zones.zones, a.zones.zones, `pace=${bad}`);
+  }
+});
+
+test('tempo marszu (Z-013): speedsFor przy mnożniku 1 zwraca te same obiekty, przy innym skaluje tylko marsz', () => {
+  for (const access of ['foot', 'bike', 'bike-onboard']) {
+    assert.equal(speedsFor(access, 'from', 1), speedsFor(access, 'from'), `${access}/from: ta sama referencja`);
+  }
+  const m = 3.5 / 4.5;
+  const foot = speedsFor('foot', 'from', m);
+  assert.equal(foot.accessMps, NET_WALK_MPS * m);
+  assert.equal(foot.egressMps, NET_WALK_MPS * m);
+  assert.equal(foot.crowAccess, WALK_MPS * m);
+  assert.equal(foot.crowEgress, WALK_MPS * m);
+  assert.equal(foot.crowWalk, WALK_MPS * m);
+  // rower nietknięty: skaluje się wyłącznie marsz (wyjście z przystanku)
+  const bike = speedsFor('bike', 'from', m);
+  assert.equal(bike.accessMps, NET_BIKE_MPS);
+  assert.equal(bike.crowAccess, BIKE_MPS);
+  assert.equal(bike.egressMps, NET_WALK_MPS * m);
+  const onboard = speedsFor('bike-onboard', 'from', m);
+  assert.equal(onboard.accessMps, NET_BIKE_MPS);
+  assert.equal(onboard.egressMps, NET_BIKE_MPS);
+  assert.equal(onboard.crowEgress, BIKE_MPS);
+  // kierunek „do": role zamienione, ale rower dalej bez skalowania
+  const bikeTo = speedsFor('bike', 'to', m);
+  assert.equal(bikeTo.accessMps, NET_WALK_MPS * m);
+  assert.equal(bikeTo.egressMps, NET_BIKE_MPS);
+});
+
+test('tempo marszu (Z-013): cap „do miejsca" nie zależy od porównania prędkości — pieszy dostaje 90 min przy każdym tempie', () => {
+  for (const mult of [2.5 / 4.5, 3.5 / 4.5, 1, 5.5 / 4.5]) {
+    assert.equal(speedsFor('foot', 'to', mult).cap, 90 * 60, `foot/to ×${mult}`);
+    assert.equal(speedsFor('bike', 'to', mult).cap, 90 * 60, `bike/to ×${mult}`);
+    assert.equal(speedsFor('bike', 'from', mult).cap, 30 * 60, `bike/from ×${mult}`);
+    assert.equal(speedsFor('bike-onboard', 'to', mult).cap, 30 * 60, `onboard/to ×${mult}`);
+    assert.equal(speedsFor('foot', 'from', mult).cap, 90 * 60, `foot/from ×${mult}`);
+  }
+});
+
+test('tempo marszu (Z-013): w silniku cap pieszego „do miejsca" zostaje 90 min przy tempie innym niż domyślne', async () => {
+  const e = await makeEngine('tstPaceCap');
+  for (const pace of [2.5, 3.5, 5.5]) {
+    await run(e, { pace, direction: 'to' });
+    assert.equal(e.last.speeds.cap, 90 * 60, `foot/to ${pace}`);
+    await run(e, { pace, direction: 'to', access: 'bike' });
+    assert.equal(e.last.speeds.cap, 90 * 60, `bike/to ${pace}`);
+  }
+});
+
+test('tempo marszu (Z-013): monotoniczność — wolniej = czasy nie mniejsze, zasięg nie większy', async () => {
+  const e = await makeEngine('tstPaceMono');
+  const at = async (pace, extra = {}) => { const r = await run(e, { pace, ...extra }); return { m: mins(e), reachable: r.zones.reachable }; };
+  for (const extra of [{}, { direction: 'to' }, { walk: false }]) {
+    const slow = await at(2.5, extra), mid = await at(4.5, extra), fast = await at(5.5, extra);
+    for (let i = 0; i < slow.m.length; i++) {
+      assert.ok(slow.m[i] >= mid.m[i], `S${i} 2,5 ≥ 4,5 ${JSON.stringify(extra)}`);
+      assert.ok(mid.m[i] >= fast.m[i], `S${i} 4,5 ≥ 5,5 ${JSON.stringify(extra)}`);
+    }
+    assert.ok(slow.reachable <= mid.reachable && mid.reachable <= fast.reachable, `zasięg ${JSON.stringify(extra)}`);
+  }
+  // sama ścieżka dojścia: S0 (3339 m) pieszo ~44 min przy 4,5, ~80 przy 2,5, ~36 przy 5,5
+  const s0 = async pace => (await at(pace)).m[0];
+  near(await s0(2.5) / (await s0(4.5)), 1.8, 0.1, 'S0: stosunek czasów 2,5 / 4,5');
+  assert.ok(await s0(5.5) < await s0(4.5));
+  // rower do przystanku nie zależy od tempa marszu
+  const b1 = await at(2.5, { access: 'bike' }), b2 = await at(5.5, { access: 'bike' });
+  assert.deepEqual(b1.m.slice(0, 3), b2.m.slice(0, 3));
+});
+
+test('tempo marszu (Z-013): w trybie porównania obie osoby liczone tym samym tempem', async () => {
+  const e = await makeEngine('tstPaceCmp');
+  await run(e, { pace: 3.5, compare: true, point2: { lat: 50.002, lng: 20 } });
+  assert.equal(e.last.speeds.accessMps, NET_WALK_MPS * (3.5 / 4.5));
+  const a = [...e.last.res.minutes];
+  await run(e, { pace: 3.5, compare: false });
+  assert.deepEqual([...e.last.res.minutes], a, 'osoba A tak samo jak w trybie jednej osoby');
+});
+
+test('tempo marszu (Z-013): tryb „tylko pieszo" skaluje falę mnożnikiem tempa', async () => {
+  const e = await makeGridEngine('tstPaceWalkOnly');
+  const target = { lat: 50.005, lng: 20 }; // ok. 556 m od punktu wzdłuż ulicy
+  const secAt = async pace => {
+    await run(e, { walkOnly: true, pace });
+    const { grid, gridTime } = e.last;
+    return gridTime[pixelIndex(grid, target.lat, target.lng)];
+  };
+  const base = await secAt(4.5);
+  assert.ok(base > 300 && base < 65535, `bazowy czas ${base}`);
+  for (const pace of [2.5, 3.5, 5.5]) {
+    const t = await secAt(pace);
+    near(t / base, 4.5 / pace, 0.03, `pace ${pace}`);
+  }
+});
+
+test('tempo marszu (Z-013): dymek trasy „tylko pieszo" w linii prostej liczy aktualnym tempem', async () => {
+  const e = await makeEngine('tstPaceJourney');
+  const target = { lat: 50.02, lng: 20 };
+  await run(e, { walkOnly: true });
+  const base = e.journey(target).sec;
+  await run(e, { walkOnly: true, pace: 2.5 });
+  near(e.journey(target).sec / base, 4.5 / 2.5, 1e-9, 'stosunek czasów');
 });

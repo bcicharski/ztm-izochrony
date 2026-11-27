@@ -66,6 +66,8 @@ export function computeReachability(net, opts) {
   const lim = {
     rounds: Number.isInteger(opts.maxTransfers) ? Math.max(1, Math.min(MAX_ROUNDS, opts.maxTransfers + 1)) : MAX_ROUNDS,
     maxWalkSec: Number.isFinite(opts.maxWalkSec) ? opts.maxWalkSec : Infinity,
+    // mnożnik czasu przejść pieszych w obrębie węzła (Z-013): 1 = dane bez zmian
+    transferScale: opts.transferScale > 0 && Number.isFinite(opts.transferScale) ? opts.transferScale : 1,
   };
   const sources = findAccessStops(g, opts.lat, opts.lon, opts.walk, opts.accessSec, opts.accessMps ?? WALK_MPS, lim.maxWalkSec);
   if (sources.length === 0) {
@@ -96,7 +98,7 @@ export function computeReachability(net, opts) {
       run.second = second;
     }
   } else {
-    run = dijkstra(g, sources, opts.walk, opts.types, opts.cautious, lim.maxWalkSec);
+    run = dijkstra(g, sources, opts.walk, opts.types, opts.cautious, lim.maxWalkSec, lim.transferScale);
   }
 
   const minutes = new Float64Array(g.nStops);
@@ -177,11 +179,37 @@ function newParents(n) {
   };
 }
 
+/**
+ * Listy przejść pieszych z czasami pomnożonymi przez `factor` (Z-013: tempo
+ * marszu inne niż domyślne). Podłoga `MIN_TRANSFER_S` nakładana PO skalowaniu.
+ * Przy `factor === 1` zwraca TĘ SAMĄ referencję — domyślne tempo nie dotyka
+ * ani jednego elementu. Wynik jest pamiętany obok (WeakMap po liście źródłowej),
+ * nigdy w `net`: lista z cache'u miasta jest dzielona z siecią odwróconą,
+ * a funkcja dekodująca (data.js) ma zostać nietknięta.
+ * @param {Array<number[]>} adj  spłaszczone pary [sąsiad, sekundy, ...] per przystanek
+ */
+const scaledTransfers = new WeakMap();
+export function scaleTransfers(adj, factor) {
+  if (factor === 1) return adj;
+  let byFactor = scaledTransfers.get(adj);
+  if (!byFactor) scaledTransfers.set(adj, byFactor = new Map());
+  let out = byFactor.get(factor);
+  if (!out) {
+    out = adj.map(list => {
+      const l = list.slice();
+      for (let k = 1; k < l.length; k += 2) l[k] = Math.max(Math.round(l[k] * factor), MIN_TRANSFER_S);
+      return l;
+    });
+    byFactor.set(factor, out);
+  }
+  return out;
+}
+
 // --- RAPTOR -----------------------------------------------------------------
 
 function raptor(g, sources, t0, walk, types, cautious, delays, dayType, lim) {
   const n = g.nStops;
-  const { rounds, maxWalkSec } = lim;
+  const { rounds, maxWalkSec, transferScale = 1 } = lim;
   const INF = Infinity;
   const best = new Float64Array(n).fill(INF);      // najlepszy znany czas przyjazdu
   const arrPrev = new Float64Array(n).fill(INF);   // przyjazdy z poprzedniej rundy
@@ -206,7 +234,7 @@ function raptor(g, sources, t0, walk, types, cautious, delays, dayType, lim) {
   }
   kindPrev.set(par.kind);
 
-  const footAdj = walk ? g.transferAdj : g.sameGroupAdj;
+  const footAdj = scaleTransfers(walk ? g.transferAdj : g.sameGroupAdj, transferScale);
   const qPattern = new Int32Array(g.patterns.length).fill(-1); // najwcześniejsza pozycja wejścia
   // Bufor przesiadkowy przy wsiadaniu dotyczy WYŁĄCZNIE przystanku, na który
   // dojechało się pojazdem (przesiadka w miejscu). Po dojściu pieszym
@@ -396,10 +424,10 @@ function rideAdjacency(g, types, cautious) {
   return adj;
 }
 
-function dijkstra(g, sources, walk, types, cautious, maxWalkSec = Infinity) {
+function dijkstra(g, sources, walk, types, cautious, maxWalkSec = Infinity, transferScale = 1) {
   const n = g.nStops;
   const rideAdj = rideAdjacency(g, types, cautious);
-  const footAdj = walk ? g.transferAdj : g.sameGroupAdj;
+  const footAdj = scaleTransfers(walk ? g.transferAdj : g.sameGroupAdj, transferScale);
   const dist = new Float64Array(n).fill(Infinity);
   const par = newParents(n);
 

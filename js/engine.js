@@ -12,7 +12,7 @@
  * a gładkie obrysy dokłada, gdy przyjdą.
  */
 
-import { loadDay, loadWater, loadCity, loadBridges, loadWalkNet, loadDelays, dropCityCache, distM, WALK_MPS, BIKE_MPS } from './data.js';
+import { loadDay, loadWater, loadCity, loadBridges, loadWalkNet, loadDelays, dropCityCache, distM, WALK_MPS, BIKE_MPS, DEFAULT_PACE_KMH, normalizePace } from './data.js';
 import { decodeWalkNet, snapEdges, snapSeeds, snapTime, sameEdgeSec, computeNodeTimes, paintNetwork, SPREAD_M, NET_WALK_MPS, NET_BIKE_MPS } from './walknet.js';
 import { computeReachability } from './router.js';
 import { buildZones, NO_WALK_RADIUS_M, OUTSIDE_MAX_RADIUS_M } from './isochrone.js';
@@ -40,9 +40,9 @@ const DAY_TYPE = { workday: 0, saturday: 1, sunday: 2 };
  * nie zna (dalekie stacje spoza gridBbox).
  */
 const ACCESS_MODES = {
-  foot: { accessMps: NET_WALK_MPS, egressMps: NET_WALK_MPS, cap: WALK_CAP_SEC, crowAccess: WALK_MPS, crowEgress: WALK_MPS },
-  bike: { accessMps: NET_BIKE_MPS, egressMps: NET_WALK_MPS, cap: BIKE_ACCESS_CAP_SEC, crowAccess: BIKE_MPS, crowEgress: WALK_MPS },
-  'bike-onboard': { accessMps: NET_BIKE_MPS, egressMps: NET_BIKE_MPS, cap: BIKE_ACCESS_CAP_SEC, crowAccess: BIKE_MPS, crowEgress: BIKE_MPS },
+  foot: { accessMps: NET_WALK_MPS, egressMps: NET_WALK_MPS, cap: WALK_CAP_SEC, crowAccess: WALK_MPS, crowEgress: WALK_MPS, walkAccess: true, walkEgress: true, crowWalk: WALK_MPS },
+  bike: { accessMps: NET_BIKE_MPS, egressMps: NET_WALK_MPS, cap: BIKE_ACCESS_CAP_SEC, crowAccess: BIKE_MPS, crowEgress: WALK_MPS, walkAccess: false, walkEgress: true, crowWalk: WALK_MPS },
+  'bike-onboard': { accessMps: NET_BIKE_MPS, egressMps: NET_BIKE_MPS, cap: BIKE_ACCESS_CAP_SEC, crowAccess: BIKE_MPS, crowEgress: BIKE_MPS, walkAccess: false, walkEgress: false, crowWalk: WALK_MPS },
 };
 
 /**
@@ -50,15 +50,31 @@ const ACCESS_MODES = {
  * zamieniają: podróżny startuje z klikniętego miejsca (i to on ma rower),
  * a kończy przy punkcie użytkownika — czyli szybszy środek lokomocji dotyczy
  * wtedy fali po mieście, nie doboru przystanków startowych.
+ *
+ * `walkMult` (Z-013) = tempo marszu ÷ 4,5 km/h. Skaluje WYŁĄCZNIE odcinki
+ * piesze (flagi `walkAccess`/`walkEgress` w tablicy trybów, ustawione zanim
+ * mnożnik wejdzie w grę) — rower nietknięty. Flagi, nie porównanie prędkości
+ * z `NET_WALK_MPS`: po przeskalowaniu równość by nie zachodziła i pieszy
+ * dostałby cap rowerowy. Mnożnik 1 zwraca stałe i obiekty z tablicy trybów
+ * bez kopiowania, więc domyślny wynik jest identyczny co do sekundy.
  */
-function speedsFor(access, direction) {
-  const m = ACCESS_MODES[access] ?? ACCESS_MODES.foot;
+export function speedsFor(access, direction, walkMult = 1) {
+  const base = ACCESS_MODES[access] ?? ACCESS_MODES.foot;
+  const m = walkMult === 1 ? base : {
+    ...base,
+    accessMps: base.walkAccess ? base.accessMps * walkMult : base.accessMps,
+    egressMps: base.walkEgress ? base.egressMps * walkMult : base.egressMps,
+    crowAccess: base.walkAccess ? base.crowAccess * walkMult : base.crowAccess,
+    crowEgress: base.walkEgress ? base.crowEgress * walkMult : base.crowEgress,
+    crowWalk: base.crowWalk * walkMult,
+  };
   if (direction !== 'to') return m;
   return {
     ...m,
     accessMps: m.egressMps, egressMps: m.accessMps,
     crowAccess: m.crowEgress, crowEgress: m.crowAccess,
-    cap: m.egressMps === NET_WALK_MPS ? WALK_CAP_SEC : m.cap,
+    walkAccess: m.walkEgress, walkEgress: m.walkAccess,
+    cap: base.walkEgress ? WALK_CAP_SEC : base.cap,
   };
 }
 
@@ -240,7 +256,7 @@ export class Engine {
     }
     if (!painted) return null; // nic nie przyłączyło się do sieci — raster poradzi sobie lepiej
     for (const [idx, sec] of extraSeeds) if (grid.land[idx] && sec < grid.time[idx]) grid.time[idx] = sec;
-    return computeTimeGrid(grid, null, SPREAD_M);
+    return computeTimeGrid(grid, null, SPREAD_M, { mps: speeds.crowWalk ?? WALK_MPS });
   }
 
   /**
@@ -257,7 +273,10 @@ export class Engine {
       loadDay(p.city, p.dayKey),
       p.cautious ? loadDelays(p.city) : Promise.resolve(null),
     ]);
-    const speeds = speedsFor(p.access ?? 'foot', p.direction);
+    // tempo marszu (Z-013): liczone RAZ na przeliczenie, wspólne dla obu osób w porównaniu;
+    // brak pola albo wartość spoza listy = domyślne 4,5 km/h, czyli mnożnik 1
+    const walkMult = normalizePace(p.pace) / DEFAULT_PACE_KMH;
+    const speeds = speedsFor(p.access ?? 'foot', p.direction, walkMult);
     // Limity (null = bez limitu; wynik wtedy identyczny jak przed Z-012).
     // Spacer: sekundy na JEDEN odcinek pieszy przy komunikacji (dojście,
     // przesiadka, końcówka) — bez znaczenia, gdy spaceru nie ma albo jest „tylko pieszo".
@@ -269,6 +288,7 @@ export class Engine {
       types: p.types ? new Set(p.types) : null,
       cautious: p.cautious, delays, dayType: DAY_TYPE[p.dayKey],
       accessMps: speeds.crowAccess,
+      transferScale: 1 / walkMult, // czas przejść pieszych w węźle odwrotnie do tempa
     };
     // tryb „tylko pieszo" pomija routing — zasięg wyznacza sama fala po lądzie
     let res = null, res2 = null, minutes;
@@ -330,7 +350,7 @@ export class Engine {
       const ringReach = Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * egressCrow);
       const waveFor = (mins, origin) => {
         const time = this.walkWaveOnNet(grid, net, mins, origin, speeds, maxWalkSec)
-          ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * WALK_MPS);
+          ?? computeTimeGrid(grid, seedsFor(mins, origin), maxWalkSec * speeds.crowWalk, { mps: speeds.crowWalk });
         const ring = outsideSeeds(grid, net, mins, { mps: egressCrow, reachM: ringReach });
         return ring.length ? computeTimeGrid(grid, ring, ringReach, { reset: false, mps: egressCrow }) : time;
       };

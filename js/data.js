@@ -13,6 +13,16 @@ export const WALK_MPS = 4.5 / 3.6 / 1.3;
 /** Prędkość roweru w linii prostej [m/s] — 15 km/h ÷ ten sam ryczałt krętości.
  *  Używana tylko tam, gdzie graf ulic milczy (przystanki spoza sieci). */
 export const BIKE_MPS = 15 / 3.6 / 1.3;
+/**
+ * Tempo marszu do wyboru w interfejsie [km/h] (Z-013). 4,5 to dotychczasowe,
+ * jedyne dotąd tempo — domyślne. Lista zamknięta: adres spoza niej daje domyślne.
+ * Poniżej 2,5 km/h o czasie decydują schody i krawężniki, których dane nie
+ * opisują, więc liczba byłaby fikcją.
+ */
+export const WALK_PACES_KMH = [2.5, 3.5, 4.5, 5.5];
+export const DEFAULT_PACE_KMH = 4.5;
+/** Dozwolone tempo marszu [km/h]; cokolwiek spoza listy (także brak) = domyślne. */
+export const normalizePace = v => (WALK_PACES_KMH.includes(Number(v)) ? Number(v) : DEFAULT_PACE_KMH);
 /** Minimalny czas przesiadki [s]. */
 export const MIN_TRANSFER_S = 60;
 /**

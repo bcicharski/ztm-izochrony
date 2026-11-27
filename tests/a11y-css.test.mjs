@@ -33,6 +33,7 @@ const SIZED = [
   '.veh',
   '.city-select',
   '#accessSelect',
+  '#paceSelect',
   '.time-row input',
   '.time-row select',
   '.share-btn',

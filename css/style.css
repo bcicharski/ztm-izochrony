@@ -199,7 +199,8 @@ html, body {
 /* ---------- wybór miasta ---------- */
 
 .city-select,
-#accessSelect {
+#accessSelect,
+#paceSelect {
   width: 100%;
   height: var(--tap);
   margin: 0 0 12px;
@@ -215,8 +216,10 @@ html, body {
   touch-action: manipulation;
 }
 #accessSelect { margin: 8px 0 0; }
+#paceSelect { margin: 8px 0 6px; }
 .city-select:focus-visible,
-#accessSelect:focus-visible {
+#accessSelect:focus-visible,
+#paceSelect:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -1356,6 +1359,7 @@ html[data-approx] .legend .note-approx { display: flex; }
   .hint { margin-bottom: 8px; }
   .time-row { margin-top: 6px; }
   #accessSelect { margin-top: 6px; }
+  #paceSelect { margin-top: 6px; margin-bottom: 4px; }
   .legend { margin: 2px 0 8px; }
   .stats-switch { margin-bottom: 6px; }
   .share-btn,
@@ -1365,7 +1369,8 @@ html[data-approx] .legend .note-approx { display: flex; }
   /* 16 px: poniżej tego iOS Safari przybliża stronę po fokusie na polu */
   .panel input,
   .panel select,
-  #accessSelect { font-size: 16px; }
+  #accessSelect,
+  #paceSelect { font-size: 16px; }
 }
 
 /* ---------- dostępność ---------- */

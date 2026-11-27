@@ -8,7 +8,7 @@
  * Używane przez app.js, map.js i worker.js.
  */
 
-import { DAY_LABELS } from './data.js';
+import { DAY_LABELS, DEFAULT_PACE_KMH, WALK_PACES_KMH, normalizePace } from './data.js';
 
 // --- czas ------------------------------------------------------------------
 
@@ -93,6 +93,11 @@ export const limitsEnabled = ({ mode, walk, walkOnly }) => ({
   walkMax: !!walk && !walkOnly,
 });
 
+/** Podpowiedź pod wyborem tempa (Z-013): tylko przy tempie innym niż domyślne — panel nie rośnie bez potrzeby. */
+export const paceHint = pace => (normalizePace(pace) === DEFAULT_PACE_KMH
+  ? ''
+  : 'Wolniej niż 2,5 km/h nie liczymy: tam o czasie decydują schody i krawężniki, których dane nie opisują.');
+
 const TRANSFER_WORDS = { 0: 'bez przesiadek', 1: 'najwyżej 1 przesiadka', 2: 'najwyżej 2 przesiadki' };
 
 /** Krótki opis aktywnych limitów (pasek statusu); pusty tekst, gdy żadnego nie ma. */
@@ -118,9 +123,9 @@ export function emptyResultText({ reachable, maxTransfers, maxWalkMin }) {
     : 'Przy tym limicie przesiadek nie ma przystanku w zasięgu — poluzuj limit albo wybierz inny punkt.';
 }
 
-/** Dystans marszu w 4,5 km/h: do 1 km co 50 m, powyżej w km z przecinkiem. */
-function walkDistText(min) {
-  const m = min * 60 * 1.25;
+/** Dystans marszu w danym tempie [km/h]: do 1 km co 50 m, powyżej w km z przecinkiem. */
+function walkDistText(min, pace = DEFAULT_PACE_KMH) {
+  const m = min * 60 * (pace === DEFAULT_PACE_KMH ? 1.25 : pace / 3.6);
   return m < 1000 ? `${Math.round(m / 50) * 50} m` : `${(Math.round(m / 100) / 10).toFixed(1).replace('.', ',')} km`;
 }
 
@@ -129,14 +134,14 @@ function walkDistText(min) {
  * Spacer: pusty tekst przy „bez limitu"; przesiadki: zawsze coś (mówi wprost,
  * że „bez limitu" to cztery przesiadki).
  */
-export function limitHints({ maxTransfers, maxWalkMin, walk, walkOnly, mode, access }) {
+export function limitHints({ maxTransfers, maxWalkMin, walk, walkOnly, mode, access, pace = DEFAULT_PACE_KMH }) {
   let walkHint = '';
   if (walkOnly) walkHint = 'Bez pojazdów limit nie ma znaczenia.';
   else if (!walk) walkHint = 'Spacer jest wyłączony, więc limit nie ma znaczenia.';
   else if (maxWalkMin != null) {
     walkHint = access && access !== 'foot'
       ? `Każdy odcinek do ${maxWalkMin} min, także dojazd rowerem: dojście, przesiadka i końcówka.`
-      : `Każdy odcinek pieszo do ${maxWalkMin} min (ok. ${walkDistText(maxWalkMin)}): dojście, przesiadka i końcówka.`;
+      : `Każdy odcinek pieszo do ${maxWalkMin} min (ok. ${walkDistText(maxWalkMin, pace)}): dojście, przesiadka i końcówka.`;
   }
   let trHint;
   if (walkOnly) trHint = 'Bez pojazdów nie ma przesiadek.';
@@ -181,6 +186,8 @@ export function parseUrlState(search, cities) {
   if (q.get('mode') === 'general') out.mode = 'general';
   // limity (Z-012): brak albo wartość spoza zakresu = bez limitu, jak dotąd
   if (/^[012]$/.test(q.get('tr') ?? '')) out.maxTransfers = +q.get('tr');
+  // tempo marszu (Z-013): biała lista; spoza niej = domyślne, czyli pole nieustawione
+  if (q.has('pace') && normalizePace(q.get('pace')) !== DEFAULT_PACE_KMH) out.pace = normalizePace(q.get('pace'));
   if (/^\d{1,2}$/.test(q.get('wmax') ?? '') && +q.get('wmax') >= 1 && +q.get('wmax') < WALK_LIMIT_MAX_MIN) {
     out.maxWalkMin = +q.get('wmax');
   }
@@ -214,6 +221,8 @@ export function buildQuery(state) {
   q.set('dir', state.direction);
   q.set('walk', state.walk ? '1' : '0');
   if (state.access !== 'foot') q.set('acc', state.access);
+  // tempo marszu tylko po zmianie — stan domyślny daje ten sam adres co dawniej (Z-013)
+  if (state.pace != null && state.pace !== DEFAULT_PACE_KMH && WALK_PACES_KMH.includes(state.pace)) q.set('pace', String(state.pace));
   // limity tylko po ustawieniu — stan domyślny daje ten sam adres co dawniej
   if (state.maxTransfers != null) q.set('tr', String(state.maxTransfers));
   if (state.maxWalkMin != null) q.set('wmax', String(state.maxWalkMin));
@@ -867,9 +876,10 @@ const vehName = label => String(label).replace(/^[^\p{L}\p{N}]+/u, '').trim().to
  * kluczy → bool. Do trzech nazw wprost, powyżej „N z M środków". Przy jednym
  * środku filtr jest ukryty w panelu, więc podsumowanie mówi tylko o dojściu.
  */
-export function accessSectionSummary({ walk, access, groups, veh, maxTransfers = null, maxWalkMin = null }) {
+export function accessSectionSummary({ walk, access, groups, veh, maxTransfers = null, maxWalkMin = null, pace = DEFAULT_PACE_KMH }) {
   const on = groups.filter(g => veh[g.key]);
-  if (groups.length >= 2 && on.length === 0) return { text: 'tylko pieszo', changed: true };
+  const paceTxt = pace === DEFAULT_PACE_KMH ? null : `${String(pace).replace('.', ',')} km/h`;
+  if (groups.length >= 2 && on.length === 0) return { text: paceTxt ? `tylko pieszo · ${paceTxt}` : 'tylko pieszo', changed: true };
   // limity przychodzą już „skuteczne" (engineLimits): bez spaceru nie ma limitu spaceru
   const wl = walk ? maxWalkMin : null;
   const base = walk ? (SUMMARY_ACCESS[access] ?? 'pieszo') : 'bez spaceru';
@@ -881,7 +891,8 @@ export function accessSectionSummary({ walk, access, groups, veh, maxTransfers =
   }
   const trPart = maxTransfers == null ? null
     : maxTransfers === 0 ? 'bez przesiadek' : `do ${maxTransfers} ${maxTransfers === 1 ? 'przesiadki' : 'przesiadek'}`;
-  const join = (walkPart, veh) => [walkPart, veh, trPart].filter(Boolean).join(' · ');
+  const pacePart = paceTxt;
+  const join = (walkPart, veh) => [walkPart, pacePart, veh, trPart].filter(Boolean).join(' · ');
   const withLimit = word => (wl != null ? `${word} do ${wl} min` : word);
   // wiersz nie może urosnąć do dwóch linii: najpierw bez słowa „pieszo", potem
   // środki skrócone do licznika, na końcu przytnie CSS (text-overflow: ellipsis)
@@ -891,10 +902,10 @@ export function accessSectionSummary({ walk, access, groups, veh, maxTransfers =
     wl != null && base === 'pieszo' ? join(`do ${wl} min`, vehShort) : join(withLimit(base), vehShort),
   ].filter(t => t != null);
   // bez limitów tekst zostaje dokładnie taki jak dotąd (skracanie dotyczy tylko wierszy z limitem)
-  const text = (wl == null && maxTransfers == null) ? tries[0]
+  const text = (wl == null && maxTransfers == null && pacePart == null) ? tries[0]
     : (tries.find(t => t.length <= SUMMARY_BUDGET) ?? tries[tries.length - 1]);
   const changed = !walk || access !== 'foot' || (vehPart !== null && on.length !== groups.length)
-    || maxTransfers != null || wl != null;
+    || maxTransfers != null || wl != null || pacePart != null;
   return { text, changed };
 }
 

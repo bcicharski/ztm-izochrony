@@ -311,6 +311,13 @@
               <option value="bike">🚲 rowerem, zostaje na przystanku</option>
               <option value="bike-onboard">🚲 rowerem, jedzie z tobą</option>
             </select>
+            <select id="paceSelect" aria-label="Tempo marszu" aria-describedby="paceHint">
+              <option value="2.5">Tempo 2,5 km/h · balkonik, kule</option>
+              <option value="3.5">Tempo 3,5 km/h · wolniejszy krok</option>
+              <option value="4.5" selected>Tempo 4,5 km/h · zwykły marsz</option>
+              <option value="5.5">Tempo 5,5 km/h · szybki marsz</option>
+            </select>
+            <p class="hint" id="paceHint"></p>
           </fieldset>
 
           <fieldset class="control" id="walkMaxField" aria-describedby="walkMaxHint">

@@ -50,7 +50,8 @@ jednego punktu) pojawia się po włączeniu „Pokaż statystyki".
   dotrzeć do punktu.
 - **Dojście do przystanku** — wliczone dojście do przystanków i od przystanku
   docelowego, liczone **po realnej sieci ulic, chodników i ścieżek z OSM**
-  (4,5 km/h); po wyłączeniu liczy się wyłącznie od najbliższego zespołu
+  (domyślnie 4,5 km/h; tempo marszu do wyboru: 2,5 / 3,5 / 4,5 / 5,5 km/h, URL `pace=`,
+  skaluje też przejścia w węźle, rower bez zmian); po wyłączeniu liczy się wyłącznie od najbliższego zespołu
   przystankowego, a przesiadki tylko w ramach tego samego zespołu.
   Zamiast spaceru można wybrać **rower** (15 km/h po tej samej sieci, dojazd
   do przystanku liczony do 30 min; parametr URL `acc=`): wariant *zostaje na
@@ -294,7 +295,8 @@ linia brzegowa, czyli praktycznie nigdy).
   przystanki dalej niż 400 m od jakiejkolwiek drogi i dalekie stacje spoza
   `gridBbox`. Dojście dłuższe niż 90 min nie jest brane pod uwagę.
 - Sieć piesza nie rozróżnia przewyższeń, schodów ani jakości nawierzchni:
-  wszystkie drogi przechodzi się z tą samą prędkością 4,5 km/h.
+  wszystkie drogi przechodzi się z tą samą prędkością (domyślnie 4,5 km/h, do wyboru 2,5–5,5 km/h).
+  Poniżej 2,5 km/h o czasie decydowałyby schody i krawężniki, których dane nie opisują, więc listy nie rozszerzamy.
 - Rower jeździ po **tej samej sieci co pieszy** — `walknet.json` nie ma tagów
   krawędzi, więc model nie odróżnia schodów i deptaków (czas bywa zaniżony)
   ani nie zna dróg rowerowych z `foot=no`, których w grafie nie ma (czas bywa
