@@ -10,7 +10,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niżej jako historia).
 - Praca autonomiczna, w tej kolejności:
-  - Z-019 — w toku (część „awaria widoczna" wdrożona; zadanie otwarte, pozostaje wyznaczanie linii z identyfikatora kursu).
+  - Z-019 — w toku (część „awaria widoczna" wdrożona; Szczecin wdrożony 2026-11-27; GZM otwarte, bez profili, niewykonalne po naszej stronie).
   - Z-075 — nowe.
   - Z-080 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-053 — nowe.
@@ -27,7 +27,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 ## W toku
 
 ### Z-019 [P1] Brakujące profile opóźnień dla GZM i Szczecina
-- Status: w toku (część „awaria widoczna" wdrożona; pomiar identyfikatorów kursów 2026-11-27: Szczecin naprawialny, GZM niewykonalny po naszej stronie; zadanie otwarte)
+- Status: w toku (część „awaria widoczna" wdrożona; Szczecin wdrożony 2026-11-27; GZM bez profili, niewykonalne po naszej stronie; zadanie otwarte)
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: oba miasta mają skonfigurowane źródło rt, ale nie mają danych opóźnień. Diagnoza: config, mapy `routeNames` i próg `MIN_OBS` są poprawne; ścieżka urywa się w `tools/collect-delays.mjs` — kolektor dostaje zero obserwacji przy każdym przebiegu, a błędy HTTP i wyjątki kończyły się cichym ostrzeżeniem przy sukcesie przebiegu, więc awaria była niewidoczna od lipca 2026. Pliki `data/delays/gzm.json` i `szczecin.json` nigdy nie istniały w żadnym commicie.
 - Dowód: data/cities.json:300,344; data/delays/ zawiera tylko krakow.json, poznan.json, trojmiasto.json, a rt jest ustawione dla 5 miast.
@@ -43,8 +43,10 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - GZM: niewykonalny po naszej stronie. 0 z 1020. Identyfikatory w feedzie to liczby od 6,5 do 7,5 mln, w publikowanym rozkładzie tego przewoźnika do 2,1 mln: inna przestrzeń identyfikatorów, bez klucza łączącego. Sprawdzono też pliki rozszerzone i feed pozycji pojazdów. Opóźnienia w feedzie są prawdziwe (od −180 do 2220 s, mediana 60), ale nie da się ich przypisać do linii. Naprawa wymagałaby dodania identyfikatora linii przez przewoźnika.
   - Ustalenie wspólne: identyfikator kursu nie przeżywa prekompilacji (`data/<miasto>/` go nie zawiera), więc mapa „kurs → linia" musi powstawać w kolektorze, a nie w danych miejskich. Rozmiar takiej mapy dla Szczecina: 283 kB jako JSON, 36,6 kB po kompresji. Nie trafia do przeglądarki; używa jej wyłącznie kolektor.
   - SPROSTOWANIE (2026-11-27): to ustalenie unieważnia wcześniejsze założenie zadania, że naprawa wymaga zmiany formatu danych i przeliczenia miast.
-  - Pozostaje: (a) wdrożenie wariantu dla Szczecina (w toku); (b) rozstrzygnięcie, jak w raporcie przebiegu odróżniać ograniczenie feedu GZM od prawdziwej awarii kolektora.
-- Pliki: data/delays/, tools/collect-delays.mjs, data/cities.json, .github/workflows/collect-delays.yml, README.md, tests/collect-delays.test.mjs.
+  - Wdrożono 2026-11-27 (Szczecin, Z-019): kolektor buduje mapę „kurs → linia" z publikowanego rozkładu i przez nią wyznacza linię dla feedu bez identyfikatora linii. Mapa w pamięci podręcznej na gałęzi kolektora, poza katalogiem kopiowanym na stronę. Nagłówki rozkładu sprawdzane co 6 h; treść ściągana ponownie tylko przy zmianie sygnatury albo gdy mapa ma ponad tydzień. Kurs bez wpisu pomijany; ponad 20% braków wymusza przebudowę (co najwyżej raz na 2 h). Zmierzone na żywym feedzie: 831 obserwacji z mechanizmem, 0 bez; 62 linie. Testy: 28 nowych, tests/trip-map.test.mjs. Nie sprawdzone: workflow na GitHubie (odtwarzanie i zapis pamięci podręcznej mapy).
+  - Pozostaje: (a) GZM bez profili opóźnień — feed nie podaje linii, identyfikatory kursów nie pasują do rozkładu; naprawa wymaga identyfikatora linii od przewoźnika; zadanie zostaje otwarte.
+  - Rozstrzygnięte 2026-11-27 (b): GZM bez linii i bez mapy dostaje w raporcie werdykt „ograniczenie feedu" i nie wywraca przebiegu (kod wyjścia 0). Nie jest to wyciszenie: błędy pobrania, wyjątki, treść niedekodowalna i brak encji nadal dają awarię. Gdy przewoźnik doda identyfikator linii, GZM wraca do normalnego działania (pokrywa to test).
+- Pliki: data/delays/, tools/collect-delays.mjs, tools/trip-map.mjs, data/cities.json, .github/workflows/collect-delays.yml, README.md, tests/collect-delays.test.mjs, tests/trip-map.test.mjs.
 
 ### Z-051 [P1] Rozkład Opola kończy się 2026-11-16
 - Status: w toku

@@ -35,6 +35,9 @@ jobs:
           git fetch origin delays --depth 1 || true
           if git rev-parse --verify origin/delays >/dev/null 2>&1; then
             git checkout origin/delays -- data/delays || true
+            # mapy kursów (Z-019): leżą obok agregatów, ale poza data/delays,
+            # żeby cotygodniowy refresh-data nie kopiował ich na main
+            git checkout origin/delays -- data/delays-cache || true
           fi
 
       - name: Zainstaluj dekoder GTFS-RT
@@ -54,6 +57,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B delays
           git add -f data/delays
+          git add -f data/delays-cache 2>/dev/null || true
           git commit -m "Agregaty opóźnień ($(date -u +%Y-%m-%dT%H:%MZ))" || { echo "Brak zmian."; exit 0; }
           git push -f origin delays
 

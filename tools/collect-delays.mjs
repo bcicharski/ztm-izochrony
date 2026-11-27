@@ -25,9 +25,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { makeTripMapProvider } from './trip-map.mjs';
 
 const UA = { 'User-Agent': 'ztm-izochrony-delays/1.0' };
 const BUCKETS = [-60, 60, 180, 300, 600]; // granice histogramu [s]
+// Odsetek kursów bez linii, których nie ma w mapie kursów, od którego mapę
+// uznajemy za nieaktualną (próbka min. STALE_MIN_SAMPLE kursów; normalnie ~1%).
+const STALE_RATIO = 0.2;
+const STALE_MIN_SAMPLE = 20;
 
 // lokalny typ dnia i godzina (Actions działa w UTC)
 function localSlot(date = new Date()) {
@@ -69,19 +74,42 @@ function routeNameMap(root, cityKey) {
  * Czysta funkcja: wyciąga obserwacje ze zdekodowanego feedu GTFS-RT
  * (obiekt po FeedMessage.toObject) i liczy statystyki do diagnostyki.
  * Zwraca { obs: Map, stats }, gdzie stats: entities / withTripUpdate /
- * withRouteId / withDelay / sampleRouteIds (maks. 3, same identyfikatory).
+ * withRouteId / withDelay / sampleRouteIds (maks. 3, same identyfikatory) oraz
+ * withoutRoute (tripUpdate bez routeId), viaTripMap (linia wyznaczona z mapy
+ * kursów) i unmapped (bez routeId i bez wpisu w mapie — pominięte).
+ *
+ * `trips` (opcjonalnie): mapa tripId -> route_id z GTFS miasta (tools/trip-map.mjs).
+ * Używana tylko dla encji BEZ routeId w feedzie; linia z feedu ma pierwszeństwo,
+ * więc miasta podające routeId działają jak dotąd. Kurs spoza mapy (albo z
+ * route_id nieznanym w `names`) jest pomijany — nigdy zgadywany.
  */
-export function extractGtfsRtObservations(feed, names, url = '') {
+export function extractGtfsRtObservations(feed, names, url = '', trips = null) {
   const obs = new Map();
-  const stats = { entities: 0, withTripUpdate: 0, withRouteId: 0, withDelay: 0, sampleRouteIds: [] };
+  const stats = {
+    entities: 0, withTripUpdate: 0, withRouteId: 0, withDelay: 0, sampleRouteIds: [],
+    withoutRoute: 0, viaTripMap: 0, unmapped: 0,
+  };
   for (const e of feed?.entity ?? []) {
     stats.entities++;
     const tu = e.tripUpdate;
     if (!tu) continue;
     stats.withTripUpdate++;
-    if (!tu.trip?.routeId) continue; // bez linii obserwacja jest bezużyteczna
+    let routeId = tu.trip?.routeId ? String(tu.trip.routeId) : null;
+    let route;
+    if (routeId) {
+      route = names[routeId] ?? routeId;
+    } else {
+      stats.withoutRoute++;
+      const mapped = trips && tu.trip?.tripId != null ? trips[String(tu.trip.tripId)] : undefined;
+      if (mapped === undefined || names[mapped] === undefined) {
+        if (trips) stats.unmapped++;
+        continue; // bez linii obserwacja jest bezużyteczna
+      }
+      routeId = String(mapped);
+      route = names[routeId];
+      stats.viaTripMap++;
+    }
     stats.withRouteId++;
-    const routeId = String(tu.trip.routeId);
     if (stats.sampleRouteIds.length < 3 && !stats.sampleRouteIds.includes(routeId)) {
       stats.sampleRouteIds.push(routeId);
     }
@@ -95,7 +123,7 @@ export function extractGtfsRtObservations(feed, names, url = '') {
     }
     if (delay === undefined) continue;
     stats.withDelay++;
-    obs.set(`${url}|${tu.trip.tripId ?? e.id}`, { route: names[routeId] ?? routeId, delaySec: delay });
+    obs.set(`${url}|${tu.trip.tripId ?? e.id}`, { route, delaySec: delay });
   }
   return { obs, stats };
 }
@@ -111,6 +139,12 @@ export function extractGtfsRtObservations(feed, names, url = '') {
  *   no-entities   — sparsowane, ale feed bez encji
  *   no-tripupdate — encje są, żadna nie ma tripUpdate (inny kształt feedu)
  *   no-routeid    — są tripUpdate, żaden nie ma trip.routeId
+ *   feed-limit    — ograniczenie feedu, nie nasz błąd: kursy bez routeId, a ich
+ *                   identyfikatorów nie ma w GTFS (świeża mapa kursów) albo
+ *                   miasto nie ma bezpośredniego GTFS do zmapowania (GZM)
+ *   trip-map-unavailable — kursy bez routeId, mapa kursów niedostępna (awaria)
+ *   trip-map-stale       — kursy bez routeId, mapa nieaktualna i nie da się
+ *                          jej jeszcze odświeżyć (awaria)
  *   no-delay      — są routeId, żaden kurs nie ma delay
  */
 export function classifyUrlResult(r) {
@@ -126,8 +160,25 @@ export function classifyUrlResult(r) {
         + `dekodowanie: ${r.decodeError}, początek: "${preview}"`,
     };
   }
-  if ((r.obsCount ?? 0) > 0) return { url, kind: 'ok', detail: `${r.obsCount} obserwacji` };
   const s = r.stats ?? {};
+  if ((r.obsCount ?? 0) > 0) {
+    const viaMap = s.viaTripMap ? `, linia z mapy kursów: ${s.viaTripMap}, pominięte (kursu nie ma w mapie): ${s.unmapped}` : '';
+    return { url, kind: 'ok', detail: `${r.obsCount} obserwacji${viaMap}` };
+  }
+  const tm = r.tripMap;
+  if (tm && s.withoutRoute > 0 && !s.withRouteId) {
+    const n = s.withoutRoute;
+    if (tm.state === 'unsupported') {
+      return { url, kind: 'feed-limit', detail: `feed nie podaje routeId (${n} kursów), a rozkład miasta nie pozwala zbudować mapy kursów: ${tm.detail}` };
+    }
+    if (tm.state === 'unavailable') {
+      return { url, kind: 'trip-map-unavailable', detail: `${n} kursów bez routeId, mapa kursów niedostępna: ${tm.detail}` };
+    }
+    if (tm.state === 'rebuilt') {
+      return { url, kind: 'feed-limit', detail: `feed nie podaje routeId, a żaden z ${n} identyfikatorów kursów nie występuje w świeżo pobranym GTFS` };
+    }
+    return { url, kind: 'trip-map-stale', detail: `żaden z ${n} kursów bez routeId nie występuje w mapie kursów (zbudowanej ${tm.builtAt ?? '?'}); odświeżenie jeszcze niedozwolone` };
+  }
   const diag = `encji ${s.entities ?? 0}, z tripUpdate ${s.withTripUpdate ?? 0}, `
     + `z routeId ${s.withRouteId ?? 0}, z delay ${s.withDelay ?? 0}, `
     + `przykładowe routeId: [${(s.sampleRouteIds ?? []).join(', ')}]`;
@@ -140,12 +191,16 @@ export function classifyUrlResult(r) {
 
 /**
  * Werdykt miasta z wyników URL-i. `configured` = miasto ma pole rt.
- * ok (>0 obserwacji) | fail (rt, zero obserwacji) | skip (brak rt).
+ * ok (>0 obserwacji) | fail (rt, zero obserwacji) | limit (zero obserwacji
+ * wyłącznie z powodu ograniczenia feedu) | skip (brak rt).
  */
 export function cityVerdict(configured, obsCount, urlResults = []) {
   if (!configured) return { status: 'skip', reason: 'brak rt' };
   if (obsCount > 0) return { status: 'ok', reason: `${obsCount} obserwacji` };
   const kinds = [...new Set(urlResults.map(u => u.kind))];
+  // Samo ograniczenie feedu to nie awaria kolektora (kod wyjścia 0), ale zostaje
+  // widoczne w podsumowaniu; gdy przewoźnik doda routeId, miasto samo wróci do ok.
+  if (kinds.length && kinds.every(k => k === 'feed-limit')) return { status: 'limit', reason: 'ograniczenie feedu (nie awaria kolektora)' };
   return { status: 'fail', reason: kinds.length ? kinds.join('+') : 'brak URL-i' };
 }
 
@@ -156,7 +211,7 @@ export function exitCodeFor(reports) {
 
 /** Tabela markdown (log + $GITHUB_STEP_SUMMARY). */
 export function renderSummary(reports) {
-  const icon = { ok: 'OK', fail: 'BŁĄD', skip: 'pominięte' };
+  const icon = { ok: 'OK', fail: 'BŁĄD', limit: 'OGRANICZENIE FEEDU', skip: 'pominięte' };
   const rows = reports.filter(r => r.verdict.status !== 'skip').map(r => {
     const details = r.urlResults.filter(u => u.kind !== 'ok').map(u => `${u.kind}: ${u.detail}`).join(' ; ');
     return `| ${r.cityKey} | ${icon[r.verdict.status]} | ${r.verdict.reason} | ${details.replace(/\|/g, '\\|')} |`;
@@ -164,8 +219,33 @@ export function renderSummary(reports) {
   return ['| Miasto | Werdykt | Wynik | Szczegóły (URL-e bez obserwacji) |', '|---|---|---|---|', ...rows].join('\n');
 }
 
+/**
+ * Wyciąga obserwacje z feedu; dla encji bez routeId leniwie prosi o mapę
+ * kursów (tripMapProvider) — miasta podające routeId nigdy jej nie ruszają.
+ * Gdy za dużo kursów nie ma w mapie, wymusza jej odświeżenie (provider
+ * pilnuje, by nie częściej niż co kilka godzin), a po nim liczy ponownie.
+ */
+export async function extractWithTripMap(feed, names, url, tripMapProvider) {
+  let res = extractGtfsRtObservations(feed, names, url);
+  if (!res.stats.withoutRoute || !tripMapProvider) return { ...res, tripMap: null };
+  let tm = await tripMapProvider();
+  if (tm.trips) res = extractGtfsRtObservations(feed, names, url, tm.trips);
+  const stale = x => x.withoutRoute >= STALE_MIN_SAMPLE && x.unmapped / x.withoutRoute >= STALE_RATIO;
+  if (tm.trips && stale(res.stats)) {
+    const forced = await tripMapProvider({ force: true });
+    if (forced.state === 'rebuilt' && forced.trips) {
+      tm = forced;
+      res = extractGtfsRtObservations(feed, names, url, tm.trips);
+    } else if (forced.state === 'limited') {
+      tm = forced;
+    }
+  }
+  const { withoutRoute, unmapped } = res.stats;
+  return { ...res, tripMap: { state: tm.state, detail: tm.detail, builtAt: tm.builtAt, stale: stale(res.stats), unmapped, withoutRoute } };
+}
+
 /** Odpytuje jeden URL GTFS-RT; zwraca surowy wynik dla classifyUrlResult. */
-async function fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl = fetch) {
+async function fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl = fetch, tripMapProvider = null) {
   const r = { url, obs: new Map(), obsCount: 0 };
   try {
     const res = await fetchImpl(url, { headers: UA });
@@ -177,8 +257,8 @@ async function fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl = fetch) {
       // toObject bez defaults: pola nieobecne w feedzie są undefined
       // (surowa instancja materializuje protobufowe zera, co fałszuje dane)
       const feed = transit_realtime.FeedMessage.toObject(decoded, { defaults: false });
-      const { obs, stats } = extractGtfsRtObservations(feed, names, url);
-      r.obs = obs; r.obsCount = obs.size; r.stats = stats;
+      const { obs, stats, tripMap } = await extractWithTripMap(feed, names, url, tripMapProvider);
+      r.obs = obs; r.obsCount = obs.size; r.stats = stats; r.tripMap = tripMap;
     } catch (err) {
       r.decodeError = err.message;
       r.raw = { size: bytes.length, preview: new TextDecoder().decode(bytes.slice(0, 80)) };
@@ -190,14 +270,23 @@ async function fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl = fetch) {
 }
 
 /** Obserwacje z feedów GTFS-RT TripUpdates: { obs, urlResults }. */
-async function fromGtfsRt(urls, names, fetchImpl = fetch, decoder = null) {
+async function fromGtfsRt(urls, names, fetchImpl = fetch, decoder = null, tripMapProvider = null) {
   const transit_realtime = decoder ?? (await import('gtfs-realtime-bindings')).default.transit_realtime;
   const obs = new Map();
   const urlResults = [];
   for (const url of urls) {
-    const r = await fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl);
+    const r = await fetchGtfsRtUrl(url, names, transit_realtime, fetchImpl, tripMapProvider);
     for (const [k, v] of r.obs) obs.set(k, v);
     urlResults.push(classifyUrlResult(r));
+    // obserwacje są, ale spora część kursów nie ma wpisu w mapie: mapa się
+    // zdezaktualizowała (a odświeżenie nie pomogło albo było za wcześnie)
+    if (r.obsCount > 0 && r.tripMap?.stale) {
+      const t = r.tripMap;
+      urlResults.push({
+        url, kind: 'trip-map-stale',
+        detail: `${t.unmapped} z ${t.withoutRoute} kursów bez routeId pominięto (brak w mapie kursów z ${t.builtAt ?? '?'}); stan mapy: ${t.state}`,
+      });
+    }
   }
   return { obs, urlResults };
 }
@@ -236,11 +325,11 @@ async function fromGdanskDepartures(url, fetchImpl = fetch) {
  * Odpytuje źródło rt jednego miasta. Nigdy nie rzuca: wyjątek i nieznany typ
  * źródła stają się wpisem urlResults (kind 'exception'), więc awaria jednego
  * miasta trafia do podsumowania, a pozostałe miasta są dalej zbierane.
- * deps: { names, fetchImpl, decoder } — wstrzykiwane w testach (bez sieci).
+ * deps: { names, fetchImpl, decoder, tripMapProvider } — wstrzykiwane w testach (bez sieci).
  */
-export async function collectCity(cfg, { names = {}, fetchImpl = fetch, decoder = null } = {}) {
+export async function collectCity(cfg, { names = {}, fetchImpl = fetch, decoder = null, tripMapProvider = null } = {}) {
   try {
-    if (cfg.rt.type === 'gtfsrt') return await fromGtfsRt(cfg.rt.urls, names, fetchImpl, decoder);
+    if (cfg.rt.type === 'gtfsrt') return await fromGtfsRt(cfg.rt.urls, names, fetchImpl, decoder, tripMapProvider);
     if (cfg.rt.type === 'gdansk-departures') return await fromGdanskDepartures(cfg.rt.url, fetchImpl);
     return { obs: new Map(), urlResults: [{ url: '-', kind: 'exception', detail: `nieznany typ rt: ${cfg.rt.type}` }] };
   } catch (err) {
@@ -310,7 +399,7 @@ export function mergeObservations(agg, obs, { dayType, hour, today }) {
  * brak uprawnień) staje się werdyktem fail tego miasta i nie przerywa pętli.
  * Zwraca { reports, totalObs }. deps: collect, now — wstrzykiwane w testach.
  */
-export async function runCollection(cities, { root, collect = collectCity, now = new Date() } = {}) {
+export async function runCollection(cities, { root, collect = collectCity, now = new Date(), fetchImpl = fetch } = {}) {
   const outDir = path.join(root, 'data', 'delays');
   const { dayType, hour } = localSlot(now);
   const today = localDate(now);
@@ -319,7 +408,8 @@ export async function runCollection(cities, { root, collect = collectCity, now =
 
   for (const [cityKey, cfg] of Object.entries(cities)) {
     if (!cfg.rt) { reports.push({ cityKey, verdict: cityVerdict(false, 0), urlResults: [] }); continue; }
-    const { obs, urlResults } = await collect(cfg, { names: routeNameMap(root, cityKey) });
+    const tripMapProvider = makeTripMapProvider(cityKey, cfg, { root, fetchImpl, now: now.getTime() });
+    const { obs, urlResults } = await collect(cfg, { names: routeNameMap(root, cityKey), tripMapProvider });
     for (const u of urlResults) if (u.kind !== 'ok') console.warn(`${cityKey}: ${u.kind} — ${u.url} — ${u.detail}`);
     const verdict = cityVerdict(true, obs.size, urlResults);
     const report = { cityKey, verdict, urlResults };
@@ -365,6 +455,8 @@ async function main() {
     try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Kolektor opóźnień\n\n${summary}\n`); } catch { /* podsumowanie jest dodatkiem */ }
   }
   const failed = reports.filter(r => r.verdict.status === 'fail').map(r => r.cityKey);
+  const limited = reports.filter(r => r.verdict.status === 'limit').map(r => r.cityKey);
+  if (limited.length) console.warn(`Ograniczenie feedu (nie awaria): ${limited.join(', ')} — feed nie podaje linii, a kursów nie da się dopasować do GTFS.`);
   if (failed.length) console.error(`BŁĄD: miasta z rt bez zapisanych obserwacji: ${failed.join(', ')}`);
   process.exitCode = exitCodeFor(reports);
 }
