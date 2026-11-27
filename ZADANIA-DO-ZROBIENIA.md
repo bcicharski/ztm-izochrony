@@ -13,7 +13,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Z-019 — w toku (część „awaria widoczna" wdrożona; Szczecin wdrożony 2026-11-27; GZM otwarte, bez profili, niewykonalne po naszej stronie).
   - Z-075 — nowe.
   - Z-080 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
-  - Z-053 — nowe.
+  - Z-053 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; potwierdzenie bez zmiany kodu).
   - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
   - Z-013 — nowe.
   - Z-003 — ZROBIONE 2026-11-27 (etap 1 i etap 2 wdrożone; wpis w „Zrobione").
@@ -191,16 +191,6 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Z-064 (2026-11-17): częściowo wykonane — zdanie o reklamach znikło z banera, który jest krótszy o ten człon. Nowa treść dosłownie: „Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie." Propozycja z tego wpisu nie została przyjęta dosłownie. Nie zamknięte.
 - Pliki: index.html.
 
-### Z-053 [P2] Potwierdzenie progów bramki na realnych `counts` i `grid`
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: progi z Z-031 dobrano z wartości policzonych z plików rozkładowych, a nie z pól `counts` i `grid` w `meta.json`, bo tych jeszcze nie ma. Po pierwszym odświeżeniu danych trzeba sprawdzić, czy wyliczone udziały zgadzają się z zapisanymi.
-- Dowód: obserwacja 2026-11-16: żaden `meta.json` nie ma pól `counts` ani `grid`.
-- Pliki: tools/check-data.mjs
-- Wynik (2026-11-20; zadanie zostaje otwarte, potwierdzenie objęło tylko 3 z 18 miast): progi są w porządku, logika bez zmian; zgadzają się z polami `counts` i `grid`. Pola mają tylko Łódź, Olsztyn i Opole; pozostałe 15 miast ma `meta.json` bez nich, w tym Warszawa, Kraków, Trójmiasto i Toruń (najwyższy udział przystanków poza siatką), więc nie dało się ich porównać. Dla trzech miast z polami wszystkie wielkości z `counts` i `grid` policzono tą samą funkcją co build i porównano z `meta.json`: zero różnic, w tym `outsideStops`, `outsideShare` i `maxOutsideKm`. Jedyna rozbieżność (liczba linii w plikach dnia Łodzi 129 / 133 / 134 wobec `counts.routes` 134) ma przyczynę w kodzie: lista linii w `tools/build-data.mjs` jest uzupełniana leniwie, więc każdy plik dnia dostaje stan z chwili zapisu. Nie wpływa na bramkę (porównuje `counts` z `counts`); zgłoszone jako Z-080.
-- Udział poza siatką dla miast z polami (zmierzony): Łódź 0%, Olsztyn 1%, Opole 0,77%. Dla pozostałych 15 miast policzono z plików (nie porównano z `meta.json`): Warszawa 8,94%, Kraków 5,88%, Trójmiasto 5,52%, Toruń 5,02%, Poznań 3,16%, Bydgoszcz 2,79%, Kielce 2,59%, Lublin 0,76%, Wrocław 0,36%, Szczecin 0,19%, GZM 0,07%, Białystok, Rzeszów, Zielona Góra i Gorzów 0%. Próg ostrzegawczy `outsideShareWarn` to 0,25 (25%), najwyższa wartość (Warszawa) ma zapas ok. 2,8 raza.
-- Pozostaje: potwierdzenie progów na miastach o wysokim udziale (przede wszystkim Warszawa) możliwe dopiero po ich przeliczeniu, bo dopiero wtedy zapiszą `counts` i `grid`. Dotąd zapas potwierdzony tylko wartością liczoną z plików, nie zapisaną. Niezweryfikowane: zgodność `counts` z plikami dla 15 miast bez tych pól.
-
 ### Z-055 [P1] Gorzów: żywe źródło rozkładu po 2026-12-30
 - Status: nowe
 - Zgłoszone: 2026-11-16 (nieznane)
@@ -241,6 +231,18 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Wynik zadania: z czterech pomysłów pomiar obalił trzy. Porządek węzłów (krzywa Hilberta zamiast pasm 500 m): od −2,0% do +1,0%. Format binarny: 10–15% wobec JSON z tym samym kodowaniem, poniżej progu 15%, odrzucony. Przerzedzanie grafu: krawędzie krótsze niż 25 m to 34–54% krawędzi, ale 3,6–9,5% km sieci; mały zysk w bajtach, zmiana topologii. Wdrożony został czwarty, początkowo niewymieniony w zadaniu: kodowanie reszty długości krawędzi. Wariant z grubszą kwantyzacją (do 18,6%) ODRZUCONY: kwantyzacja 1e4 to błąd położenia do 5,6 m. Narzędzia pomiarowe (`tools/measure-data.mjs`, `tools/measure-lib.mjs`) zostają w repozytorium, żeby powtórzyć pomiar przy następnej takiej decyzji.
 - Pliki: js/walknet.js, tools/build-walknet.mjs, tools/measure-lib.mjs, README.md, tools/walknet-codec.mjs (nowy), tools/reencode-walknet.mjs (nowy; domyślnie na sucho, zapis wymaga jawnej flagi, przez plik tymczasowy z ponownym odczytem i weryfikacją grafu), tools/walknet-ab.mjs (nowy), tools/measure-data.mjs (nowy), data/<miasto>/walknet.json w 18 miastach (etap 2).
 - Jak sprawdzić: 8 nowych testów w tests/walknet-codec.test.mjs (regresja starego formatu, obieg zamknięty, reszta zerowa i duża, krawędź zerowej długości, pętla z węzła do siebie, brama zielona na identycznym grafie i czerwona na popsutych długościach); `npm run check`: tests 588, pass 587, fail 0, skipped 1, lint czysty. Weryfikacja w przeglądarce: Trójmiasto renderuje się poprawnie, konsola bez błędów. Nie sprawdzone: pozostałe 17 miast w przeglądarce (tylko brama jakości); realny czas pobierania na łączu mobilnym nie mierzony; zgodność zaokrągleń Node–przeglądarka nie mierzona (rozbieżność możliwa tylko dla cięciwy wypadającej dokładnie na pół metra).
+
+### Z-053 [P2] Potwierdzenie progów bramki na realnych `counts` i `grid`
+- Status: zrobione (2026-11-27; potwierdzenie na 16 z 18 miast, zero rozbieżności; Gorzów i Zielona Góra bez pól — znany i nieszkodliwy brak)
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: progi z Z-031 dobrano z wartości policzonych z plików rozkładowych, a nie z pól `counts` i `grid` w `meta.json`, bo tych jeszcze nie ma. Po pierwszym odświeżeniu danych trzeba sprawdzić, czy wyliczone udziały zgadzają się z zapisanymi.
+- Dowód: obserwacja 2026-11-16: żaden `meta.json` nie ma pól `counts` ani `grid`.
+- Wynik końcowy (2026-11-27): progi bramki jakości potwierdzone na zapisanych polach `counts` i `grid` w metadanych, dla 16 z 18 miast — zero rozbieżności. Policzone wartości zgadzają się z zapisanymi co do jednego przystanku i co do setnej części procenta. Domyka wynik częściowy z 2026-11-24 (wtedy pola miały tylko Łódź, Olsztyn i Opole, wszystkie o niskim udziale). Od tego czasu odświeżenia przebudowały kolejne miasta; pola ma też Warszawa, miasto o najwyższym udziale przystanków poza siatką pieszą.
+- Zmierzone udziały poza siatką, zapisane w metadanych (2026-11-27): Warszawa 8,89%, Kraków 5,90%, Trójmiasto 5,55%, Toruń 5,02%, Poznań 3,16%, Bydgoszcz 2,79%, Kielce 2,59%, Olsztyn 1,00%, Opole 0,77%, Lublin 0,76%, Wrocław 0,44%, Szczecin 0,19%, Łódź 0,08%, GZM 0,07%, Białystok i Rzeszów 0,00%. Próg ostrzegawczy 25%: wobec najgorszego realnego miasta zapas blisko trzykrotny, potwierdzony na liczbach, które zapisuje sam build. Progów nie zmieniano.
+- Pozostałe dwa miasta: Gorzów i Zielona Góra nie mają jeszcze pól, bo ich dane nie były przebudowywane po zmianie, która je wprowadziła. Gorzów — świadomie martwe źródło rozkładu (Z-055). Oba mają zerowy albo bliski zeru udział przystanków poza siatką, więc nie wpływają na ocenę progów. Znany i nieszkodliwy brak, nie otwarty punkt.
+- Wynik wcześniejszy (2026-11-20; częściowy, 3 z 18 miast): progi są w porządku, logika bez zmian; zgadzają się z polami `counts` i `grid`. Pola miały Łódź, Olsztyn i Opole; dla nich wszystkie wielkości z `counts` i `grid` policzono tą samą funkcją co build i porównano z `meta.json`: zero różnic, w tym `outsideStops`, `outsideShare` i `maxOutsideKm`. Jedyna rozbieżność (liczba linii w plikach dnia Łodzi 129 / 133 / 134 wobec `counts.routes` 134) ma przyczynę w kodzie i została zgłoszona jako Z-080 (naprawiona 2026-11-27).
+- Pliki: tools/check-data.mjs (wdrożenie 2026-11-27: żadne; zadanie weryfikacyjne, kod bez zmian; komentarz przy `outsideShareWarn` dopisany 2026-11-20 zostaje aktualny).
+- Testy: bez zmian. Niezweryfikowane: Gorzów i Zielona Góra, do czasu przebudowy ich danych.
 
 ### Z-080 [P3] Lista linii zapisywana w plikach dnia zależy od kolejności budowania dni
 - Status: zrobione (wdrożone 2026-11-27)
