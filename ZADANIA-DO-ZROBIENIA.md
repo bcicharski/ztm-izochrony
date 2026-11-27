@@ -15,7 +15,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Z-080 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-053 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; potwierdzenie bez zmiany kodu).
   - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
-  - Z-013 — nowe.
+  - Z-013 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; zakres zawężony do tempa marszu, schody i bezbarierowość poza zakresem).
   - Z-003 — ZROBIONE 2026-11-27 (etap 1 i etap 2 wdrożone; wpis w „Zrobione").
   - Z-037 — nowe (zatwierdzone 2026-11-24), po Z-003.
   - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione"), poza kolejnością.
@@ -152,13 +152,6 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Dowód: luka 2 — pomiar 2026-11-20 (wyżej) oraz `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Luki 1 i 3: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js (luki 1 i 3). Luka 2: js/walkgrid.js, js/isochrone.js, js/engine.js, testy w tests/ (walkgrid, isochrone, engine).
 
-### Z-013 [P2] Profil pieszego
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak ustawień prędkości, schodów i bezbarierowości.
-- Dowód: nieznane.
-- Pliki: js/walknet.js, js/walkgrid.js, js/app.js.
-
 ### Z-014 [P2] Funkcje analityczne i produktowe
 - Status: nowe
 - Zgłoszone: 2026-11-16 (analityk)
@@ -219,6 +212,13 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 
 
 ## Zrobione
+
+### Z-013 [P2] Profil pieszego
+- Status: zrobione 2026-11-27 (zakres zawężony do tempa marszu; schody i bezbarierowość poza zakresem, powód w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak ustawień prędkości, schodów i bezbarierowości.
+- Dowód: nieznane.
+- Pliki: js/data.js, js/engine.js, js/router.js, js/uilogic.js, js/app.js, index.html, css/style.css, README.md, CURRENT_STATE.md.
 
 ### Z-003 [P1] Mniejsze dane
 - Status: zrobione (etap 1, dekoder, wdrożony 2026-11-27; etap 2, przeliczenie `walknet.json` w 18 miastach, wdrożony 2026-11-27)
