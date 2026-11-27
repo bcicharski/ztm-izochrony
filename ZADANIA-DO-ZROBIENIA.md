@@ -8,13 +8,21 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 
 ## Kolejność ustalona z właścicielem
 
-Data ustalenia: 2026-11-24.
-- Teraz, w tej kolejności:
-  - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione").
-  - Z-003 — w toku od 2026-11-24 (narzędzia pomiarowe wdrożone; optymalizacja czeka na decyzję właściciela).
-  - Z-037 — po Z-003.
-- Następnie, jako ważne w drugiej kolejności: Z-013, Z-038, Z-009.
-- Z-009 nadal czeka na adresy profili społecznościowych od właściciela; bez nich nie da się go zacząć, mimo miejsca w kolejności.
+Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niżej jako historia).
+- Praca autonomiczna, w tej kolejności:
+  - Z-019 — w toku (część „awaria widoczna" wdrożona; zadanie otwarte, pozostaje wyznaczanie linii z identyfikatora kursu).
+  - Z-075 — nowe.
+  - Z-080 — nowe.
+  - Z-053 — nowe.
+  - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
+  - Z-013 — nowe.
+  - Z-003 — w toku (zgoda właściciela na wdrożenie kodowania długości krawędzi i przeliczenie 18 miast, 2026-11-27).
+  - Z-037 — nowe (zatwierdzone 2026-11-24), po Z-003.
+  - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione"), poza kolejnością.
+- Wstrzymane (nie pominięte; właściciel wymienił je 2026-11-24 jako ważne w drugiej kolejności, nic tego nie odwołało; w zleceniu z 2026-11-27 ich nie ma):
+  - Z-038 — czeka na decyzję właściciela: treść prawna banera zgody, nie wolno jej zmieniać bez jego słowa.
+  - Z-009 — czeka na adresy profili społecznościowych od właściciela; bez nich nie ma czego wstawić.
+- Poprzednia kolejność (2026-11-24, zastąpiona): Z-079 (zrobione), Z-003, Z-037; następnie Z-013, Z-038, Z-009.
 
 ## W toku
 
@@ -31,18 +39,6 @@ Data ustalenia: 2026-11-24.
 - Pozostaje (wymaga decyzji właściciela): wyznaczanie linii z identyfikatora kursu przez `trips.txt`. Wymaga mapy „kurs na linię" w danych miejskich, czyli zmiany formatu danych i prawdopodobnie przeliczenia miast; nie wykonano. Niesprawdzone: czy identyfikatory kursów z feedów pasują do `trips.txt` w `data/gzm` i `data/szczecin`; trzeba to zmierzyć, zanim powstanie projekt. Werdykt pierwszego przebiegu kolektora w GitHub Actions: nieznane (workflow nie był uruchamiany; prawdziwy przebieg nie był odpalany, bo zapisałby do `data/delays/`).
 - Nowe zadanie powstałe przy Z-019: Z-079 (uszkodzony agregat jednego miasta przerywa przebieg kolektora).
 - Pliki: data/delays/, tools/collect-delays.mjs, data/cities.json, .github/workflows/collect-delays.yml, README.md, tests/collect-delays.test.mjs.
-
-### Z-002 [P1] Mobile i PWA
-- Status: w toku
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: brak manifest.json i service workera; offline tylko przez cache przeglądarki. Dochodzi bottom sheet, przycisk „wyśrodkuj na mnie" i wibracja.
-- Dowód: brak odwołań do manifestu i service workera w index.html (stan przed etapem 1).
-- Wdrożone 2026-11-16:
-  - Etap 1 (manifest i ikony): `manifest.json` (`start_url` i `scope` jako `./`, `start_url` bez parametrów), generator `tools/build-icons.mjs` (zero zależności, wynik deterministyczny), `assets/icon.svg`, `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-maskable-512.png`, `assets/apple-touch-icon.png`; w `index.html` cztery linie w `<head>`, stara ikona data-URI zostaje jako awaryjna. Testy: `tests/pwa-manifest.test.mjs` (5), `tests/build-icons.test.mjs` (2).
-  - Etap 2 (lokalizacja i wibracja): kontrolka „Wyśrodkuj na mnie" (`addLocateControl` w `js/map.js`) z kółkiem dokładności i przyciskiem „Ustaw tu punkt startowy" w dymku; czyste funkcje w `js/uilogic.js`; rozróżnione komunikaty błędów lokalizacji, komunikat „Jesteś poza obszarem: <miasto>", jeden impuls wibracji 20 ms po przeliczeniu dłuższym niż 1,5 s, komunikat „Jesteś offline". Testy: `tests/uilogic.test.mjs`, `tests/mobile-layout.test.mjs` (`TAP_USES_MIN` 19 -> 21).
-- Rozwiązanie etapu 3 (service worker; szkic z wejścia fali, bez przeglądu rozwiazywacza): service worker shell-only, który nigdy nie odpowiada na żądania zawierające `/data/` (nie pokaże nieaktualnego rozkładu); powłoka jako jedna atomowa paczka `shell-<hash>`; bez `skipWaiting()` w tle; komunikat „Dostępna nowa wersja — odśwież" z przyciskiem; wyjście awaryjne `?sw=off`; stempel wersji z `tools/stamp-sw.mjs` pilnowany testem. Wariant „sam manifest, bez service workera" odpadł: GitHub Pages narzuca `Cache-Control: max-age=600` i nie pozwala tego zmienić, a bez handlera `fetch` Chrome nie pokaże promptu instalacji. Etap 3 czeka na decyzję właściciela, bo trwale instaluje się w przeglądarkach użytkowników i zmienia zachowanie offline.
-- Pliki: index.html, js/app.js, js/map.js, js/uilogic.js, css/style.css, manifest.json, tools/build-icons.mjs, assets/, tests/pwa-manifest.test.mjs, tests/build-icons.test.mjs. Etap 3: sw.js, js/pwa.js, tools/stamp-sw.mjs, tests/sw.test.mjs.
-- Niezweryfikowane: etap 1 — faktyczna instalowalność na telefonie i na iOS, ścieżki względne pod `github.io/ZTM/`. Etap 2 — prawdziwy prompt o zgodę, kod 3 (timeout), komunikat offline w przeglądarce, pozycjonowanie kontrolki na wąskim ekranie, wibracja na prawdziwym urządzeniu.
 
 ### Z-051 [P1] Rozkład Opola kończy się 2026-11-16
 - Status: w toku
@@ -104,14 +100,15 @@ Data ustalenia: 2026-11-24.
 - Pozostaje: cykliczne odświeżanie danych OSM (workflow z `build-walknet`, `build-water`, `build-bridges`). Nadpisuje `data/<miasto>/`, więc wymaga zgody właściciela. Dane mają 123–129 dni (Trójmiasto 63).
 
 ### Z-003 [P1] Mniejsze dane
-- Status: w toku (narzędzia pomiarowe wdrożone 2026-11-24; zadanie otwarte; wdrożenie kodowania reszty czeka na decyzję właściciela)
+- Status: w toku (narzędzia pomiarowe wdrożone 2026-11-24; zgoda właściciela na wdrożenie kodowania 2026-11-27, wdrożenie w kolejce; zadanie otwarte)
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: walknet.json ładowany w całości — 3,3 MB dla Trójmiasta, ok. 2,4 MB po gzipie dla GZM. Pomysły: format binarny, kafle wokół widoku, wersjonowanie nazw plików.
 - Dowód: rozmiary plików w data/<miasto>/. Pomiar 2026-11-24 (`tools/measure-data.mjs`, tylko odczyt, `data/` nietknięte):
   - Stan wyjściowy: graf pieszy to 63,5% danych pobieranych po gzipie (11 886 KB z 18 732 KB dla 18 miast), w GZM 68%. Całe pobranie po gzipie: Warszawa 3307 KB, GZM 3464 KB, Trójmiasto 1702 KB, Opole 214 KB, Gorzów 199 KB.
   - OBALONE na liczbach: porządek węzłów (krzywa Hilberta zamiast pasm 500 m) od −2,0% do +1,0% w trzech miastach; Hilbert gorszy od obecnego; pasmowy porządek 500 m praktycznie optymalny; krok re-kodowania martwy. Format binarny 10–15% wobec JSON z tym samym kodowaniem (zestawienie 28–32% zawierało wkład kodowania długości), poniżej progu 15%, odrzucony. Przerzedzanie grafu: krawędzie krótsze niż 25 m to 34–54% krawędzi, ale 3,6–9,5% km sieci; mały zysk w bajtach, zmiana topologii (zysk w czasie liczenia niezmierzony).
   - POTWIERDZONE: zapis długości krawędzi jako reszty względem odległości w linii prostej: −15,8% Trójmiasto (1048 → 883 KB), −16,3% GZM (2350 → 1966 KB), −17,0% Opole (129 → 107 KB), bez utraty dokładności (błąd położenia węzła 0,56 m, jak dziś). Grubsza kwantyzacja daje do 18,6%, ale kwantyzacja 1e4 to błąd do 5,6 m; nierozstrzygnięte, czy bezpieczne dla przyczepiania przystanków do krawędzi.
-  - Pozostaje do decyzji właściciela: zmiana dekodera w `js/walknet.js` (format v2 z obsługą v1) i nadpisanie `walknet.json` w 18 miastach. Zysk ok. 16% rozmiaru grafu, ok. 10% całego pobrania.
+  - Pozostawało do decyzji właściciela (rozstrzygnięte 2026-11-27, patrz niżej): zmiana dekodera w `js/walknet.js` (format v2 z obsługą v1) i nadpisanie `walknet.json` w 18 miastach. Zysk ok. 16% rozmiaru grafu, ok. 10% całego pobrania.
+  - Decyzja właściciela (2026-11-27): ZATWIERDZONE wdrożenie kodowania długości krawędzi jako reszty względem odległości w linii prostej, wraz z przeliczeniem `walknet.json` w 18 miastach. Zmierzony zysk: 15,8–17,0% bez utraty dokładności (błąd położenia węzła 0,56 m, jak dziś; Trójmiasto −15,8%, GZM −16,3%, Opole −17,0%). Wariant z grubszą kwantyzacją ODRZUCONY: daje do 18,6%, ale kwantyzacja 1e4 to błąd położenia do 5,6 m (zamiast 0,56 m), co nie jest warte dziesięciokrotnego pogorszenia precyzji.
 - Pliki: tools/build-walknet.mjs, js/walknet.js, js/data.js. Wdrożone 2026-11-24 (narzędzia pomiarowe): tools/measure-data.mjs, tools/measure-lib.mjs, tests/measure-data.test.mjs.
 
 ## Zaprojektowane (gotowe do wdrożenia)
@@ -119,7 +116,7 @@ Data ustalenia: 2026-11-24.
 ## Nowe (bez projektu rozwiązania)
 
 ### Z-007 [P2] Znane luki modelu
-- Status: nowe (częściowo zrobione: luka 2 wdrożona 2026-11-21; luki 1 i 3 otwarte, bez projektu; zadanie NIE jest zamknięte)
+- Status: nowe (częściowo zrobione: luka 2 wdrożona 2026-11-21; luka 3 ODRZUCONA 2026-11-27; luka 1 ZATWIERDZONA 2026-11-27, bez projektu; zadanie NIE jest zamknięte — jedyny otwarty punkt: luka 1)
 - Decyzja: ZATWIERDZONE do wdrożenia 2026-11-20 z zastrzeżeniem terminu — patrz „Decyzja właściciela (2026-11-20)" niżej. Luka 2 ma gotowy projekt; wdrożenie zmienia obraz izochrony i statystykę „% powierzchni" w Warszawie i Krakowie, czyli rdzeń produktu. Luki 1 i 3 bez projektu.
 - Zgłoszone: 2026-11-16 (analityk)
 - Problem: trzy luki — (1) stacje kolejowe 150-400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru (COMPLEX_MAX_M; Kraków SKA, 17 stacji); (2) dalekie przystanki poza gridBbox rysowane kołami 1 km bez bariery wody za krawędzią siatki (poprawione 2026-11-20, patrz niżej); (3) graf pieszy bez tagów krawędzi (schody, deptaki, foot=no dla roweru).
@@ -128,6 +125,11 @@ Data ustalenia: 2026-11-24.
   - Właściciel przyjął do wiadomości konsekwencje: widoczna zmiana obrazu izochrony na obrzeżach Warszawy i Krakowa oraz wzrost statystyki „% powierzchni".
 - Wdrożono 2026-11-21 (tylko luka 2, „nasiona na brzegu siatki"; wpis w CHANGELOG.md, sekcja 2026-11-21): przystanki do 1 km za krawędzią `gridBbox` zasiewają brzeg siatki zamiast płaskiego koła na wierzchu wyniku; dalej liczy fala po lądzie (woda, mosty, sieć ulic); koło przystanku obcięte do odległości od siatki; dalsze przystanki bez zmian. Testy: 19 nowych, `npm run check`: tests 511, pass 510, fail 0, skipped 1, lint czysty.
 - ZMIERZONY EFEKT (2026-11-21), ODBIEGA OD OCZEKIWANIA: statystyka „% powierzchni" NIE wzrosła. Zmiana wynosi 0,000 punktu procentowego w każdym z sześciu pasm, we wszystkich siedmiu sprawdzonych trybach. Przyczyna ustalona: żaden przystanek z pierścienia (Warszawa 52, Kraków 38, Olsztyn 7, Opole 4) nie ma w promieniu 1 km ani jednego piksela maski granic miasta; poprawione piksele leżą poza maską, której statystyka używa. Zmiana jest widoczna na mapie, nie w liczbie. Wzrost statystyki założony w projekcie i w decyzji właściciela (2026-11-20) nie wystąpił.
+- Decyzja właściciela (2026-11-27), rozstrzygnięcie dwóch z trzech luk:
+  - Luka 1 (stacje kolejowe 150–400 m od przystanku naziemnego, niedostępne jako przesiadka w trybie bez spaceru; 17 stacji, głównie Kraków SKA): ZATWIERDZONA do wdrożenia. Wymaga przeliczenia danych miast. Projekt jeszcze nie powstał.
+  - Luka 3 (graf pieszy bez tagów krawędzi: schody, deptaki, zakaz ruchu pieszego): ODRZUCONA. Świadoma rezygnacja, nie odłożenie na później.
+  - Luka 2: wdrożona 2026-11-21 (patrz wyżej).
+  - Po tej decyzji z zadania pozostaje jeden otwarty punkt: luka 1. Zadanie zostaje otwarte do jej wdrożenia.
 - Pozostaje otwarte (bez projektu): luka 1 (stacje kolejowe 150–400 m od przystanku naziemnego niedostępne jako przesiadka w trybie bez spaceru) — NIE ruszana; luka 3 (graf pieszy bez tagów krawędzi) — NIE ruszana. Dalekie przystanki powyżej 1 km — bez zmian, wymagają szerszego `gridBbox` (zgoda właściciela).
 - Luka 2 — sprostowanie opisu (2026-11-20). Trzy dawne twierdzenia są nieaktualne:
   - „Koła bez bariery wody" — nieprawda. Koła SĄ maskowane wodą przy rysowaniu: warstwa w `js/map.js` wycina poligony i linie z `water.json` trybem `destination-out`. Koło nie maluje po zatoce tam, gdzie zatoka jest w `water.json`.
@@ -153,13 +155,6 @@ Data ustalenia: 2026-11-24.
 - Luka 2 — jak sprawdzić przy wdrożeniu: test monotoniczności (nasiona mogą tylko skracać czas, nigdy go nie wydłużać, dla każdego piksela); regresja na Łodzi (bez przystanków poza siatką) — obraz i statystyki bez żadnej zmiany; regresja barierowa — siatka z pasem wody bez mostu, przystanek za krawędzią po stronie A: piksele po stronie B muszą zostać nieosiągalne; ten sam układ z mostem daje stronę B osiągalną i dłuższy czas; przystanek 10 km za krawędzią daje wynik identyczny jak dziś; narożnik siatki (nasiona na dwóch bokach, bez duplikatów); zgodność w tył obu rozszerzeń krotki i opcji `reset`.
 - Dowód: luka 2 — pomiar 2026-11-20 (wyżej) oraz `js/engine.js:360` (`maxRadiusM: Math.min(OUTSIDE_MAX_RADIUS_M, maxWalkSec * WALK_MPS)`). Luki 1 i 3: nieznane.
 - Pliki: tools/build-data.mjs, tools/build-walknet.mjs, js/walkgrid.js (luki 1 i 3). Luka 2: js/walkgrid.js, js/isochrone.js, js/engine.js, testy w tests/ (walkgrid, isochrone, engine).
-
-### Z-011 [P2] Realny „teraz"
-- Status: nowe
-- Zgłoszone: 2026-11-16 (analityk)
-- Problem: tryb ostrożny używa statystycznych profili opóźnień, nie bieżących danych GTFS-RT.
-- Dowód: nieznane.
-- Pliki: js/router.js, tools/collect-delays.mjs.
 
 ### Z-013 [P2] Profil pieszego
 - Status: nowe
@@ -199,21 +194,6 @@ Data ustalenia: 2026-11-24.
 - Przegląd (2026-11-17): tekst banera zależy od decyzji o AdSense (Z-064); jeśli reklamy znikną, zdanie o reklamach przestaje być prawdziwe. Wymaga przeglądu przez właściciela.
 - Z-064 (2026-11-17): częściowo wykonane — zdanie o reklamach znikło z banera, który jest krótszy o ten człon. Nowa treść dosłownie: „Strona korzysta z Google Analytics (anonimowe statystyki) — pliki cookie zapisywane tylko po zgodzie." Propozycja z tego wpisu nie została przyjęta dosłownie. Nie zamknięte.
 - Pliki: index.html.
-
-### Z-039 [P2] Zewnętrzna usługa zbierania błędów (decyzja właściciela)
-- Status: nowe
-- Zgłoszone: nieznane
-- Problem: rozwiązanie z Z-025 daje lokalną diagnostykę plus zdarzenie w Analytics po zgodzie. Zewnętrzna usługa (np. Sentry) dałaby stosy i grupowanie, ale oznacza nową zależność runtime na froncie (złamanie nienegocjowalnego ograniczenia projektu), nowego procesora danych w polityce prywatności i możliwy koszt po przekroczeniu darmowego limitu. Kontrakt `setSink` w `js/diag.js` jest punktem wymiany, więc wdrożenie byłoby podmianą samego ujścia.
-- Dowód: nieznane.
-- Pliki: js/diag.js, js/app.js.
-
-### Z-047 [P2] Zapis miasta do użytku offline — decyzja właściciela
-- Status: nowe
-- Zgłoszone: 2026-11-16 (nieznane)
-- Problem: strona nie działa offline z danymi rozkładowymi, a użytkownik nie ma jawnego sposobu zapisania miasta na telefonie. Zależy od etapu 3 Z-002.
-- Dowód: nieznane.
-- Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): przycisk „Zapisz to miasto offline"; zapis `data/<miasto>/*` do nazwanego cache razem z `meta.generated`; widoczna data pobrania; przycisk „Odśwież"; automatyczne unieważnienie po 7 dniach; przycisk „Usuń dane offline". Koszt: kilka MB na telefonie użytkownika.
-- Pliki: nieznane.
 
 ### Z-053 [P2] Potwierdzenie progów bramki na realnych `counts` i `grid`
 - Status: nowe
@@ -876,6 +856,19 @@ Pułapki do wdrożenia:
 - Pliki: js/walkgrid.js, js/engine.js, tests/walkgrid.test.mjs.
 - Jak sprawdzić: stan 2026-11-20 — naprawa u źródła w `computeTimeGrid` (`js/walkgrid.js`): w gałęzi bez zasiewu pętla zbierająca zasiane piksele zeruje `grid.spread` w każdej odwiedzonej komórce. Zasiane piksele leżą na ulicy (zasięg zero), komórki dopisane w przebiegu dostają świeży zasięg przed odczytem, niezasiane nie są czytane przed zapisem. Koszt dodatkowy zero. Obejście `grid.spread?.fill(0)` w `js/engine.js` usunięte, bo druga linia obrony kosztowałaby O(W×H) przy każdym przeliczeniu. Test regresji z obejścia zostaje w `tests/walkgrid.test.mjs`: na tym samym obiekcie siatki pierwszy przebieg zasiewa rozlanie do kilku kilometrów, drugi z limitem 300 m musi dać wynik identyczny jak na czystej siatce. Dowód, że testy łapią błąd: po tymczasowym wycofaniu poprawki oba testy padają, po przywróceniu przechodzą. Zmierzone w przeglądarce (Trójmiasto, limit 5 minut, sześć przeładowań, za każdym razem identyczny wynik): 0,2 / 0,8 / 3,4 / 8,8 / 13 / 20 procent. Bez limitu dwa przeładowania: 0,2 / 0,9 / 4,2 / 15 / 23 / 37 procent. `npm run check`: lint czysty, wynik dosłowny w CHANGELOG.md. Niezweryfikowane: nie porównano liczbowo wyników z sprzed Z-012, więc nie wiadomo, która z dawnych wartości (26 czy 35 procent) była prawidłowa — istotne, że wynik jest teraz stabilny; nie badano innych miast z limitem.
 
+### Z-002 [P1] Mobile i PWA
+- Status: zrobione w zakresie etapów 1 i 2 (wdrożone 2026-11-16); etap 3 (service worker) ODRZUCONY decyzją właściciela 2026-11-27.
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: brak manifest.json i service workera; offline tylko przez cache przeglądarki. Dochodzi bottom sheet, przycisk „wyśrodkuj na mnie" i wibracja.
+- Dowód: brak odwołań do manifestu i service workera w index.html (stan przed etapem 1).
+- Wdrożone 2026-11-16:
+  - Etap 1 (manifest i ikony): `manifest.json` (`start_url` i `scope` jako `./`, `start_url` bez parametrów), generator `tools/build-icons.mjs` (zero zależności, wynik deterministyczny), `assets/icon.svg`, `assets/icon-192.png`, `assets/icon-512.png`, `assets/icon-maskable-512.png`, `assets/apple-touch-icon.png`; w `index.html` cztery linie w `<head>`, stara ikona data-URI zostaje jako awaryjna. Testy: `tests/pwa-manifest.test.mjs` (5), `tests/build-icons.test.mjs` (2).
+  - Etap 2 (lokalizacja i wibracja): kontrolka „Wyśrodkuj na mnie" (`addLocateControl` w `js/map.js`) z kółkiem dokładności i przyciskiem „Ustaw tu punkt startowy" w dymku; czyste funkcje w `js/uilogic.js`; rozróżnione komunikaty błędów lokalizacji, komunikat „Jesteś poza obszarem: <miasto>", jeden impuls wibracji 20 ms po przeliczeniu dłuższym niż 1,5 s, komunikat „Jesteś offline". Testy: `tests/uilogic.test.mjs`, `tests/mobile-layout.test.mjs` (`TAP_USES_MIN` 19 -> 21).
+- Rozwiązanie etapu 3 (service worker; szkic z wejścia fali, bez przeglądu rozwiazywacza): service worker shell-only, który nigdy nie odpowiada na żądania zawierające `/data/` (nie pokaże nieaktualnego rozkładu); powłoka jako jedna atomowa paczka `shell-<hash>`; bez `skipWaiting()` w tle; komunikat „Dostępna nowa wersja — odśwież" z przyciskiem; wyjście awaryjne `?sw=off`; stempel wersji z `tools/stamp-sw.mjs` pilnowany testem. Wariant „sam manifest, bez service workera" odpadł: GitHub Pages narzuca `Cache-Control: max-age=600` i nie pozwala tego zmienić, a bez handlera `fetch` Chrome nie pokaże promptu instalacji. Etap 3 czeka na decyzję właściciela, bo trwale instaluje się w przeglądarkach użytkowników i zmienia zachowanie offline.
+- Pliki: index.html, js/app.js, js/map.js, js/uilogic.js, css/style.css, manifest.json, tools/build-icons.mjs, assets/, tests/pwa-manifest.test.mjs, tests/build-icons.test.mjs. Etap 3 (nie wdrożony): sw.js, js/pwa.js, tools/stamp-sw.mjs, tests/sw.test.mjs.
+- Niezweryfikowane: etap 1 — faktyczna instalowalność na telefonie i na iOS, ścieżki względne pod `github.io/ZTM/`. Etap 2 — prawdziwy prompt o zgodę, kod 3 (timeout), komunikat offline w przeglądarce, pozycjonowanie kontrolki na wąskim ekranie, wibracja na prawdziwym urządzeniu.
+- Decyzja właściciela (2026-11-27): etap 3 (service worker) ODRZUCONY. Wcześniejsze etapy 1 i 2 zostają jako wykonane. Kontekst: źle napisany service worker potrafi trwale serwować starą wersję, a dane tej strony zmieniają się co tydzień. Odrzucenie etapu 3 zamyka część zadania, która została; zależne od niego Z-047 również odrzucone.
+
 ## Odrzucone
 
 ### Z-001 [P1] Certyfikowany CMP (Consent Mode v2)
@@ -960,3 +953,28 @@ Pułapki do wdrożenia:
 - Pliki: tools/ (prekompilacja GTFS), data/<miasto>/ — dopiero po decyzji właściciela.
 - Jak sprawdzić: nieznane.
 - Decyzja właściciela (2026-11-24): zadanie nie ma sensu. Dotyczyło dołożenia prawdziwej geometrii przejazdu z `shapes.txt`, żeby linia trasy biegła torami i ulicami zamiast prosto między przystankami. Koszt był wyceniony na 15–20 MB nowych danych w repozytorium, 0,5–0,8 MB po kompresji na duże miasto przy każdej wizycie oraz przeliczenie 18 miast, przy nierównym pokryciu (Opole bez geometrii, bo konwerter TransXChange jej nie produkuje). Schematyczna linia z Z-010 zostaje.
+
+### Z-011 [P2] Realny „teraz"
+- Status: odrzucone
+- Zgłoszone: 2026-11-16 (analityk)
+- Problem: tryb ostrożny używa statystycznych profili opóźnień, nie bieżących danych GTFS-RT.
+- Dowód: nieznane.
+- Pliki: js/router.js, tools/collect-delays.mjs.
+- Decyzja właściciela (2026-11-27): ODRZUCONE. Kontekst: wymagałoby odpytywania feedów przewoźników przy każdym przeliczeniu, czyli zależności od cudzego serwera na ścieżce krytycznej, przy udokumentowanej w tym projekcie zawodności takich źródeł (Gorzów, Opole, zbiorkom).
+
+### Z-047 [P2] Zapis miasta do użytku offline — decyzja właściciela
+- Status: odrzucone
+- Zgłoszone: 2026-11-16 (nieznane)
+- Problem: strona nie działa offline z danymi rozkładowymi, a użytkownik nie ma jawnego sposobu zapisania miasta na telefonie. Zależy od etapu 3 Z-002.
+- Dowód: nieznane.
+- Rozwiązanie (szkic z wejścia fali, bez przeglądu rozwiazywacza): przycisk „Zapisz to miasto offline"; zapis `data/<miasto>/*` do nazwanego cache razem z `meta.generated`; widoczna data pobrania; przycisk „Odśwież"; automatyczne unieważnienie po 7 dniach; przycisk „Usuń dane offline". Koszt: kilka MB na telefonie użytkownika.
+- Pliki: nieznane.
+- Decyzja właściciela (2026-11-27): ODRZUCONE. Zależało od etapu trzeciego Z-002 (service worker), który właściciel odrzucił tego samego dnia.
+
+### Z-039 [P2] Zewnętrzna usługa zbierania błędów (decyzja właściciela)
+- Status: odrzucone
+- Zgłoszone: nieznane
+- Problem: rozwiązanie z Z-025 daje lokalną diagnostykę plus zdarzenie w Analytics po zgodzie. Zewnętrzna usługa (np. Sentry) dałaby stosy i grupowanie, ale oznacza nową zależność runtime na froncie (złamanie nienegocjowalnego ograniczenia projektu), nowego procesora danych w polityce prywatności i możliwy koszt po przekroczeniu darmowego limitu. Kontrakt `setSink` w `js/diag.js` jest punktem wymiany, więc wdrożenie byłoby podmianą samego ujścia.
+- Dowód: nieznane.
+- Pliki: js/diag.js, js/app.js.
+- Decyzja właściciela (2026-11-27): ODRZUCONE. Kontekst: łamie nienegocjowalny zakaz zależności runtime na froncie, dokłada nowego procesora danych do polityki prywatności i może kosztować po przekroczeniu darmowego progu.
