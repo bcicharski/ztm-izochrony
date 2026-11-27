@@ -17,7 +17,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
   - Z-013 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; zakres zawężony do tempa marszu, schody i bezbarierowość poza zakresem).
   - Z-003 — ZROBIONE 2026-11-27 (etap 1 i etap 2 wdrożone; wpis w „Zrobione").
-  - Z-037 — nowe (zatwierdzone 2026-11-24), po Z-003.
+  - Z-037 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-079 — ZROBIONE 2026-11-24 (wpis w „Zrobione"), poza kolejnością.
 - Wstrzymane (nie pominięte; właściciel wymienił je 2026-11-24 jako ważne w drugiej kolejności, nic tego nie odwołało; w zleceniu z 2026-11-27 ich nie ma):
   - Z-038 — czeka na decyzję właściciela: treść prawna banera zgody, nie wolno jej zmieniać bez jego słowa.
@@ -167,14 +167,6 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Tryb ciemny (2026-11-21): zrobiony w Z-044, patrz wpis Z-044 w sekcji „Zrobione". Mapa i kolory pasm świadomie zostały jasne. „Wariant wysokiego kontrastu stref" z tego zadania to nadal otwarta, osobna sprawa; nie jest tym samym co tryb ciemny.
 - Pliki: css/style.css, index.html, js/app.js.
 
-### Z-037 [P2] Automatyczne ustawianie niedzieli w święto
-- Status: nowe
-- Zgłoszone: nieznane
-- Problem: dziś w święto strona pokazuje komunikat z przyciskiem przełączającym na rozkład niedzielny (Z-022). Wariant pełny ustawiałby typ dnia sam. To naprawa (w Boże Ciało rozkład roboczy nie istnieje w terenie), ale zmienia domyślny stan kontrolki.
-- Dowód: nieznane.
-- Pliki: js/app.js.
-- Decyzja właściciela (2026-11-24): zatwierdzone, ma się przełączać automatycznie. Zadanie czeka na wdrożenie.
-
 ### Z-038 [P2] Skrócony tekst banera zgody (decyzja właściciela)
 - Status: nowe
 - Zgłoszone: nieznane
@@ -212,6 +204,14 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 
 
 ## Zrobione
+
+### Z-037 [P2] Automatyczne ustawianie niedzieli w święto
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: nieznane
+- Problem: dziś w święto strona pokazuje komunikat z przyciskiem przełączającym na rozkład niedzielny (Z-022). Wariant pełny ustawiałby typ dnia sam. To naprawa (w Boże Ciało rozkład roboczy nie istnieje w terenie), ale zmienia domyślny stan kontrolki.
+- Dowód: nieznane.
+- Pliki: js/uilogic.js, js/app.js, tests/uilogic.test.mjs.
+- Decyzja właściciela (2026-11-24): zatwierdzone, ma się przełączać automatycznie. Wdrożone 2026-11-27.
 
 ### Z-013 [P2] Profil pieszego
 - Status: zrobione 2026-11-27 (zakres zawężony do tempa marszu; schody i bezbarierowość poza zakresem, powód w CHANGELOG.md, sekcja 2026-11-27)
