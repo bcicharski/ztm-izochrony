@@ -11,7 +11,7 @@ Stary backlog `zadania.md` to archiwum, tylko do czytania.
 Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niżej jako historia).
 - Praca autonomiczna, w tej kolejności:
   - Z-019 — w toku (część „awaria widoczna" wdrożona; Szczecin wdrożony 2026-11-27; GZM otwarte, bez profili, niewykonalne po naszej stronie).
-  - Z-075 — nowe.
+  - Z-075 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-080 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-053 — ZROBIONE 2026-11-27 (wpis w „Zrobione"; potwierdzenie bez zmiany kodu).
   - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
@@ -193,17 +193,19 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
   - Właściciel dostał 2026-11-23 gotowy draft pisma do MZK z prośbą o paczkę obejmującą dłuższy okres albo o stały adres najnowszego pliku. Pismo NIE zostało wysłane; decyzja i wysyłka należą do właściciela.
 - Pliki: data/cities.json, tools/fetch-feeds.mjs (gałąź BIP, jeśli wpinane), tests/fetch-feeds.test.mjs.
 
-### Z-075 [P2] Wyciek `water.json` poza `gridBbox` jest przypadkowy
-- Status: nowe
-- Zgłoszone: 2026-11-20 (nieznane)
-- Problem: `tools/build-water.mjs` buduje wodę na `gridBbox`, ale Overpass zwraca pełną geometrię way'a, który ma choć jeden węzeł w bboxie. W Trójmieście geometria wychodzi 4,3 km na południe za krawędź, a tylko 0,6 km na zachód. Skutek: maska wody w `js/map.js` poza siatką działa losowo — w jednym kierunku jest, w drugim nie.
-- Dowód: pomiar 2026-11-20 (Trójmiasto, geometria wody za krawędzią `gridBbox`).
-- Opcje (do rozstrzygnięcia, nie zaprojektowane): świadomy margines w `build-water.mjs` albo przycięcie danych do bboxa, żeby zachowanie było przewidywalne. Zmiana wymaga przeliczenia `water.json`, czyli zgody właściciela.
-- Pliki: tools/build-water.mjs, js/map.js; `data/<miasto>/water.json` dopiero po decyzji właściciela.
-- Jak sprawdzić: nieznane.
-
-
 ## Zrobione
+
+### Z-075 [P2] Wyciek `water.json` poza `gridBbox` jest przypadkowy
+- Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
+- Zgłoszone: 2026-11-20 (nieznane)
+- Problem: `tools/build-water.mjs` buduje wodę na `gridBbox`, ale Overpass zwraca pełną geometrię way'a, który ma choć jeden węzeł w prostokącie. Zasięg wycieku był losowy: przed zmianą Bydgoszcz 72,5 km na północ, Warszawa 66 km na zachód, Trójmiasto 34,3 km na południe, w innych kierunkach kilkaset metrów. Tą maską przycinane są koła 804 przystanków leżących poza siatką, więc w jednym kierunku koło respektowało brzeg, w drugim nie.
+- SPROSTOWANIE (2026-11-27): dotychczasowy opis podawał dla Trójmiasta 4,3 km na południe i 0,6 km na zachód. Te liczby pochodziły z wcześniejszego raportu projektowego i były o rząd wielkości za małe. Koordynator przekazał je do zlecenia bez sprawdzenia; wdrożeniowiec zmierzył je sam i zatrzymał pracę zamiast wdrażać na błędnej przesłance. Prawidłowe liczby są w punkcie Problem.
+- Dowód: pomiar 2026-11-20 (Trójmiasto, geometria wody za krawędzią `gridBbox`; liczby sprostowane wyżej); pomiar wdrożeniowca przed zmianą (2026-11-27): Bydgoszcz, Warszawa, Trójmiasto, jak w punkcie Problem.
+- Opcje (rozstrzygnięte i wdrożone 2026-11-27): zapytanie do Overpass idzie dla siatki powiększonej o 2 km, a wynik jest przycinany do tego samego prostokąta. Stała marginesu w `tools/geo.mjs`. Margines wynika z pomiaru: przystanek może leżeć do 1 km za krawędzią (176 pozycji w pierścieniu 0–1 km), a jego koło ma promień do 1 km, więc najdalszy punkt wymagający przycięcia leży 2 km za siatką. Żadne z dwóch pierwotnie rozważanych wyjść nie wystarczało osobno: sam margines nie daje jednakowego zachowania (serwer i tak oddaje rzekę w całości), a samo przycięcie do siatki zabrałoby barierę kołom przystanków leżących do 1 km za krawędzią.
+- Efekt: maska wody ma jednakowy zasięg 2 km poza siatką pieszą we wszystkich 18 miastach i we wszystkich kierunkach. Zmierzone po przebudowie: maksymalne wystawanie wynosi dokładnie 2000 m, w żadnym mieście ani metr więcej.
+- Oczekiwanie, które się nie sprawdziło: zapowiadano ok. 50 kB oszczędności po gzipie. Wynik: 559,1 kB wobec 555,3 kB przed przebudową, czyli 3,8 kB WIĘCEJ. Próba na sucho tylko przycinała istniejące dane; prawdziwe pobranie dołożyło wodę w promieniu 2 km tam, gdzie wcześniejszy przypadkowy wyciek był krótszy niż margines. Bilans rozmiaru jest neutralny; jedynym zyskiem jest przewidywalność maski. Nie szukać oszczędności, której nie ma.
+- Pliki: tools/geo.mjs (nowe funkcje przycinania i wyznaczania zasięgu zapytania, stała marginesu), tools/build-water.mjs, tests/build-water.test.mjs (nowy), `data/<miasto>/water.json` w 18 miastach. `js/map.js` nietknięty (sposób użycia maski się nie zmienia); pola w `data/cities.json` nie dodano.
+- Jak sprawdzić: 10 nowych testów na danych syntetycznych (obiekt w całości wewnątrz; przecinający granicę; całkowicie poza; rzeka 72 km jako regresja tego zadania; linia wchodząca i wychodząca dwukrotnie; pierścień przecinający granicę z zachowaniem obiegu; pierścień obejmujący cały prostokąt). `npm run check`: tests 621, pass 620, fail 0, skipped 1, lint czysty. Przebieg: Warszawa i Wrocław padły w pierwszym przebiegu na błędzie 502 po stronie Overpass, przeszły przy powtórzeniu (awaria przejściowa, nie w kodzie). Nie sprawdzone: wygląd map po przebudowie w przeglądarce w żadnym mieście; sprawdzono zasięg liczbowo i wynik testów.
 
 ### Z-037 [P2] Automatyczne ustawianie niedzieli w święto
 - Status: zrobione 2026-11-27 (wpis w CHANGELOG.md, sekcja 2026-11-27)
