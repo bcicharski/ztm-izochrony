@@ -7,7 +7,7 @@ import { loadMeta, loadWater, loadCities, dropCityCache, DAY_KEYS, DAY_LABELS, d
 import { BANDS } from './isochrone.js';
 import { createMap, ZoneLayer, ZONE_ALPHA, prefersReducedMotion, addLocateControl, createJourneyPane, createJourneyLayer } from './map.js';
 import {
-  warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
+  warsawNow, dayTypeOf, defaultDayType, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine, buildQuery,
   accessIcons as accessIconsFor, statusLine, dayInfoView,
   engineLimits, limitsEnabled, limitsSummary, limitHints, emptyResultText,
   geoErrorMessage, locateUnavailableReason, ADDRESS_QUERY_MIN, ADDRESS_QUERY_HINT, nearestCity, inBbox, shouldVibrate, loadErrorMessage, zoneSummaryText,
@@ -44,6 +44,7 @@ const DEFAULT_CITY = 'trojmiasto';
 
 const now = warsawNow();
 const todayDay = dayTypeOf(now.weekday);
+const startDay = defaultDayType(now.weekday, now.ymd); // w święto: niedziela (Z-037)
 
 const state = {
   city: DEFAULT_CITY,
@@ -58,7 +59,7 @@ const state = {
   pace: DEFAULT_PACE_KMH, // tempo marszu [km/h] z listy WALK_PACES_KMH (Z-013); rowera nie dotyczy
   mode: 'time',
   timeMin: Math.floor(now.minutes / 5) * 5,
-  day: todayDay,
+  day: startDay,
   stats: false,
   safe: false,   // tryb ostrożny: margines na opóźnienia
   maxTransfers: null, // limit przesiadek 0|1|2 (null = bez limitu, do 4) — Z-012
@@ -92,7 +93,6 @@ const isWalkOnly = () => cityCfg().veh.every(g => !state.veh[g.key]);
 
 let pointFromUrl = false;
 let point2Chosen = false; // drugi punkt ustawiony przez użytkownika albo adres (tryb spotkania czeka na niego)
-let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dnia
 {
   const u = parseUrlState(location.search, CITIES);
   if (u.city) state.city = u.city;
@@ -105,7 +105,6 @@ let dayFromUrl = false; // ?day= w adresie: nie podsuwamy przełączenia typu dn
   for (const k of ['compare', 'meet', 'meetCrit', 'direction', 'walk', 'access', 'mode', 'timeMin', 'day', 'stats', 'safe', 'maxTransfers', 'maxWalkMin', 'pace']) {
     if (k in u) state[k] = u[k];
   }
-  dayFromUrl = u.dayFromUrl;
   if (u.veh) for (const k of Object.keys(state.veh)) state.veh[k] = u.veh.has(k);
 }
 
@@ -811,7 +810,7 @@ function openSectionAuto(id) {
 }
 
 // domyślne = „gdybym wyszedł teraz” (sprzed stanu z linku), więc opcje z linku dostają znacznik
-const initialDefaults = { timeMin: Math.floor(now.minutes / 5) * 5, day: todayDay };
+const initialDefaults = { timeMin: Math.floor(now.minutes / 5) * 5, day: startDay };
 let feedYmd = null;     // data rozkładu wybranego typu dnia (yyyymmdd) — do nagłówka „Dane i kontakt"
 let feedStale = false;  // rozkład po terminie ważności
 
@@ -1490,35 +1489,23 @@ let cityMetaReady = false; // applyMeta już zadziałało dla bieżącego miasta
 /**
  * Stopka (data wybranego typu dnia, dopisek o reżimie) i komunikat #dayNote.
  * Wołana z applyMeta i przy zmianie typu dnia — bez ponownego pobierania meta.
- * Domyślny typ dnia zostaje po dniu tygodnia; w święto tylko proponujemy
- * przełączenie na niedzielę (nie przy ?day= w adresie).
+ * Domyślny typ dnia: z dnia tygodnia, w święto niedzielny (defaultDayType);
+ * ?day= w adresie wygrywa, ręczna zmiana zostaje (automat działa tylko na starcie).
  */
 function renderDayInfo() {
   if (!cityMetaReady) return;
   const today = warsawNow();
   const n = dayDataNotice(cityMeta, state.day, today.ymd);
-  const view = dayInfoView(n, { dayFromUrl, day: state.day, todayDay });
+  const view = dayInfoView(n, { day: state.day, todayDay, mode: state.mode });
   feedYmd = n.date ?? null;
   $('feedDate').textContent = view.feedDate;
   $('feedDateNote').textContent = view.feedDateNote;
 
   const note = $('dayNote');
-  // komunikat wymagający działania (np. „Pokaż niedzielę”) otwiera swoją sekcję — raz na nowy tekst
+  // nowy komunikat (np. wyjaśnienie automatycznej niedzieli) otwiera swoją sekcję — raz na nowy tekst
   if (view.text && view.text !== note.dataset.shown) openSectionAuto('secTime');
   note.dataset.shown = view.text;
   note.textContent = view.text;
-  if (view.offerSunday) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = 'Pokaż niedzielę';
-    btn.addEventListener('click', () => {
-      state.day = 'sunday';
-      $('daySelect').value = 'sunday';
-      renderDayInfo();
-      recompute();
-    });
-    note.append(' ', btn);
-  }
 }
 
 /**

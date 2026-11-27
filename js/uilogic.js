@@ -8,6 +8,7 @@
  * Używane przez app.js, map.js i worker.js.
  */
 
+import { holidayName } from './calendar.js';
 import { DAY_LABELS, DEFAULT_PACE_KMH, WALK_PACES_KMH, normalizePace } from './data.js';
 
 // --- czas ------------------------------------------------------------------
@@ -42,6 +43,19 @@ export function warsawNow(date = new Date()) {
 
 /** Dzień tygodnia (0 = niedziela) → domyślny typ dnia rozkładu. */
 export const dayTypeOf = weekday => (weekday === 0 ? 'sunday' : weekday === 6 ? 'saturday' : 'workday');
+
+/**
+ * Domyślny typ dnia na dziś (Z-037): z dnia tygodnia, ale w święto ustawowo
+ * wolne wypadające w dzień roboczy — niedzielny (komunikacja jedzie wtedy jak
+ * w niedzielę). Wigilia ma rozkład skrócony, nie niedzielny, więc zostaje
+ * roboczy; sobota zostaje sobotą. `?day=` w adresie wygrywa — nadpisuje stan
+ * po tej funkcji (app.js).
+ */
+export function defaultDayType(weekday, ymd) {
+  const base = dayTypeOf(weekday);
+  if (base !== 'workday') return base;
+  return holidayName(ymd) && ymd.slice(4) !== '1224' ? 'sunday' : base;
+}
 
 /** Sekundy doby → „GG:MM"; ujemne (wyjście przed północą przy „do miejsca") zawijane do poprzedniego dnia. */
 export const HHMM = s => {
@@ -381,18 +395,20 @@ export function zoneSummaryText({ statusText, city, reachable, walkOnly, compare
 
 /**
  * Stopka i komunikat #dayNote z wyniku `dayDataNotice` (calendar.js).
- * W święto tylko proponujemy przełączenie na niedzielę (`offerSunday`) —
- * nie przy `?day=` w adresie i nie, gdy typ dnia wybrano ręcznie.
+ * W święto w dzień roboczy typ dnia ustawia się sam na niedzielny
+ * (`defaultDayType`); komunikat tłumaczy dlaczego i działa bez stanu: pokazuje
+ * się, gdy dziś jest takie święto, a wybrany jest rozkład niedzielny (także po
+ * odświeżeniu, gdy adres niesie `day=sunday`). Wybór dnia roboczego — z adresu
+ * albo ręczny — zostaje bez komentarza. Tylko w trybie z godziną: tryb ogólny
+ * liczy zawsze na dniu roboczym.
  */
-export function dayInfoView(n, { dayFromUrl, day, todayDay }) {
+export function dayInfoView(n, { day, todayDay, mode = 'time' }) {
   const parts = [];
-  let offerSunday = false;
-  if (n.todayHoliday && !dayFromUrl && day === 'workday' && todayDay === 'workday') {
+  if (n.todayHoliday && todayDay === 'workday' && mode === 'time') {
     if (n.todayShortened) {
-      parts.push(`Dziś ${n.todayHoliday} — komunikacja jedzie rozkładem skróconym, wyniki dla dnia roboczego mogą odbiegać.`);
-    } else {
-      parts.push(`Dziś święto (${n.todayHoliday}) — komunikacja jedzie zwykle rozkładem niedzielnym.`);
-      offerSunday = true;
+      if (day === 'workday') parts.push(`Dziś ${n.todayHoliday} — komunikacja jedzie rozkładem skróconym, wyniki dla dnia roboczego mogą odbiegać.`);
+    } else if (day === 'sunday') {
+      parts.push(`Dziś święto (${n.todayHoliday}) — komunikacja jedzie rozkładem niedzielnym, więc wybrano niedzielę. Dzień roboczy możesz wskazać w polu „Dzień”.`);
     }
   }
   if (n.regimeMismatch) {
@@ -406,7 +422,6 @@ export function dayInfoView(n, { dayFromUrl, day, todayDay }) {
     feedDate: fmtDate(n.date) ?? '—',
     feedDateNote: n.regime === 'summer' ? ' (rozkład wakacyjny)' : '',
     text: parts.join(' '),
-    offerSunday,
   };
 }
 

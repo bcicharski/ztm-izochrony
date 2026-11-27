@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   normalizeStopQuery, buildStopIndex, searchStops, mergeSearchResults,
-  warsawNow, dayTypeOf, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine,
+  warsawNow, dayTypeOf, defaultDayType, HHMM, fmtClock, fmtDate, parseUrlState, wantsMainEngine,
   buildQuery, reducedMotionFrom, accessIcons, statusLine, dayInfoView, createLatestQueue,
   geoErrorMessage, nearestCity, shouldVibrate, loadErrorMessage, inBbox, zoneSummaryText, NEAREST_CITY_MAX_KM,
   journeyShape,
@@ -250,23 +250,47 @@ const ctx = { dayFromUrl: false, day: 'workday', todayDay: 'workday' };
 
 test('dayInfoView: brak uwag → pusty tekst; brak daty → „—"', () => {
   const v = dayInfoView(noNotice, ctx);
-  assert.deepEqual(v, { feedDate: '16.11.2026', feedDateNote: '', text: '', offerSunday: false });
+  assert.deepEqual(v, { feedDate: '16.11.2026', feedDateNote: '', text: '' });
   assert.equal(dayInfoView({ ...noNotice, date: null }, ctx).feedDate, '—');
 });
 
-test('dayInfoView: święto — propozycja niedzieli tylko gdy wybór nie był świadomy', () => {
-  const n = { ...noNotice, todayHoliday: 'Wszystkich Świętych' };
-  const v = dayInfoView(n, ctx);
-  assert.equal(v.offerSunday, true);
-  assert.equal(v.text, 'Dziś święto (Wszystkich Świętych) — komunikacja jedzie zwykle rozkładem niedzielnym.');
-  assert.equal(dayInfoView(n, { ...ctx, dayFromUrl: true }).offerSunday, false);
+test('dayInfoView: święto w dzień roboczy + niedziela → wyjaśnienie, bez przycisku', () => {
+  const n = { ...noNotice, todayHoliday: 'Boże Ciało' };
+  const v = dayInfoView(n, { ...ctx, day: 'sunday' });
+  assert.ok(v.text.startsWith('Dziś święto (Boże Ciało) — komunikacja jedzie rozkładem niedzielnym, więc wybrano niedzielę.'));
+  assert.equal('offerSunday' in v, false);
+});
+
+test('dayInfoView: wybór dnia roboczego w święto zostaje bez komentarza (adres albo ręcznie)', () => {
+  const n = { ...noNotice, todayHoliday: 'Boże Ciało' };
+  assert.equal(dayInfoView(n, ctx).text, '');
   assert.equal(dayInfoView(n, { ...ctx, day: 'saturday' }).text, '');
-  assert.equal(dayInfoView(n, { ...ctx, todayDay: 'saturday' }).text, '');
+});
+
+test('dayInfoView: bez święta, w niedzielę/sobotę i w trybie ogólnym — milczy', () => {
+  assert.equal(dayInfoView(noNotice, { ...ctx, day: 'sunday' }).text, '');
+  const n = { ...noNotice, todayHoliday: 'Boże Ciało' };
+  assert.equal(dayInfoView(n, { ...ctx, day: 'sunday', todayDay: 'sunday' }).text, '');
+  assert.equal(dayInfoView(n, { ...ctx, day: 'sunday', mode: 'general' }).text, '');
+});
+
+test('defaultDayType: święto w dzień roboczy → niedziela; zwykły czwartek → roboczy', () => {
+  assert.equal(defaultDayType(4, '20260604'), 'sunday');   // Boże Ciało (czwartek)
+  assert.equal(defaultDayType(4, '20261126'), 'workday');  // zwykły czwartek
+  assert.equal(defaultDayType(3, '20261111'), 'sunday');   // 11 listopada (środa)
+  assert.equal(defaultDayType(1, '20260406'), 'sunday');   // Poniedziałek Wielkanocny
+});
+
+test('defaultDayType: niedziela-święto, sobota-święto i Wigilia nie dają niespodzianek', () => {
+  assert.equal(defaultDayType(0, '20260405'), 'sunday');   // Wielkanoc, niedziela
+  assert.equal(defaultDayType(6, '20260815'), 'saturday'); // Wniebowzięcie w sobotę
+  assert.equal(defaultDayType(4, '20261224'), 'workday');  // Wigilia: rozkład skrócony, nie niedzielny
+  assert.equal(defaultDayType(1, '20301125'), 'workday');
+  assert.equal(defaultDayType(4, '20300620'), 'sunday');   // Boże Ciało 2030 — święta ruchome bez końca listy
 });
 
 test('dayInfoView: rozkład skrócony nie proponuje niedzieli', () => {
   const v = dayInfoView({ ...noNotice, todayHoliday: 'Wigilia', todayShortened: true }, ctx);
-  assert.equal(v.offerSunday, false);
   assert.match(v.text, /^Dziś Wigilia — komunikacja jedzie rozkładem skróconym/);
 });
 
@@ -280,7 +304,7 @@ test('dayInfoView: rozbieżność reżimu — wakacyjny i szkolny, z datą lub b
 });
 
 test('dayInfoView: kilka uwag łączone spacją, w ustalonej kolejności', () => {
-  const v = dayInfoView({ ...noNotice, todayHoliday: 'X', regime: 'school', regimeMismatch: true, holiday: 'Y' }, ctx);
+  const v = dayInfoView({ ...noNotice, todayHoliday: 'X', regime: 'school', regimeMismatch: true, holiday: 'Y' }, { ...ctx, day: 'sunday' });
   const [a, b, c] = [v.text.indexOf('Dziś święto'), v.text.indexOf('Rozkład pochodzi'), v.text.indexOf('Rozkład z dnia świątecznego (Y)')];
   assert.ok(a === 0 && b > a && c > b);
 });
