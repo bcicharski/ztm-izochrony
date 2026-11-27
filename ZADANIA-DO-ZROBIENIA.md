@@ -12,7 +12,7 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Praca autonomiczna, w tej kolejności:
   - Z-019 — w toku (część „awaria widoczna" wdrożona; zadanie otwarte, pozostaje wyznaczanie linii z identyfikatora kursu).
   - Z-075 — nowe.
-  - Z-080 — nowe.
+  - Z-080 — ZROBIONE 2026-11-27 (wpis w „Zrobione").
   - Z-053 — nowe.
   - Z-023 — w toku (kontrola spójności danych OSM wdrożona 2026-11-20; cykliczne odświeżanie czeka na zgodę właściciela).
   - Z-013 — nowe.
@@ -232,15 +232,16 @@ Data ustalenia: 2026-11-27 (zastępuje kolejność z 2026-11-24, zachowaną niż
 - Jak sprawdzić: nieznane.
 
 
+## Zrobione
+
 ### Z-080 [P3] Lista linii zapisywana w plikach dnia zależy od kolejności budowania dni
-- Status: nowe
+- Status: zrobione (wdrożone 2026-11-27)
 - Zgłoszone: 2026-11-20 (nieznane; znalezione przy Z-053)
 - Problem: lista linii w `tools/build-data.mjs` jest uzupełniana leniwie w trakcie budowania kolejnych dni i zapisywana do każdego pliku w chwili jego zapisu. Łódź ma w plikach dnia 129 (dzień roboczy), 133 (sobota) i 134 (niedziela) linii, a `counts.routes` to 134. Dziś nieszkodliwe, bo bramka porównuje `counts` z `counts`, ale plik dnia niesie wtedy niepełną listę linii.
 - Dowód: pomiar 2026-11-20 (Łódź: liczba linii w `data/lodz/workday.json`, `saturday.json`, `sunday.json` wobec `counts.routes` w `data/lodz/meta.json`); przyczyna ustalona z kodu `tools/build-data.mjs`.
-- Pliki: tools/build-data.mjs.
-- Jak sprawdzić: nieznane (oczekiwane: liczba linii w każdym pliku dnia równa `counts.routes`; test nieznany).
-
-## Zrobione
+- Rozwiązanie (wdrożone 2026-11-27): wszystkie dni budowane najpierw, ładunki do zapisu składane potem z końcową listą linii. Każdy plik dnia niesie pełną listę niezależnie od kolejności budowania. Plik niepełny, nie błędny: indeksy linii są tylko dopisywane, więc wzorce w starszych plikach wskazują poprawne nazwy; brakowało pozycji na liście, nic nie było źle wyświetlane. Format plików i numer wersji bez zmian; front nietknięty. Wpływ na rozmiar: rząd 100 bajtów na plik (Łódź).
+- Pliki: tools/build-data.mjs, tools/build-lib.mjs (nowa funkcja; odstępstwo świadome: `tools/build-data.mjs` nie ma eksportów, więc nie dało się jej przetestować), tests/build-lib.test.mjs. `data/` i `js/` nietknięte; pliki dnia odświeżą się przy najbliższym cotygodniowym buildzie.
+- Jak sprawdzić: 3 nowe testy w `tests/build-lib.test.mjs` (budowanie dni w trzech kolejnościach daje tę samą listę; indeksy wskazują właściwe nazwy; plik ze starą, niepełną listą dekoduje się). Dowód, że test łapie wadę: po tymczasowym przywróceniu starego zachowania test kolejności padł (lista 2 pozycje zamiast 4). Słabość: test zgodności wstecznej sprawdza tylko dekodowanie bez błędu, nie wykryje zmiany sposobu, w jaki front korzysta z listy. `npm run check`: tests 555, pass 554, fail 0, skipped 1, lint czysty (wynik podany w zleceniu, nie wklejony dosłownie z terminala). Nie sprawdzone: przebieg na realnym mieście (wymaga pobranego feedu), więc przepięta pętla zapisu nie była wykonana na prawdziwych danych.
 
 ### Z-079 [P2] Uszkodzony agregat jednego miasta przerywa cały przebieg kolektora
 - Status: zrobione

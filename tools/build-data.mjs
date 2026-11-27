@@ -42,6 +42,7 @@ import {
   candidateDates, selectDayTypes, normalizeStopName, clusterStopGroups, parseStopTimeRow,
   tripTouchesBbox, dropUnusedStops, buildDayPatterns, parseWaterRings, crossesWater,
   transferCandidates, gridCoverage, carryOverMeta,
+  assembleDayPayloads,
 } from './build-lib.mjs';
 
 const cityKey = process.argv[2];
@@ -388,21 +389,22 @@ const transfers = buildTransfers();
 console.log(`Przesiadki piesze (pary ≤${TRANSFER_MAX_M} m): ${transfers.length}`);
 
 const dayCounts = {}; // metryki dla bramki jakości (tools/check-data.mjs)
+// listę linii uzupełnia leniwie buildDay, więc budujemy wszystkie dni przed zapisem
+// pierwszego pliku — każdy plik dnia niesie wtedy pełną listę (Z-080)
+const overtakeByDay = [];
+const dayPayloads = assembleDayPayloads({
+  dayTypes,
+  buildDay: d => { const p = buildDay(d); overtakeByDay[d] = overtakeStats; return p; },
+  routeList, stopsOut, transfers,
+  version: 3, // v3: czasy w sekundach + opcjonalne postoje (pole d); v2 = minuty, bez d
+});
 for (let d = 0; d < dayTypes.length; d++) {
-  const patterns = buildDay(d);
+  const { payload, patterns } = dayPayloads[d];
   const nTrips = patterns.reduce((s, p) => s + p.t.length, 0);
   const file = path.join(outDir, `${dayTypes[d].key}.json`);
-  const payload = {
-    version: 3, // v3: czasy w sekundach + opcjonalne postoje (pole d); v2 = minuty, bez d
-    day: dayTypes[d].key,
-    date: dayTypes[d].date,
-    routes: routeList,
-    stops: stopsOut,
-    transfers,
-    patterns,
-  };
   fs.writeFileSync(file, JSON.stringify(payload));
   const bytes = fs.statSync(file).size;
+  overtakeStats = overtakeByDay[d];
   dayCounts[dayTypes[d].key] = { patterns: patterns.length, trips: nTrips, bytes, overtaking: overtakeStats.overtaking };
   console.log(`${dayTypes[d].key}: wzorce=${patterns.length}, kursy=${nTrips}, plik=${(bytes / 1e6).toFixed(2)} MB, wyprzedzanie: rozbito ${overtakeStats.overtaking} wzorców (+${overtakeStats.extraEntries} wpisów, ${overtakeStats.ms} ms)`);
 }

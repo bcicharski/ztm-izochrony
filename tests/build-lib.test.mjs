@@ -4,7 +4,7 @@ import {
   splitCsv, parseCsvText, timeToSec, dateToWeekday, datesBetween, addFeedServices,
   commonDateRange, candidateDates, selectDayTypes, normalizeStopName, clusterStopGroups,
   parseStopTimeRow, tripTouchesBbox, dropUnusedStops, buildDayPatterns, parseWaterRings,
-  segmentsCross, crossesWater, transferCandidates, gridCoverage, carryOverMeta,
+  segmentsCross, crossesWater, transferCandidates, gridCoverage, carryOverMeta, assembleDayPayloads,
 } from '../tools/build-lib.mjs';
 
 const M_PER_DEG_LAT = 111320;
@@ -421,4 +421,50 @@ test('carryOverMeta: meta bez delays, brak lub uszkodzony poprzedni meta — bez
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ city: 'x' }));
   assert.deepEqual(rebuildMeta(dir, { city: 'x' }), { city: 'x' });
   assert.deepEqual(carryOverMeta(null, { delaysFileExists: true }), {});
+});
+
+// --- Z-080: lista linii w plikach dnia ------------------------------------
+
+/** Atrapa buildDay: dzień d „używa" linii z `usage[d]`, indeks przydzielany leniwie jak w build-data. */
+function makeLazyDays(usage) {
+  const routeList = [];
+  const idx = new Map();
+  const buildDay = d => usage[d].map(name => {
+    if (!idx.has(name)) { idx.set(name, routeList.length); routeList.push({ n: name, t: 3 }); }
+    return { r: idx.get(name), s: [0, 1], p: [[60]], t: [[0, 0]] };
+  });
+  return { routeList, buildDay };
+}
+const DAYS = ['workday', 'saturday', 'sunday'].map(key => ({ key, date: '2026-01-01' }));
+const USAGE = [['1', '2'], ['1', '2', '3'], ['1', '2', '3', '4']];
+
+test('assembleDayPayloads: każdy plik dnia niesie pełną listę linii, niezależnie od kolejności dni', () => {
+  const orders = [[0, 1, 2], [2, 1, 0], [1, 2, 0]];
+  for (const order of orders) {
+    const { routeList, buildDay } = makeLazyDays(order.map(i => USAGE[i]));
+    const dayTypes = order.map(i => DAYS[i]);
+    const out = assembleDayPayloads({ dayTypes, buildDay, routeList, stopsOut: {}, transfers: [], version: 3 });
+    assert.equal(routeList.length, 4);
+    for (const { payload } of out) {
+      assert.equal(payload.routes.length, 4, `kolejność ${order}: ${payload.day}`);
+      assert.deepEqual(payload.routes.map(r => r.n).sort(), ['1', '2', '3', '4']);
+    }
+  }
+});
+
+test('assembleDayPayloads: indeksy linii we wzorcach wskazują właściwą nazwę w liście', () => {
+  const { routeList, buildDay } = makeLazyDays(USAGE);
+  const out = assembleDayPayloads({ dayTypes: DAYS, buildDay, routeList, stopsOut: {}, transfers: [], version: 3 });
+  const names = out[0].payload.patterns.map(p => out[0].payload.routes[p.r].n);
+  assert.deepEqual(names, USAGE[0]);
+});
+
+test('front: stary plik dnia z niepełną (prefiksową) listą linii nadal się dekoduje', async () => {
+  const { decodeNetwork } = await import('../js/data.js');
+  const { makeRaw } = await import('./helpers.mjs');
+  const stops = [0, 1].map(i => ({ name: `S${i}`, lat: 50 + i * 0.0045, lon: 20 }));
+  // wzorzec używa linii 0; plik zbudowany starym sposobem miał listę ucięta do użytych linii
+  const net = decodeNetwork(makeRaw({ stops, routes: [{ n: '1', t: 3 }], patterns: [{ r: 0, s: [0, 1], p: [[300]], t: [[28800, 0]] }] }));
+  assert.equal(net.routes.length, 1);
+  assert.equal(net.routes[net.patterns[0].r ?? 0].n, '1');
 });

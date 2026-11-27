@@ -414,3 +414,19 @@ export function carryOverMeta(prevMeta, { delaysFileExists }) {
   }
   return carried;
 }
+
+/**
+ * Ładunki plików dnia (Z-080). `routeList` jest uzupełniana leniwie przez
+ * `buildDay` (indeks linii przydzielany przy pierwszym użyciu), więc wszystkie
+ * dni muszą zostać zbudowane ZANIM któryś ładunek dostanie listę — inaczej
+ * każdy plik niesie stan listy z chwili własnego zapisu i różni się od
+ * `meta.counts.routes`. Indeksy są tylko dopisywane, więc wzorce zbudowane
+ * wcześniej zostają poprawne wobec pełnej listy. Zwraca [{payload, patterns}].
+ */
+export function assembleDayPayloads({ dayTypes, buildDay, routeList, stopsOut, transfers, version }) {
+  const built = dayTypes.map((_, d) => buildDay(d));
+  return dayTypes.map((dt, d) => ({
+    patterns: built[d],
+    payload: { version, day: dt.key, date: dt.date, routes: routeList, stops: stopsOut, transfers, patterns: built[d] },
+  }));
+}
