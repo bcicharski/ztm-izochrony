@@ -11,6 +11,10 @@ Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
 - Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
 
+## 2026-11-28
+### Wewnętrzne
+- Z-007 Luka 1 (stacje kolejowe jako przesiadka w trybie „bez spaceru"): rozstrzygnięto pytanie o pary stacja kolejowa – metro w Warszawie. Decyzja właściciela: zostawić bez zmian; kod nietknięty, zachowanie strony bez zmian. Pomiar na `data/warszawa/workday.json`: 19 z 855 par stacyjnych z udziałem metra, wszystkie w pięciu zbudowanych węzłach przesiadkowych (skrypt doraźny, nie w repozytorium). Pełne uzasadnienie: ZADANIA-ARCHIWUM.md, Z-007. (bez zmian w kodzie; `npm run check` nie uruchamiano, bo zmiana dotyczy tylko dokumentacji)
+
 ## 2026-11-27
 ### Dodane
 - Z-013 Profil pieszego: w sekcji „Dojście, przesiadki i środki" pojawiła się lista tempa marszu: 2,5 km/h (balkonik, kule), 3,5 (wolniejszy krok), 4,5 (domyślnie, dokładnie jak dotąd) i 5,5 (szybki marsz). Tempo wpływa na dojście do przystanku, wyjście z niego, przejścia przesiadkowe i falę pieszą. Parametr `pace` w adresie, emitowany tylko gdy różny od domyślnego; adres stanu domyślnego nie zmienia się ani o znak.
