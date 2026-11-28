@@ -4,15 +4,15 @@ Historia wdrożonych zmian i prac w toku. Najnowsze na górze.
 Utrzymuje ten plik wyłącznie agent `kronikarz`. Historia nie jest kasowana.
 
 ## W toku
-- Z-019 Brakujące profile opóźnień dla GZM i Szczecina — etap: wdrożenie (Szczecin wdrożony 2026-11-27; GZM bez profili, niewykonalne po naszej stronie; zadanie otwarte).
 - Z-002 Mobile i PWA — etap: wdrożenie (etapy 1 i 2 wdrożone; etap 3, service worker, czeka na decyzję właściciela).
-- Z-051 Rozkład Opola kończy się 2026-11-16; Łódź i Olsztyn mają nowe adresy źródeł i przeliczone dane (2026-11-17) — etap: wdrożenie (częściowo; Opole zamknięte w Z-054 (2026-11-17), Gorzów -> Z-055, przegląd przed 2026-12-30).
 - Z-023 Odświeżanie danych OSM — etap: wdrożenie (kroki 1–6 wdrożone 2026-11-27; krok 7, przełączenie bramki porównawczej w tryb blokujący, i pierwsze ręczne uruchomienie workflow przed nami; zadanie otwarte).
 - Z-009 Stopka i onboarding — etap: wdrożenie (wskazówka przy pierwszej wizycie zrobiona; stopka i przycisk Suppi otwarte).
-- Z-015 Udostępnianie i wyszukiwarka — etap: wdrożenie (historia ostatnich punktów i wyszukiwanie przystanków zrobione (Z-056); krótkie linki, dynamiczny obrazek OG i iframe otwarte).
-
 ## 2026-11-28
 ### Wewnętrzne
+- Z-051 Rozkład Opola kończy się 2026-11-16 — zamknięte jako zrobione (porządek w kolejce; bez zmiany zachowania strony). Łódź i Olsztyn z nowymi źródłami i pełnym przeliczeniem (2026-11-17); Opole w Z-054; Gorzów w Z-055. Ryzyka przeniesione do Z-090 (Olsztyn i Opole, `feedEndDate` 20261130). (bez zmian w kodzie i danych; `npm run check` nie uruchamiano, bo zmiana dotyczy tylko dokumentacji)
+- Z-019 Brakujące profile opóźnień dla GZM i Szczecina — zamknięte jako zrobione częściowo (porządek w kolejce; bez zmiany zachowania strony). Szczecin z profilami opóźnień wdrożony 2026-11-27; GZM odrzucony jako niewykonalny po naszej stronie (feed nie podaje numeru linii; naprawa wymaga identyfikatora linii od przewoźnika). GZM dostaje werdykt „ograniczenie feedu" i nie wywraca przebiegu. (bez zmian w kodzie; `npm run check` nie uruchamiano, bo zmiana dotyczy tylko dokumentacji)
+- Z-015 Udostępnianie i wyszukiwarka — zamknięte jako zrobione częściowo (porządek w kolejce; bez zmiany zachowania strony). Zrobione: historia ostatnich punktów, wyszukiwanie przystanków po nazwie (Z-056), statyczny obrazek OG. Odrzucone jako niewykonalne w obecnej architekturze: krótkie linki i dynamiczny obrazek OG (wymagają backendu lub zewnętrznej usługi). Iframe przeniesiony do Z-089. (bez zmian w kodzie; `npm run check` nie uruchamiano, bo zmiana dotyczy tylko dokumentacji)
+- Z-089 i Z-090 — nowe zadania w kolejce: Z-089 osadzanie strony w iframe (czeka na decyzję właściciela), Z-090 Olsztyn i Opole kończą rozkład 2026-11-30 (przegląd 2026-11-30). (bez zmian w kodzie)
 - Z-007 Luka 1 (stacje kolejowe jako przesiadka w trybie „bez spaceru"): rozstrzygnięto pytanie o pary stacja kolejowa – metro w Warszawie. Decyzja właściciela: zostawić bez zmian; kod nietknięty, zachowanie strony bez zmian. Pomiar na `data/warszawa/workday.json`: 19 z 855 par stacyjnych z udziałem metra, wszystkie w pięciu zbudowanych węzłach przesiadkowych (skrypt doraźny, nie w repozytorium). Pełne uzasadnienie: ZADANIA-ARCHIWUM.md, Z-007. (bez zmian w kodzie; `npm run check` nie uruchamiano, bo zmiana dotyczy tylko dokumentacji)
 
 ## 2026-11-27
